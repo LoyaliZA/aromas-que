@@ -1,0 +1,55 @@
+version: "3.7"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        user: laravel
+        uid: 1000
+    image: aromas-app
+    container_name: aromas-app
+    restart: unless-stopped
+    working_dir: /var/www
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./:/var/www
+    networks:
+      - aromas-net
+
+  db:
+    image: mysql:8.0
+    container_name: aromas-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: aromas_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: aromas_pass
+      MYSQL_USER: aromas_user
+    volumes:
+      - dbdata:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - aromas-net
+    command: --default-authentication-plugin=mysql_native_password
+
+  nginx:
+    image: nginx:alpine
+    container_name: aromas-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - aromas-net
+
+networks:
+  aromas-net:
+    driver: bridge
+
+volumes:
+  dbdata:
