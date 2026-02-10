@@ -11,54 +11,95 @@ class DailyShift extends Model
 {
     use HasFactory;
 
-    protected $table = 'daily_shifts';
-
-    // Estados definidos en SRS y DB
-    const STATUS_OFFLINE = 'OFFLINE';
-    const STATUS_ONLINE = 'ONLINE'; // En Linea / Disponible
-    const STATUS_BUSY = 'BUSY';     // Atendiendo cliente (derivado de sales_queue)
-    const STATUS_BREAK = 'BREAK';   // Descanso
-
+    /**
+     * Definimos los campos editables.
+     * Importante: 'last_action_at' es vital para el "Heartbeat" del sistema
+     * (saber si el usuario sigue ahí).
+     */
     protected $fillable = [
         'employee_id',
         'work_date',
-        'current_status',
-        'flagged_as_idle',
+        'current_status',       // ONLINE, BREAK, BUSY, OFFLINE
+        'flagged_as_idle',      // Si el sistema detectó abandono (True/False)
         'customers_served_count',
         'last_status_change_at',
         'last_action_at',
     ];
 
-    protected $casts = [
-        'work_date' => 'date',
-        'flagged_as_idle' => 'boolean',
-        'last_status_change_at' => 'datetime',
-        'last_action_at' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-    ];
+    /**
+     * Casting de tipos nativos.
+     */
+    protected function casts(): array
+    {
+        return [
+            'work_date' => 'date',
+            'flagged_as_idle' => 'boolean',
+            'last_status_change_at' => 'datetime',
+            'last_action_at' => 'datetime',
+            'customers_served_count' => 'integer',
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relaciones
+    |--------------------------------------------------------------------------
+    */
 
     /**
-     * Relacion: El turno pertenece a un empleado.
+     * El turno pertenece a un Empleado.
      */
     public function employee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class, 'employee_id');
+        return $this->belongsTo(Employee::class);
     }
 
     /**
-     * Relacion: Un turno puede tener muchas atenciones asignadas.
+     * Un turno tiene una bitácora de cambios de estado.
+     * Ejemplo: De ONLINE pasó a BUSY a las 10:00am.
+     * (Crearemos este modelo en el siguiente paso).
      */
-    public function salesQueues(): HasMany
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(ShiftStatusLog::class);
+    }
+
+    /**
+     * Un turno tiene múltiples clientes atendidos (Ventas).
+     * Relación con la tabla 'sales_queue'.
+     */
+    public function servedCustomers(): HasMany
     {
         return $this->hasMany(SalesQueue::class, 'assigned_shift_id');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Lógica de Dominio (State Machine Helpers)
+    |--------------------------------------------------------------------------
+    */
+
     /**
-     * Helper para saber si esta disponible para asignacion.
+     * Verifica si el vendedor está disponible para recibir clientes.
      */
     public function isAvailable(): bool
     {
-        return $this->current_status === self::STATUS_ONLINE && !$this->flagged_as_idle;
+        return $this->current_status === 'ONLINE' && ! $this->flagged_as_idle;
+    }
+
+    /**
+     * Verifica si está en descanso.
+     */
+    public function isOnBreak(): bool
+    {
+        return $this->current_status === 'BREAK';
+    }
+
+    /**
+     * Actualiza el "latido" del usuario para evitar que se marque como inactivo.
+     */
+    public function touchLastAction(): void
+    {
+        $this->update(['last_action_at' => now()]);
     }
 }

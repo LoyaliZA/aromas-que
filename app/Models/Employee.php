@@ -4,37 +4,71 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Employee extends Model
 {
     use HasFactory;
 
-    protected $table = 'employees';
-
+    /**
+     * Campos que permitimos asignar masivamente.
+     * Observa que incluimos 'user_id' para poder vincularlo.
+     */
     protected $fillable = [
+        'user_id',
         'full_name',
         'employee_code',
         'is_active',
     ];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
+    /**
+     * Conversión de tipos nativa.
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relaciones
+    |--------------------------------------------------------------------------
+    */
 
     /**
-     * Relacion: Un empleado tiene muchos turnos diarios (historico).
+     * Relación Inversa: Un empleado PERTENECE a una cuenta de Usuario.
+     * (Opcional, porque puede haber empleados sin usuario de sistema todavía).
      */
-    public function dailyShifts(): HasMany
+    public function user(): BelongsTo
     {
-        return $this->hasMany(DailyShift::class, 'employee_id');
+        return $this->belongsTo(User::class);
     }
 
     /**
-     * Scope para obtener solo empleados activos.
+     * Un empleado tiene MÚLTIPLES turnos diarios históricos.
+     * Esta relación conecta con la tabla 'daily_shifts'.
      */
-    public function scopeActive($query)
+    public function dailyShifts(): HasMany
     {
-        return $query->where('is_active', true);
+        return $this->hasMany(DailyShift::class);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accesores y Mutadores (La capa de traducción)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Ejemplo de lo que preguntaste:
+     * Si llamas a $employee->status_label, obtendrás "Activo" o "Inactivo"
+     * listo para la vista, sin ensuciar la lógica interna.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return $this->is_active ? 'Activo' : 'Baja Temporal';
     }
 }
