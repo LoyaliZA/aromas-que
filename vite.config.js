@@ -12,13 +12,13 @@ export default defineConfig({
         }),
     ],
     server: {
-        host: '0.0.0.0',
+        host: '0.0.0.0', // Esto permite que escuche en Tailscale Y en Local
         port: 5173,
         strictPort: true,
-        // HABILITAMOS CORS PARA QUE EL PUERTO 8000 PUEDA LEER LOS ARCHIVOS
         cors: true, 
         hmr: {
-            host: '192.168.1.66',
+            host: '100.75.11.59',
+            // Al quitarla, el navegador usará la IP que esté en la barra de direcciones
         },
     },
 });
