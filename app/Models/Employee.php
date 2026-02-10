@@ -19,6 +19,7 @@ class Employee extends Model
         'user_id',
         'full_name',
         'employee_code',
+        'job_position', // <--- AGREGADO
         'is_active',
     ];
 
@@ -70,5 +71,22 @@ class Employee extends Model
     public function getStatusLabelAttribute(): string
     {
         return $this->is_active ? 'Activo' : 'Baja Temporal';
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes (Filtros de Búsqueda)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Filtra solo a los empleados que son vendedores.
+     */
+    public function scopeActiveSellers($query)
+    {
+        // Ahora filtramos por la columna REAL del empleado
+        return $query->where('is_active', true)
+                     ->where('job_position', 'SELLER');
     }
 }
