@@ -19,13 +19,14 @@ class Pickup extends Model
         'ticket_date',
         'client_ref_id', // ID numérico del cliente (legacy)
         'client_name',
-        'department',    // ENUM: AROMAS, BELLAROMA
+        'department',    // Aromas o Bellaroma
         'pieces',
-        'status',        // ENUM: IN_CUSTODY, DELIVERED
+        'status',        // Si esta entregado o no (IN_CUSTODY, DELIVERED)
         'receiver_name',
         'is_third_party',
         'signature_path', // Ruta al archivo de imagen de la firma
         'delivered_at',
+        'notes',         // Campo de comentarios
     ];
 
     /**

@@ -30,7 +30,7 @@
 
         <div class="hidden lg:flex flex-col items-center justify-center h-32 bg-black/20 shadow-sm border-b border-aromas-tertiary/10">
             <a href="{{ route('gerencia.dashboard') }}" class="block p-2 hover:opacity-80 transition-opacity">
-                <img src="{{ asset('images/logo_blanco.png') }}" alt="Aromas Logo" class="h-14 w-auto object-contain">
+                <img src="{{ asset('images/logo_blanco.png') }}" alt="Aromas Logo" class="h-20 w-auto object-contain">
             </a>
             {{-- Distintivo de Gerencia --}}
             <span class="mt-2 px-3 py-0.5 bg-aromas-highlight/10 text-aromas-highlight border border-aromas-highlight/20 rounded text-[10px] font-bold uppercase tracking-widest shadow-sm">

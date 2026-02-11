@@ -33,6 +33,9 @@ class AuthenticatedSessionController extends Controller
         if ($request->user()->role === 'ADMIN') {
             return redirect()->intended(route('admin.dashboard'));
         }
+        if ($request->user()->role === 'MANAGER') {
+            return redirect()->intended(route('gerencia.dashboard'));
+        }
 
         // 3. Fallback (Por defecto)
         // Si es Empleado normal, Cliente o no tiene rol, va al dashboard estándar

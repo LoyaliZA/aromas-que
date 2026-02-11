@@ -21,7 +21,7 @@
                         </td>
                         <td class="px-6 py-3">
                             <div class="font-bold text-white">{{ $pickup->client_name }}</div>
-                            <span class="text-xs text-aromas-tertiary">ID: {{ $pickup->client_ref_id }}</span>
+                            <span class="text-xs text-aromas-tertiary">No. Cliente: {{ $pickup->client_ref_id }}</span>
                         </td>
                         <td class="px-6 py-3 text-center">
                             @if($pickup->department === 'AROMAS')

@@ -87,11 +87,22 @@ class PickupController extends Controller
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
+            // Nuevos campos opcionales
+            'notes'        => 'nullable|string|max:500',
+            'is_third_party'=> 'nullable|boolean',
+            'receiver_name' => 'nullable|string|max:150',
         ]);
+
+        // Si el checkbox de "Tercero" no se marca, nos aseguramos que se guarde como falso
+        $validated['is_third_party'] = $request->has('is_third_party');
+        
+        // Si no es tercero, limpiamos el nombre por seguridad (o podrías dejarlo si el gerente lo llenó)
+        if (!$validated['is_third_party']) {
+            $validated['receiver_name'] = null; 
+        }
 
         Pickup::create($validated);
 
-        // Redirigimos a la vista DAILY
         return redirect()->route('gerencia.daily')
                          ->with('success', 'Paquete registrado correctamente.');
     }
@@ -108,13 +119,21 @@ class PickupController extends Controller
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
+            // Nuevos campos
+            'notes'        => 'nullable|string|max:500',
+            'is_third_party'=> 'nullable|boolean',
+            'receiver_name' => 'nullable|string|max:150',
         ]);
 
+        // Ajuste de booleanos
+        $validated['is_third_party'] = $request->has('is_third_party');
+        
+        // Lógica de auditoría (Mantenemos tu código actual, solo agregando los campos)
         $pickup->fill($validated);
         
         if ($pickup->isDirty()) {
-            // Guardamos auditoría
-            $changes = [];
+            // ... (Tu código de auditoría DB::transaction aquí se mantiene igual) ...
+             $changes = [];
             foreach ($pickup->getDirty() as $field => $newValue) {
                 $changes[$field] = [
                     'old' => $pickup->getOriginal($field),
@@ -124,9 +143,6 @@ class PickupController extends Controller
 
             DB::transaction(function() use ($pickup, $changes) {
                 $pickup->save();
-
-                // Creamos el registro en la tabla pickup_edits
-                // Si esto falla, es porque no has creado el Modelo PickupEdit
                 PickupEdit::create([
                     'pickup_id' => $pickup->id,
                     'user_id' => Auth::id(),
@@ -135,8 +151,7 @@ class PickupController extends Controller
                 ]);
             });
 
-            return redirect()->route('gerencia.daily')
-                             ->with('success', 'Resguardo actualizado y auditado.');
+            return redirect()->route('gerencia.daily')->with('success', 'Resguardo actualizado y auditado.');
         }
 
         return redirect()->route('gerencia.daily')->with('info', 'No se detectaron cambios.');
