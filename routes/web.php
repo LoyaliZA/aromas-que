@@ -6,6 +6,12 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController;
 
+// --- NUEVOS CONTROLADORES (MODULOS) ---
+use App\Http\Controllers\Gerencia\PickupController;
+use App\Http\Controllers\Recepcion\DeliveryController;
+use App\Http\Controllers\Ventas\QueueController;
+use App\Http\Controllers\Public\TvController;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -49,5 +55,59 @@ Route::prefix('admin')
         Route::resource('users', UserController::class);
         
     });
+
+/*
+|--------------------------------------------------------------------------
+| MÓDULO GERENCIA (Rol: MANAGER)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('gerencia')
+    ->name('gerencia.')
+    ->middleware(['auth']) 
+    ->group(function () {
+        Route::get('/dashboard', [PickupController::class, 'index'])->name('dashboard');
+        
+        // --- NUEVA RUTA OPERATIVA ---
+        Route::get('/daily', [PickupController::class, 'daily'])->name('daily'); // Tabla de trabajo
+        
+        Route::post('/store', [PickupController::class, 'store'])->name('store');
+        
+        // --- RUTA PARA EDITAR ---
+        Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
+        
+        Route::get('/history', [PickupController::class, 'history'])->name('history');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| MÓDULO RECEPCIÓN (Rol: CHECKER)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('recepcion')
+    ->name('recepcion.')
+    ->middleware(['auth']) // TODO: Agregar 'role:CHECKER' en el futuro
+    ->group(function () {
+        Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| MÓDULO VENTAS (Rol: SELLER)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('ventas')
+    ->name('ventas.')
+    ->middleware(['auth']) // TODO: Agregar 'role:SELLER' en el futuro
+    ->group(function () {
+        Route::get('/dashboard', [QueueController::class, 'index'])->name('dashboard');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| VISTA PÚBLICA (TV)
+|--------------------------------------------------------------------------
+*/
+Route::get('/tv', [TvController::class, 'index'])->name('tv.public');
+
 
 require __DIR__.'/auth.php';

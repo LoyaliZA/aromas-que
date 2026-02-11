@@ -43,38 +43,68 @@ class Pickup extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Scopes (Filtros de Búsqueda Optimizados)
+    | Scopes (Filtros de Búsqueda)
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * Filtra solo los paquetes que están en almacén (No entregados).
-     * Uso: Pickup::inCustody()->get();
-     */
     public function scopeInCustody(Builder $query): void
     {
         $query->where('status', 'IN_CUSTODY');
     }
 
-    /**
-     * Filtra solo los entregados.
-     */
-    public function scopeDelivered(Builder $query): void
+    public function scopeToday(Builder $query): void
     {
-        $query->where('status', 'DELIVERED');
+        $query->whereDate('created_at', today());
     }
 
     /**
-     * Buscador inteligente para el Dashboard del Checador.
-     * Busca por Folio O por Nombre del Cliente.
+     * Buscador "Amplio" (Insensible a acentos y mayúsculas).
      */
-    public function scopeSearch(Builder $query, string $term): void
+    public function scopeSearch(Builder $query, $term): void
     {
-        $query->where(function ($q) use ($term) {
-            $q->where('ticket_folio', 'LIKE', "%{$term}%")
-              ->orWhere('client_name', 'LIKE', "%{$term}%")
-              ->orWhere('client_ref_id', 'LIKE', "%{$term}%");
-        });
+        if ($term) {
+            $query->where(function($q) use ($term) {
+                // Usamos 'utf8mb4_general_ci' para que á = a, É = e, etc.
+                $collation = 'utf8mb4_general_ci';
+                
+                $q->whereRaw("ticket_folio COLLATE $collation LIKE ?", ["%{$term}%"])
+                  ->orWhereRaw("client_name COLLATE $collation LIKE ?", ["%{$term}%"])
+                  ->orWhereRaw("client_ref_id COLLATE $collation LIKE ?", ["%{$term}%"]);
+            });
+        }
+    }
+
+    /**
+     * Filtro por rango de fechas (Opcional).
+     */
+    public function scopeByDate(Builder $query, $start = null, $end = null): void
+    {
+        if ($start) {
+            $query->whereDate('created_at', '>=', $start);
+        }
+        if ($end) {
+            $query->whereDate('created_at', '<=', $end);
+        }
+    }
+
+    /**
+     * Filtro por estado específico.
+     */
+    public function scopeByStatus(Builder $query, $status = null): void
+    {
+        if ($status && $status !== 'ALL') {
+            $query->where('status', $status);
+        }
+    }
+
+    /**
+     * Filtro por Departamento (Aromas / Bellaroma).
+     */
+    public function scopeByDepartment(Builder $query, $department = null): void
+    {
+        if ($department && $department !== 'ALL') {
+            $query->where('department', $department);
+        }
     }
 
     /*
