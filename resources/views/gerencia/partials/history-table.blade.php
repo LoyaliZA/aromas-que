@@ -5,9 +5,9 @@
                 <tr class="bg-black/20 text-aromas-tertiary text-xs uppercase tracking-wider border-b border-aromas-tertiary/10">
                     <th class="px-6 py-3 font-semibold">Folio</th>
                     <th class="px-6 py-3 font-semibold">Cliente</th>
-                    {{-- NUEVA COLUMNA SEPARADA --}}
                     <th class="px-6 py-3 font-semibold text-center">Área</th> 
                     <th class="px-6 py-3 font-semibold text-center">Piezas</th>
+                    <th class="px-6 py-3 font-semibold">Recibido Por</th> {{-- NUEVA COLUMNA --}}
                     <th class="px-6 py-3 font-semibold">Estado</th>
                     <th class="px-6 py-3 font-semibold text-right">Fecha</th>
                 </tr>
@@ -20,32 +20,42 @@
                         </td>
                         <td class="px-6 py-3">
                             <div class="font-bold text-white">{{ $pickup->client_name }}</div>
-                            <span class="text-xs text-aromas-tertiary">ID: {{ $pickup->client_ref_id }}</span>
+                            <span class="text-xs text-gray-500">ID: {{ $pickup->client_ref_id }}</span>
                         </td>
-                        {{-- ÁREA SEPARADA Y LIMPIA --}}
                         <td class="px-6 py-3 text-center">
                             @if($pickup->department === 'AROMAS')
-                                <span class="inline-block px-2 py-1 rounded bg-purple-900/30 border border-purple-500/30 text-purple-300 text-[10px] font-bold uppercase tracking-wide">
-                                    Aromas
-                                </span>
+                                <span class="px-2 py-1 bg-purple-900/40 text-purple-300 rounded text-xs border border-purple-500/20">Aromas</span>
                             @else
-                                <span class="inline-block px-2 py-1 rounded bg-pink-900/30 border border-pink-500/30 text-pink-300 text-[10px] font-bold uppercase tracking-wide">
-                                    Bellaroma
-                                </span>
+                                <span class="px-2 py-1 bg-pink-900/40 text-pink-300 rounded text-xs border border-pink-500/20">Bellaroma</span>
                             @endif
                         </td>
-                        <td class="px-6 py-3 text-center">
-                            <span class="text-white font-bold">{{ $pickup->pieces }}</span>
+                        <td class="px-6 py-3 text-center text-white font-bold">
+                            {{ $pickup->pieces }}
                         </td>
+                        
+                        {{-- NUEVA COLUMNA: DATOS DE QUIEN RECIBE --}}
+                        <td class="px-6 py-3">
+                            @if($pickup->status === 'DELIVERED')
+                                @if($pickup->is_third_party)
+                                    <div class="text-yellow-400 text-xs font-bold uppercase mb-0.5">Tercero:</div>
+                                    <div class="text-white">{{ $pickup->receiver_name }}</div>
+                                @else
+                                    <div class="text-gray-400 text-xs uppercase mb-0.5">Titular:</div>
+                                    <div class="text-white">{{ $pickup->receiver_name ?? $pickup->client_name }}</div>
+                                @endif
+                            @else
+                                <span class="text-gray-600">---</span>
+                            @endif
+                        </td>
+
                         <td class="px-6 py-3">
                             @if($pickup->status === 'IN_CUSTODY')
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
-                                    En Resguardo
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-500 border border-yellow-500/20">
+                                    En Custodia
                                 </span>
                             @else
                                 <div class="flex flex-col">
-                                    <span class="inline-flex w-max items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
                                         Entregado
                                     </span>
                                     <span class="text-[10px] text-gray-500 mt-1">
@@ -60,7 +70,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-aromas-tertiary">
+                        <td colspan="7" class="px-6 py-12 text-center text-aromas-tertiary">
                             <p>No se encontraron resultados.</p>
                         </td>
                     </tr>
@@ -72,7 +82,6 @@
     {{-- PAGINACIÓN QUE MANTIENE AJAX --}}
     <div class="px-6 py-3 border-t border-aromas-tertiary/10 bg-black/10 text-xs"
          @click.prevent="if($event.target.tagName === 'A') { fetchResults($event.target.href) }">
-         {{-- El click.prevent intercepta los clicks en la paginación para que no recarguen la página --}}
         {{ $pickups->links() }} 
     </div>
 </div>

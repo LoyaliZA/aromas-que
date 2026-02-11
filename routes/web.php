@@ -85,9 +85,13 @@ Route::prefix('gerencia')
 */
 Route::prefix('recepcion')
     ->name('recepcion.')
-    ->middleware(['auth']) // TODO: Agregar 'role:CHECKER' en el futuro
+    ->middleware(['auth']) 
     ->group(function () {
         Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
+        
+        // --- NUEVAS RUTAS ---
+        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); // Procesar entrega
+        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); // Ingresar a cola
     });
 
 /*

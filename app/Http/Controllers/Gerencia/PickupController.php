@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Gerencia;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pickup;
-use App\Models\PickupEdit; // Asegúrate de que este modelo exista (Paso 2)
+use App\Models\PickupEdit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -21,27 +21,34 @@ class PickupController extends Controller
         $deliveredTodayCount = Pickup::where('status', 'DELIVERED')
                                      ->whereDate('updated_at', today())
                                      ->count();
-        $totalTodayCount = Pickup::today()->count();
+        $totalTodayCount = Pickup::whereDate('created_at', today())->count();
 
         return view('gerencia.dashboard', compact('pendingCount', 'deliveredTodayCount', 'totalTodayCount'));
     }
 
     /**
      * OPERACIÓN DIARIA: Tabla de trabajo con Filtros y Modales.
+     * MODIFICADO: Ahora incluye rezagados (pendientes de días anteriores).
      */
     public function daily(Request $request)
     {
-        // 1. Iniciamos consulta restringida a HOY
-        $query = Pickup::today();
+        // 1. Iniciamos consulta BASE
+        // Regla: Mostrar todo lo creado HOY -O- todo lo que siga EN CUSTODIA (Rezagados)
+        $query = Pickup::query()->where(function($q) {
+            $q->whereDate('created_at', today())
+              ->orWhere('status', 'IN_CUSTODY');
+        });
 
-        // 2. Aplicamos Filtros (Igual que en historial)
-        // Nota: No filtramos por fecha porque ya estamos forzados a 'today()'
+        // 2. Aplicamos Filtros (Buscador, Estatus, Depto)
         $query->search($request->search)
               ->byStatus($request->status)
               ->byDepartment($request->department);
 
-        // 3. Obtenemos resultados
-        $todaysPickups = $query->orderBy('created_at', 'desc')->get();
+        // 3. Obtenemos resultados ordenados:
+        // Primero los pendientes para darles prioridad visual, luego por fecha descendente
+        $todaysPickups = $query->orderByRaw("FIELD(status, 'IN_CUSTODY', 'DELIVERED')")
+                               ->orderBy('created_at', 'desc')
+                               ->get();
 
         // 4. Si es AJAX (Búsqueda en vivo), devolvemos solo la tabla
         if ($request->ajax()) {
@@ -87,16 +94,13 @@ class PickupController extends Controller
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
-            // Nuevos campos opcionales
             'notes'        => 'nullable|string|max:500',
             'is_third_party'=> 'nullable|boolean',
             'receiver_name' => 'nullable|string|max:150',
         ]);
 
-        // Si el checkbox de "Tercero" no se marca, nos aseguramos que se guarde como falso
         $validated['is_third_party'] = $request->has('is_third_party');
         
-        // Si no es tercero, limpiamos el nombre por seguridad (o podrías dejarlo si el gerente lo llenó)
         if (!$validated['is_third_party']) {
             $validated['receiver_name'] = null; 
         }
@@ -114,25 +118,27 @@ class PickupController extends Controller
     {
         $pickup = Pickup::findOrFail($id);
 
+        // VALIDACIÓN ADICIONAL: Proteger rezagados desde el backend
+        // Si no es de hoy, no se debería poder editar (Regla de Negocio)
+        if (!$pickup->created_at->isToday()) {
+             return redirect()->route('gerencia.daily')->with('error', 'Los registros de días anteriores son de solo lectura.');
+        }
+
         $validated = $request->validate([
             'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio,'.$id,
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
-            // Nuevos campos
             'notes'        => 'nullable|string|max:500',
             'is_third_party'=> 'nullable|boolean',
             'receiver_name' => 'nullable|string|max:150',
         ]);
 
-        // Ajuste de booleanos
         $validated['is_third_party'] = $request->has('is_third_party');
         
-        // Lógica de auditoría (Mantenemos tu código actual, solo agregando los campos)
         $pickup->fill($validated);
         
         if ($pickup->isDirty()) {
-            // ... (Tu código de auditoría DB::transaction aquí se mantiene igual) ...
              $changes = [];
             foreach ($pickup->getDirty() as $field => $newValue) {
                 $changes[$field] = [
