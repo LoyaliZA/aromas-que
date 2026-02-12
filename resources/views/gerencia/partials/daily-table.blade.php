@@ -21,9 +21,7 @@
                             <span class="{{ $pickup->created_at->isToday() ? 'text-aromas-highlight' : 'text-orange-400' }}">
                                 {{ $pickup->ticket_folio }}
                             </span>
-                            @if(!$pickup->created_at->isToday())
-                                <span class="block text-[10px] text-orange-400/80 uppercase">Rezagado</span>
-                            @endif
+                            @if(!$pickup->created_at->isToday()) <span class="block text-[10px] text-orange-400/80 uppercase">Rezagado</span> @endif
                         </td>
                         
                         {{-- CLIENTE --}}
@@ -37,7 +35,7 @@
                             @endif
                         </td>
 
-                        {{-- ÁREA --}}
+                        {{-- ÁREA (Nombres Completos) --}}
                         <td class="px-6 py-3 text-center">
                             @if($pickup->department === 'AROMAS')
                                 <span class="px-2 py-1 bg-purple-900/40 text-purple-300 rounded text-xs border border-purple-500/20">Aromas</span>
@@ -62,24 +60,16 @@
                             @endif
                         </td>
 
-                        {{-- FECHA RECEPCIÓN --}}
+                        {{-- FECHAS --}}
+                        <td class="px-6 py-3 text-right text-gray-400 text-xs">{{ $pickup->created_at->format('d/m H:i') }}</td>
                         <td class="px-6 py-3 text-right text-gray-400 text-xs">
-                            {{ $pickup->created_at->format('d/m H:i') }}
-                        </td>
-
-                        {{-- FECHA ENTREGA --}}
-                        <td class="px-6 py-3 text-right text-gray-400 text-xs">
-                            @if($pickup->delivered_at)
-                                {{ $pickup->delivered_at->format('d/m H:i') }}
-                            @else
-                                <span class="text-gray-600">---</span>
-                            @endif
+                            {{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i') : '---' }}
                         </td>
 
                         {{-- ACCIONES --}}
                         <td class="px-6 py-3 text-center">
                             @if($pickup->status === 'IN_CUSTODY' && $pickup->created_at->isToday())
-                                {{-- BOTÓN EDITAR (Solo si es de HOY y está PENDIENTE) --}}
+                                {{-- EDITAR (Solo si es pendiente y de hoy) --}}
                                 <button @click="openEditModal({ 
                                             id: {{ $pickup->id }}, 
                                             ticket_folio: '{{ $pickup->ticket_folio }}',
@@ -90,28 +80,30 @@
                                             is_third_party: {{ $pickup->is_third_party ? 'true' : 'false' }},
                                             receiver_name: '{{ $pickup->receiver_name }}'
                                         })"
-                                        class="text-aromas-highlight hover:text-white hover:bg-aromas-highlight/20 p-2 rounded transition-colors" title="Editar / Corregir">
+                                        class="text-aromas-highlight hover:text-white hover:bg-aromas-highlight/20 p-2 rounded transition-colors" title="Editar">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                 </button>
-                            @elseif($pickup->status === 'IN_CUSTODY')
-                                {{-- REZAGADO (Solo Lectura) --}}
-                                <span class="text-gray-600 cursor-not-allowed p-2" title="Solo Lectura (Registro de días anteriores)">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                                </span>
+                            @elseif($pickup->status === 'DELIVERED')
+                                {{-- VER DETALLES (Si ya fue entregado) --}}
+                                <button @click="openDetailsModal({
+                                            ticket_folio: '{{ $pickup->ticket_folio }}',
+                                            client_name: '{{ $pickup->client_name }}',
+                                            receiver_name: '{{ $pickup->receiver_name }}',
+                                            is_third_party: {{ $pickup->is_third_party ? 'true' : 'false' }},
+                                            delivered_at: '{{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m/Y h:i A') : '' }}',
+                                            signature_url: '{{ asset('storage/'.$pickup->signature_path) }}'
+                                        })"
+                                        class="text-green-500 hover:text-white hover:bg-green-500/20 p-2 rounded transition-colors" title="Ver Firma y Detalles">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                </button>
                             @else
-                                {{-- ENTREGADO --}}
-                                <span class="text-green-500/50 p-2" title="Ya Entregado">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                </span>
+                                {{-- REZAGADO (Bloqueado) --}}
+                                <span class="text-gray-600 cursor-not-allowed p-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg></span>
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr>
-                        <td colspan="8" class="px-6 py-12 text-center text-aromas-tertiary">
-                            No hay resguardos pendientes ni registrados hoy.
-                        </td>
-                    </tr>
+                    <tr><td colspan="8" class="px-6 py-12 text-center text-aromas-tertiary">No hay registros.</td></tr>
                 @endforelse
             </tbody>
         </table>

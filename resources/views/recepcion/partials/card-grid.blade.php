@@ -14,7 +14,7 @@
                         </span>
                     @else
                         <span class="bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            🌸 Bella
+                            🌸 Bellaroma
                         </span>
                     @endif
                 </div>

@@ -4,7 +4,7 @@
         <p class="text-aromas-tertiary text-sm">Consulta el archivo histórico de paquetería.</p>
     </div>
 
-    {{-- CONTEXTO DE ALPINE JS PARA AJAX --}}
+    {{-- CONTEXTO ALPINE PARA HISTORIAL --}}
     <div x-data="{
         search: '{{ request('search') }}',
         status: '{{ request('status', 'ALL') }}',
@@ -12,110 +12,66 @@
         date_start: '{{ request('date_start') }}',
         date_end: '{{ request('date_end') }}',
         isLoading: false,
+        
+        // MODAL DE DETALLES
+        showDetailsModal: false,
+        detailsData: { ticket_folio: '', client_name: '', receiver_name: '', is_third_party: false, delivered_at: '', signature_url: '' },
 
-        // Función Principal: Fetch de datos sin recargar
+        openDetailsModal(data) {
+            this.detailsData = data;
+            this.showDetailsModal = true;
+        },
+
         async fetchResults(url = null) {
             this.isLoading = true;
-            
-            // Si no pasamos URL (ej. paginación), construimos la query actual
             if (!url) {
-                const params = new URLSearchParams({
-                    search: this.search,
-                    status: this.status,
-                    department: this.department,
-                    date_start: this.date_start,
-                    date_end: this.date_end
-                });
+                const params = new URLSearchParams({ search: this.search, status: this.status, department: this.department, date_start: this.date_start, date_end: this.date_end });
                 url = `{{ route('gerencia.history') }}?${params.toString()}`;
             }
-
             try {
-                // Solicitamos al servidor con cabecera AJAX
-                const response = await fetch(url, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
+                const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 const html = await response.text();
-                
-                // Reemplazamos el contenedor de la tabla
-                document.getElementById('table-container').innerHTML = html;
-                
-                // Actualizamos la URL del navegador sin recargar (para poder copiar y pegar el link)
-                window.history.pushState({}, '', url);
-            } catch (error) {
-                console.error('Error cargando historial:', error);
-            } finally {
-                this.isLoading = false;
-            }
+                document.getElementById('history-table-container').innerHTML = html;
+            } catch (error) { console.error(error); } finally { this.isLoading = false; }
         }
     }">
 
-        {{-- BARRA DE HERRAMIENTAS --}}
-        <div class="bg-aromas-secondary rounded-xl shadow-lg p-3 border border-aromas-tertiary/20 mb-6">
-            <div class="flex flex-col md:flex-row items-center gap-3">
-                
-                {{-- 1. BUSCADOR (Live Search) --}}
-                <div class="relative w-full md:flex-1">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </div>
-                    <input type="text" x-model="search" @input.debounce.500ms="fetchResults()"
-                        class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg pl-9 pr-3 py-2 text-white text-sm focus:outline-none focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight placeholder-gray-500 transition-all"
-                        placeholder="Buscar por folio, cliente...">
-                    
-                    {{-- Spinner de carga --}}
-                    <div x-show="isLoading" class="absolute right-3 top-2.5">
-                        <svg class="animate-spin h-4 w-4 text-aromas-highlight" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </div>
-                </div>
-
-                {{-- Separador --}}
-                <div class="hidden md:block w-px h-8 bg-aromas-tertiary/20"></div>
-
-                {{-- 2. FILTRO DEPARTAMENTO (NUEVO) --}}
-                <div class="w-full md:w-auto">
-                    <select x-model="department" @change="fetchResults()"
-                        class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-aromas-highlight cursor-pointer">
-                        <option value="ALL">Área: Todas</option>
-                        <option value="AROMAS">🟣 Aromas</option>
-                        <option value="BELLAROMA">🌸 Bellaroma</option>
-                    </select>
-                </div>
-
-                {{-- 3. FILTRO ESTADO --}}
-                <div class="w-full md:w-auto">
-                    <select x-model="status" @change="fetchResults()"
-                        class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-aromas-highlight cursor-pointer">
-                        <option value="ALL">Estado: Todos</option>
-                        <option value="IN_CUSTODY">📦 En Custodia</option>
-                        <option value="DELIVERED">✅ Entregados</option>
-                    </select>
-                </div>
-
-                {{-- 4. RANGO FECHAS --}}
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <input type="date" x-model="date_start" @change="fetchResults()"
-                        class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-aromas-highlight w-full md:w-auto">
-                    <span class="text-gray-500">-</span>
-                    <input type="date" x-model="date_end" @change="fetchResults()"
-                        class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-2 py-2 text-white text-sm focus:outline-none focus:border-aromas-highlight w-full md:w-auto">
-                </div>
-
-                {{-- Botón Limpiar --}}
-                <button x-show="search || status !== 'ALL' || department !== 'ALL' || date_start || date_end" 
-                        @click="search=''; status='ALL'; department='ALL'; date_start=''; date_end=''; fetchResults()"
-                        class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors" title="Limpiar Filtros">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+        {{-- BARRA DE FILTROS --}}
+        <div class="bg-aromas-secondary p-4 rounded-xl shadow-lg border border-aromas-tertiary/20 mb-6">
+            <div class="flex flex-col md:flex-row gap-4 items-end">
+                <div class="flex-1 w-full"><label class="text-xs text-aromas-tertiary mb-1 block">Buscar</label><input type="text" x-model.debounce.500ms="search" @input="fetchResults()" class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white w-full" placeholder="Folio, Cliente..."></div>
+                <div class="w-full md:w-auto"><label class="text-xs text-aromas-tertiary mb-1 block">Estado</label><select x-model="status" @change="fetchResults()" class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white w-full"><option value="ALL">Todos</option><option value="IN_CUSTODY">En Custodia</option><option value="DELIVERED">Entregados</option></select></div>
+                <div class="w-full md:w-auto"><label class="text-xs text-aromas-tertiary mb-1 block">Depto</label><select x-model="department" @change="fetchResults()" class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white w-full"><option value="ALL">Todos</option><option value="AROMAS">Aromas</option><option value="BELLAROMA">Bellaroma</option></select></div>
+                <div class="flex gap-2 w-full md:w-auto"><div class="flex-1"><label class="text-xs text-aromas-tertiary mb-1 block">Desde</label><input type="date" x-model="date_start" @change="fetchResults()" class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-2 py-2 text-white w-full"></div><div class="flex-1"><label class="text-xs text-aromas-tertiary mb-1 block">Hasta</label><input type="date" x-model="date_end" @change="fetchResults()" class="bg-black/20 border border-aromas-tertiary/30 rounded-lg px-2 py-2 text-white w-full"></div></div>
+                <button x-show="search || status !== 'ALL' || department !== 'ALL' || date_start || date_end" @click="search=''; status='ALL'; department='ALL'; date_start=''; date_end=''; fetchResults()" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors" title="Limpiar Filtros"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
         </div>
 
-        {{-- CONTENEDOR DE LA TABLA (Aquí se inyecta el HTML parcial) --}}
-        <div id="table-container" class="transition-opacity duration-200" :class="isLoading ? 'opacity-50' : 'opacity-100'">
-            @include('gerencia.partials.history-table')
+        {{-- CONTENEDOR TABLA --}}
+        <div id="history-table-container">
+            @include('gerencia.partials.history-table', ['pickups' => $pickups])
         </div>
 
+        {{-- MODAL DE DETALLES --}}
+        <div x-show="showDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="display: none;" x-transition>
+            <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showDetailsModal = false"></div>
+            <div class="bg-aromas-secondary w-full max-w-lg rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col overflow-hidden">
+                <div class="bg-black/20 p-5 border-b border-aromas-tertiary/20 flex justify-between items-center">
+                    <div><h2 class="text-xl font-bold text-white flex items-center gap-2"><svg class="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Detalles de Entrega</h2><p class="text-sm text-aromas-tertiary">Folio: <span class="text-aromas-highlight font-mono" x-text="detailsData.ticket_folio"></span></p></div>
+                    <button @click="showDetailsModal = false" class="text-gray-500 hover:text-white p-2"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                </div>
+                <div class="p-6 overflow-y-auto max-h-[80vh]">
+                    <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Entregado el:</label><p class="text-white font-mono" x-text="detailsData.delivered_at"></p></div>
+                            <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Tipo Receptor:</label><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="detailsData.is_third_party ? 'bg-yellow-500/20 text-yellow-500' : 'bg-blue-500/20 text-blue-400'" x-text="detailsData.is_third_party ? 'Tercero' : 'Titular'"></span></div>
+                            <div class="col-span-2 border-t border-aromas-tertiary/10 pt-3 mt-1"><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Nombre Quien Recibió:</label><p class="text-lg text-white font-bold leading-tight" x-text="detailsData.receiver_name"></p></div>
+                        </div>
+                    </div>
+                    <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma de Conformidad</label><div class="bg-white rounded-lg p-2 border-2 border-gray-300"><template x-if="detailsData.signature_url"><img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48"></template><template x-if="!detailsData.signature_url"><div class="h-32 flex items-center justify-center text-gray-400 italic">Firma no disponible</div></template></div></div>
+                </div>
+                <div class="p-4 bg-black/20 border-t border-aromas-tertiary/20 flex justify-end"><button @click="showDetailsModal = false" class="px-6 py-2 bg-aromas-tertiary/20 border border-aromas-tertiary/30 rounded-lg text-white hover:bg-white/10 transition-colors">Cerrar</button></div>
+            </div>
+        </div>
     </div>
 </x-gerencia-layout>

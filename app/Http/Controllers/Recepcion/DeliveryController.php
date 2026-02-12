@@ -13,20 +13,19 @@ class DeliveryController extends Controller
 {
     public function index(Request $request)
     {
+        // ... (Toda la lógica de consulta $query se mantiene IGUAL) ...
         $query = Pickup::query();
 
-        // 1. Filtros Básicos
+        // Filtros (Mismo código de antes)
         if ($request->has('status') && $request->status !== 'ALL') {
             $query->where('status', $request->status);
         } else {
             $query->where('status', 'IN_CUSTODY');
         }
-
         if ($request->has('department') && $request->department !== 'ALL') {
             $query->where('department', $request->department);
         }
-
-        // 2. Buscador Inteligente (Folio, Cliente, ID o Receptor)
+        // Buscador (Mismo código de antes)
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -38,14 +37,22 @@ class DeliveryController extends Controller
         }
 
         $pickups = $query->orderBy('created_at', 'desc')->paginate(9)->withQueryString();
+        
+        // CÁLCULO DE LA FILA (Lo necesitamos siempre)
+        $peopleInQueue = SalesQueue::where('status', 'WAITING')->count();
 
-        // 3. RESPUESTA AJAX: Si es búsqueda en vivo, devolvemos solo el HTML de las cards
+        // --- CAMBIO CLAVE AQUÍ ---
         if ($request->ajax()) {
-            return view('recepcion.partials.card-grid', compact('pickups'))->render();
+            // Renderizamos la vista parcial a HTML
+            $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
+            
+            // Devolvemos JSON con AMBOS datos: el HTML de la lista y el número de la fila
+            return response()->json([
+                'html' => $html,
+                'queueCount' => $peopleInQueue
+            ]);
         }
 
-        // Carga normal de la página completa
-        $peopleInQueue = SalesQueue::where('status', 'WAITING')->count();
         return view('recepcion.dashboard', compact('pickups', 'peopleInQueue'));
     }
 

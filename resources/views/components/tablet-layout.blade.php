@@ -8,6 +8,8 @@
     <title>{{ config('app.name', 'Aromas') }} - Recepción</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 </head>
 <body class="font-sans antialiased bg-aromas-main text-gray-200 min-h-screen flex flex-col selection:bg-aromas-highlight selection:text-aromas-main">
 
