@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'role',      // Agregado: Vital para definir permisos
         'is_active', // Agregado: Para el "Soft Ban" (quitar acceso sin borrar)
+        'can_manage_rezagados', // Nuevo: Permiso especial para logística vieja
     ];
 
     /**
@@ -43,6 +44,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean', // SQL guarda 1/0, PHP ve true/false
+            'can_manage_rezagados' => 'boolean', // Igual aquí
         ];
     }
 
@@ -97,5 +99,15 @@ class User extends Authenticatable
     public function canAccess(): bool
     {
         return $this->is_active;
+    }
+
+    /**
+     * Nuevo Helper: Verifica si tiene permiso para la "White List" de rezagados.
+     */
+    public function canManageRezagados(): bool
+    {
+        // Solo un Manager o Admin debería poder tener este flag true,
+        // pero por seguridad, validamos el flag directamente.
+        return $this->can_manage_rezagados;
     }
 }

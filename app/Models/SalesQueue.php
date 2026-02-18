@@ -21,6 +21,7 @@ class SalesQueue extends Model
 
     protected $fillable = [
         'client_name',
+        'service_type',       // Agregado: SALES o CASHIER
         'source',             // QR_MOBILE, MANUAL_KIOSK
         'status',             // WAITING, SERVING, COMPLETED, ABANDONED
         'assigned_shift_id',  // El turno del vendedor que lo atiende
@@ -78,5 +79,17 @@ class SalesQueue extends Model
     public function scopeToday(Builder $query): void
     {
         $query->whereDate('queued_at', today());
+    }
+
+    // --- NUEVOS SCOPES PARA TIPO DE SERVICIO ---
+
+    public function scopeSales(Builder $query): void
+    {
+        $query->where('service_type', 'SALES');
+    }
+
+    public function scopeCashier(Builder $query): void
+    {
+        $query->where('service_type', 'CASHIER');
     }
 }

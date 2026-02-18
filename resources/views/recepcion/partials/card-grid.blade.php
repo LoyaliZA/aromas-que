@@ -5,7 +5,7 @@
             {{-- CABECERA CARD --}}
             <div class="p-5 pb-0">
                 <div class="flex justify-between items-start mb-2">
-                    <span class="font-mono text-2xl font-bold text-aromas-highlight tracking-wider">{{ $pickup->ticket_folio }}</span>
+                    <span class="font-mono text-2xl font-bold text-aromas-highlight tracking-wider">Folio:{{ $pickup->ticket_folio }}</span>
                     
                     {{-- Etiqueta de Depto (Badge Visible) --}}
                     @if($pickup->department === 'AROMAS')

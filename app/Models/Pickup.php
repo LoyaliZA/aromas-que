@@ -21,12 +21,13 @@ class Pickup extends Model
         'client_name',
         'department',    // Aromas o Bellaroma
         'pieces',
-        'status',        // Si esta entregado o no (IN_CUSTODY, DELIVERED)
+        'status',        // IN_CUSTODY, DELIVERED
         'receiver_name',
         'is_third_party',
-        'signature_path', // Ruta al archivo de imagen de la firma
+        'signature_path', // Ruta a la firma
+        'evidence_path',  // Agregado: Foto de evidencia de entrega
         'delivered_at',
-        'notes',         // Campo de comentarios
+        'notes',          // Campo de comentarios/observaciones
     ];
 
     /**
@@ -53,32 +54,18 @@ class Pickup extends Model
         $query->where('status', 'IN_CUSTODY');
     }
 
-    public function scopeToday(Builder $query): void
-    {
-        $query->whereDate('created_at', today());
-    }
-
-    /**
-     * Buscador "Amplio" (Insensible a acentos y mayúsculas).
-     */
     public function scopeSearch(Builder $query, $term): void
     {
         if ($term) {
-            $query->where(function($q) use ($term) {
-                // Usamos 'utf8mb4_general_ci' para que á = a, É = e, etc.
-                $collation = 'utf8mb4_general_ci';
-                
-                $q->whereRaw("ticket_folio COLLATE $collation LIKE ?", ["%{$term}%"])
-                  ->orWhereRaw("client_name COLLATE $collation LIKE ?", ["%{$term}%"])
-                  ->orWhereRaw("client_ref_id COLLATE $collation LIKE ?", ["%{$term}%"]);
+            $query->where(function ($q) use ($term) {
+                $q->where('ticket_folio', 'like', "%{$term}%")
+                  ->orWhere('client_name', 'like', "%{$term}%")
+                  ->orWhere('client_ref_id', 'like', "%{$term}%");
             });
         }
     }
 
-    /**
-     * Filtro por rango de fechas (Opcional).
-     */
-    public function scopeByDate(Builder $query, $start = null, $end = null): void
+    public function scopeByDate(Builder $query, $start, $end): void
     {
         if ($start) {
             $query->whereDate('created_at', '>=', $start);
@@ -110,6 +97,31 @@ class Pickup extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Scopes de Lógica de Negocio (Rezagados vs Recientes)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Filtra lo que el Checador puede ver (Solo registros recientes <= 15 días).
+     * Por seguridad, el checador no debe ver paquetes viejos olvidados.
+     */
+    public function scopeVisibleForChecker(Builder $query): void
+    {
+        $query->where('created_at', '>=', now()->subDays(15)->startOfDay());
+    }
+
+    /**
+     * Filtra los "Rezagados": Paquetes en custodia con más de 15 días de antigüedad.
+     * Estos solo los debe ver el Gerente con permisos especiales.
+     */
+    public function scopeRezagados(Builder $query): void
+    {
+        $query->where('status', 'IN_CUSTODY')
+              ->where('created_at', '<', now()->subDays(15)->startOfDay());
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Lógica de Dominio
     |--------------------------------------------------------------------------
     */
@@ -123,17 +135,27 @@ class Pickup extends Model
     }
 
     /**
-     * Marca el paquete como entregado, guardando la evidencia.
-     * Esta función encapsula la lógica de cierre.
+     * Marca el paquete como entregado, guardando la evidencia y firma.
+     * Esta función encapsula toda la lógica de cierre.
      */
-    public function markAsDelivered(string $receiverName, bool $isThirdParty, string $signaturePath): void
+    public function markAsDelivered(string $receiverName, bool $isThirdParty, string $signaturePath, ?string $evidencePath = null, ?string $notes = null): void
     {
-        $this->update([
+        $data = [
             'status' => 'DELIVERED',
             'receiver_name' => $receiverName,
             'is_third_party' => $isThirdParty,
             'signature_path' => $signaturePath,
             'delivered_at' => now(),
-        ]);
+        ];
+
+        // Solo actualizamos si nos mandan los datos (opcionales)
+        if ($evidencePath) {
+            $data['evidence_path'] = $evidencePath;
+        }
+        if ($notes) {
+            $data['notes'] = $notes;
+        }
+
+        $this->update($data);
     }
 }

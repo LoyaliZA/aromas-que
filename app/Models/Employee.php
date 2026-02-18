@@ -6,87 +6,49 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Employee extends Model
 {
     use HasFactory;
 
-    /**
-     * Campos que permitimos asignar masivamente.
-     * Observa que incluimos 'user_id' para poder vincularlo.
-     */
     protected $fillable = [
         'user_id',
-        'full_name',
         'employee_code',
-        'job_position', // <--- AGREGADO
+        'job_position', // <--- CORREGIDO (Antes decía 'position')
+        'appears_in_sales_queue',
+        'hire_date',
         'is_active',
     ];
 
-    /**
-     * Conversión de tipos nativa.
-     */
     protected function casts(): array
     {
         return [
+            'hire_date' => 'date',
             'is_active' => 'boolean',
+            'appears_in_sales_queue' => 'boolean',
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
+    // ... (El resto del archivo y relaciones se quedan igual) ...
 
-    /**
-     * Relación Inversa: Un empleado PERTENECE a una cuenta de Usuario.
-     * (Opcional, porque puede haber empleados sin usuario de sistema todavía).
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Un empleado tiene MÚLTIPLES turnos diarios históricos.
-     * Esta relación conecta con la tabla 'daily_shifts'.
-     */
-    public function dailyShifts(): HasMany
+    public function dailyShift(): HasMany
     {
         return $this->hasMany(DailyShift::class);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Accesores y Mutadores (La capa de traducción)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Ejemplo de lo que preguntaste:
-     * Si llamas a $employee->status_label, obtendrás "Activo" o "Inactivo"
-     * listo para la vista, sin ensuciar la lógica interna.
-     */
-    public function getStatusLabelAttribute(): string
+    
+    public function todayShift()
     {
-        return $this->is_active ? 'Activo' : 'Baja Temporal';
+        return $this->hasOne(DailyShift::class)->where('work_date', today());
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes (Filtros de Búsqueda)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Filtra solo a los empleados que son vendedores.
-     */
-    public function scopeActiveSellers($query)
+    public function scopeSellers(Builder $query)
     {
-        // Ahora filtramos por la columna REAL del empleado
-        return $query->where('is_active', true)
-                     ->where('job_position', 'SELLER');
+        return $query->where('appears_in_sales_queue', true)->where('is_active', true);
     }
 }
