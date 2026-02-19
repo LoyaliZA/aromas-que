@@ -5,6 +5,22 @@
     </div>
 
     <div class="bg-aromas-secondary rounded-xl shadow-xl border border-aromas-tertiary/20 max-w-4xl">
+        
+        {{-- NUEVO: Bloque para mostrar errores de validación o del sistema al editar --}}
+        @if ($errors->any())
+            <div class="m-8 mb-0 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <h3 class="text-red-400 font-bold text-sm">No se pudo actualizar la información:</h3>
+                </div>
+                <ul class="list-disc list-inside text-red-300 text-sm ml-1">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form action="{{ route('admin.users.update', $employee->id) }}" method="POST" class="p-8">
             @csrf
             @method('PUT')
@@ -32,18 +48,18 @@
                         <label class="block text-sm font-medium text-gray-300 mb-2">Puesto / Rol</label>
                         <select name="job_position" required 
                                 class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
-                            <option value="SELLER" {{ $employee->job_position == 'SELLER' ? 'selected' : '' }}>Vendedor (Piso)</option>
-                            <option value="MANAGER" {{ $employee->job_position == 'MANAGER' ? 'selected' : '' }}>Gerente</option>
-                            <option value="CHECKER" {{ $employee->job_position == 'CHECKER' ? 'selected' : '' }}>Checador (Recepción)</option>
-                            <option value="ADMIN" {{ $employee->job_position == 'ADMIN' ? 'selected' : '' }}>Administrador</option>
+                            <option value="SELLER" {{ old('job_position', $employee->job_position) == 'SELLER' ? 'selected' : '' }}>Vendedor (Piso)</option>
+                            <option value="MANAGER" {{ old('job_position', $employee->job_position) == 'MANAGER' ? 'selected' : '' }}>Gerente</option>
+                            <option value="CHECKER" {{ old('job_position', $employee->job_position) == 'CHECKER' ? 'selected' : '' }}>Checador (Recepción)</option>
+                            <option value="ADMIN" {{ old('job_position', $employee->job_position) == 'ADMIN' ? 'selected' : '' }}>Administrador</option>
                         </select>
                     </div>
 
-                    {{-- NUEVO SWITCH EDITABLE --}}
                     <div class="flex items-center pt-8">
                         <label class="inline-flex items-center cursor-pointer">
+                            {{-- Validamos el old() primero, y si no hay, usamos el valor de la base de datos --}}
                             <input type="checkbox" name="appears_in_sales_queue" value="1" class="sr-only peer" 
-                                   {{ $employee->appears_in_sales_queue ? 'checked' : '' }}>
+                                   {{ old('appears_in_sales_queue', $employee->appears_in_sales_queue) ? 'checked' : '' }}>
                             <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
                             <span class="ms-3 text-sm font-medium text-gray-300">Mostrar en Pantalla de Turnos</span>
                         </label>

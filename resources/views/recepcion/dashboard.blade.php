@@ -6,12 +6,10 @@
         {{--    ZONA SUPERIOR: BOTONES (DISEÑO RESTAURADO)              --}}
         {{-- ========================================================== --}}
         <div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {{-- BOTÓN DE TICKET (DISEÑO ORIGINAL) --}}
             <button @click="openQueueModal()" 
                     class="bg-aromas-highlight text-aromas-main rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01] hover:shadow-[0_0_15px_rgba(253,201,116,0.4)] border-2 border-transparent hover:border-white/20">
                 <div class="flex items-center gap-4">
                     <div class="bg-aromas-main/10 p-3 rounded-lg text-aromas-main">
-                        {{-- Icono Ticket --}}
                         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
                     </div>
                     <div class="text-left">
@@ -21,12 +19,10 @@
                 </div>
                 <div class="bg-aromas-main text-aromas-highlight px-4 py-2 rounded-lg text-center shadow-inner">
                     <span class="block text-[10px] uppercase font-bold tracking-wider opacity-70">En Fila</span>
-                    {{-- Contador Reactivo --}}
                     <span class="text-2xl font-bold leading-none" x-text="queueCount">0</span>
                 </div>
             </button>
 
-            {{-- BOTÓN QR (Próximamente) --}}
             <button disabled class="bg-aromas-highlight/50 text-aromas-main/50 border-2 border-dashed border-aromas-main/10 rounded-xl p-4 flex items-center justify-center gap-3 cursor-not-allowed">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
                 <span class="font-bold">Escanear QR (Próximamente)</span>
@@ -38,7 +34,6 @@
         {{-- ========================================================== --}}
         <div class="bg-aromas-secondary rounded-xl p-4 shadow-md border border-aromas-tertiary/20 mb-6 sticky top-2 z-30">
             <div class="flex flex-col md:flex-row gap-4">
-                {{-- Live Search --}}
                 <div class="flex-1 relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="h-5 w-5 text-aromas-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -52,21 +47,47 @@
                     </div>
                 </div>
 
-                {{-- Filtros (Input oculto necesario para el JS) --}}
                 <div class="contents">
                     <select id="deptFilter" @change="fetchData(search)" class="bg-black/20 border border-aromas-tertiary/30 text-white rounded-lg px-4 py-3 focus:border-aromas-highlight cursor-pointer">
                         <option value="ALL">Todos</option>
-                        <option value="AROMAS" {{ request('department') == 'AROMAS' ? 'selected' : '' }}>🟣 Aromas</option>
-                        <option value="BELLAROMA" {{ request('department') == 'BELLAROMA' ? 'selected' : '' }}>🌸 Bellaroma</option>
+                        <option value="AROMAS" {{ request('department') == 'AROMAS' ? 'selected' : '' }}>Aromas</option>
+                        <option value="BELLAROMA" {{ request('department') == 'BELLAROMA' ? 'selected' : '' }}>Bellaroma</option>
                     </select>
-                    {{-- Guardamos el status actual en un input oculto para que JS lo lea --}}
                     <input type="hidden" id="statusFilter" value="{{ request('status', 'IN_CUSTODY') }}">
                 </div>
             </div>
         </div>
 
-        {{-- Mensajes Flash --}}
-        @if(session('success'))
+        {{-- ========================================================== --}}
+        {{--    MENSAJES FLASH Y ALERTA DE TURNO (NUEVO)                --}}
+        {{-- ========================================================== --}}
+        
+        @if(session('new_turn'))
+            <div x-data="{ showTurn: true }" x-show="showTurn" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-transition>
+                
+                <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="showTurn = false"></div>
+                
+                <div class="bg-aromas-secondary border-2 border-aromas-highlight rounded-2xl shadow-[0_0_30px_rgba(253,201,116,0.3)] p-8 max-w-sm w-full text-center relative z-10 animate-fade-in-down">
+                    
+                    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
+                        <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    
+                    <h3 class="text-xl font-bold text-white mb-2">Turno Asignado</h3>
+                    <p class="text-aromas-tertiary text-sm mb-6">Indíquele al cliente su número:</p>
+                    
+                    <div class="bg-gray-900 rounded-xl py-6 border border-gray-700 mb-6 shadow-inner">
+                        <div class="text-5xl font-black text-aromas-highlight tracking-widest mb-2">{{ session('new_turn') }}</div>
+                        <div class="text-white font-bold text-lg">{{ session('client_name') }}</div>
+                        <div class="text-gray-400 text-sm uppercase tracking-wider mt-1">Destino: <span class="{{ session('destination') == 'Caja' ? 'text-green-400' : 'text-yellow-400' }}">{{ session('destination') }}</span></div>
+                    </div>
+
+                    <button @click="showTurn = false" class="w-full bg-aromas-highlight text-aromas-main font-bold text-lg py-3 rounded-xl hover:bg-white transition-all shadow-lg">
+                        Cerrar y Continuar
+                    </button>
+                </div>
+            </div>
+        @elseif(session('success'))
             <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" 
                  class="mb-6 bg-green-500/10 border-l-4 border-green-500 text-green-400 p-4 rounded shadow-lg flex items-center animate-fade-in-down">
                 <span class="font-bold">{{ session('success') }}</span>
@@ -80,14 +101,13 @@
             @include('recepcion.partials.card-grid', ['pickups' => $pickups])
         </div>
 
-        {{-- Paginación --}}
         <div class="mt-6">
             {{ $pickups->links() }}
         </div>
 
 
         {{-- ========================================================== --}}
-        {{--    MODAL 1: CONFIRMAR ENTREGA (CON FOTO Y NOTAS)           --}}
+        {{--    MODAL 1: CONFIRMAR ENTREGA                              --}}
         {{-- ========================================================== --}}
         <div x-show="showDeliveryModal" style="display: none;" 
              class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
@@ -98,7 +118,6 @@
 
             <div class="bg-aromas-secondary w-full max-w-2xl rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col my-auto max-h-[90vh] overflow-y-auto">
                 
-                {{-- Header Modal --}}
                 <div class="bg-black/20 p-4 border-b border-aromas-tertiary/20 flex justify-between items-center sticky top-0 backdrop-blur-md z-20">
                     <div>
                         <h2 class="text-lg font-bold text-white">Confirmar Entrega</h2>
@@ -107,27 +126,22 @@
                     <button @click="closeModal()" class="text-gray-500 hover:text-white p-2 bg-white/5 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
 
-                {{-- Formulario (Importante: enctype) --}}
                 <form id="deliveryForm" method="POST" enctype="multipart/form-data" :action="'/recepcion/confirm/' + pickup.id" class="p-5" @submit.prevent="submitDelivery">
                     @csrf @method('PUT')
                     <input type="hidden" name="signature" x-model="signatureData">
 
-                    {{-- SECCIÓN 1: Evidencia y Notas (NUEVO) --}}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                        {{-- Foto --}}
                         <div class="bg-black/20 p-3 rounded-lg border border-aromas-tertiary/10">
-                            <label class="block text-xs font-bold text-aromas-highlight uppercase mb-2">📸 Evidencia Entrega de pedido</label>
+                            <label class="block text-xs font-bold text-aromas-highlight uppercase mb-2">Evidencia Fotográfica</label>
                             <input type="file" name="evidence_file" accept="image/*" capture="environment"
                                    class="block w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-aromas-highlight file:text-aromas-main hover:file:bg-yellow-400 cursor-pointer">
                         </div>
-                        {{-- Notas --}}
                         <div>
-                            <label class="block text-xs font-bold text-aromas-tertiary uppercase mb-1">📝 Observaciones</label>
+                            <label class="block text-xs font-bold text-aromas-tertiary uppercase mb-1">Observaciones</label>
                             <textarea name="notes" rows="2" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg text-sm text-white focus:border-aromas-highlight focus:ring-1" placeholder="Ej: Caja dañada..."></textarea>
                         </div>
                     </div>
 
-                    {{-- SECCIÓN 2: Receptor --}}
                     <div class="mb-5 space-y-3">
                         <label class="flex items-center space-x-3 cursor-pointer p-3 bg-black/20 rounded-lg border border-aromas-tertiary/10 hover:bg-white/5 transition">
                             <input type="checkbox" name="is_third_party" x-model="isThirdParty" class="w-5 h-5 rounded border-aromas-tertiary text-aromas-highlight focus:ring-aromas-highlight bg-transparent">
@@ -145,7 +159,6 @@
                         </div>
                     </div>
 
-                    {{-- SECCIÓN 3: Firma Digital --}}
                     <div class="mb-6">
                         <div class="flex justify-between items-end mb-2">
                             <label class="text-xs text-gray-400 uppercase tracking-wider font-bold">Firma Digital *</label>
@@ -167,9 +180,8 @@
             </div>
         </div>
 
-
         {{-- ========================================================== --}}
-        {{--    MODAL 2: TICKET DE TURNO (NUEVO: CAJA vs VENTAS)        --}}
+        {{--    MODAL 2: TICKET DE TURNO                                --}}
         {{-- ========================================================== --}}
         <div x-show="showQueueModal" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showQueueModal = false"></div>
@@ -185,7 +197,6 @@
                 <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6">
                     @csrf
                     
-                    {{-- Nombre --}}
                     <div>
                         <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Nombre del Cliente</label>
                         <input type="text" name="client_name" x-ref="queueInput" required 
@@ -193,13 +204,11 @@
                                placeholder="Ej. María Pérez">
                     </div>
 
-                    {{-- Selector Ventas vs Caja (NUEVO) --}}
                     <div>
                         <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-3">Destino</label>
                         <div class="grid grid-cols-2 gap-4">
                             <input type="hidden" name="service_type" x-model="queueType">
 
-                            {{-- Opción Ventas --}}
                             <button type="button" @click="queueType = 'SALES'"
                                     :class="queueType === 'SALES' ? 'bg-aromas-highlight text-aromas-main ring-2 ring-aromas-highlight ring-offset-2 ring-offset-gray-900' : 'bg-black/20 text-gray-400 hover:bg-white/5'"
                                     class="p-3 rounded-xl border border-transparent flex flex-col items-center justify-center transition-all h-24">
@@ -207,7 +216,6 @@
                                 <span class="font-bold text-sm">VENTAS</span>
                             </button>
 
-                            {{-- Opción Caja --}}
                             <button type="button" @click="queueType = 'CASHIER'"
                                     :class="queueType === 'CASHIER' ? 'bg-green-500 text-white ring-2 ring-green-500 ring-offset-2 ring-offset-gray-900' : 'bg-black/20 text-gray-400 hover:bg-white/5'"
                                     class="p-3 rounded-xl border border-transparent flex flex-col items-center justify-center transition-all h-24">
@@ -227,21 +235,17 @@
 
     </div>
 
-    {{-- LIBRERÍA DE FIRMA + SCRIPT UNIFICADO --}}
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <script>
         function deliveryApp(initialQueueCount) {
             return {
-                // Estado General
                 search: '', 
                 isLoading: false,
                 queueCount: initialQueueCount, 
 
-                // Estado Modales
                 showDeliveryModal: false, 
                 showQueueModal: false,
 
-                // Datos Delivery
                 pickup: {}, 
                 isThirdParty: false, 
                 receiverName: '',
@@ -249,27 +253,22 @@
                 signatureData: '', 
                 isPadEmpty: true,
 
-                // Datos Queue (NUEVO)
                 queueType: 'SALES',
 
                 init() {
-                    // 1. Watcher: Búsqueda
                     this.$watch('search', (value) => { this.fetchData(value); });
 
-                    // 2. Polling: Actualizar datos cada 5 seg
                     setInterval(() => {
-                        // No actualizar si el usuario está haciendo algo
+                        // Respetamos la recarga solo si no hay modales abiertos
                         if (this.showDeliveryModal || this.showQueueModal || this.search.length > 0) return;
                         this.fetchData('');
                     }, 5000);
 
-                    // 3. Listener Global: Para abrir modal desde los Cards (AJAX)
                     window.addEventListener('open-delivery-modal', event => {
                         this.openDeliveryModal(event.detail);
                     });
                 },
 
-                // --- Lógica de Búsqueda y Actualización ---
                 fetchData(searchValue) {
                     this.isLoading = true;
                     let dept = document.getElementById('deptFilter') ? document.getElementById('deptFilter').value : 'ALL';
@@ -287,16 +286,14 @@
                         .catch(err => console.error('Error polling:', err));
                 },
 
-                // --- Lógica Modal Queue ---
                 openQueueModal() {
                     this.showQueueModal = true;
-                    this.queueType = 'SALES'; // Resetear a default
+                    this.queueType = 'SALES';
                     setTimeout(() => { 
                         if(this.$refs.queueInput) this.$refs.queueInput.focus(); 
                     }, 100);
                 },
 
-                // --- Lógica Modal Delivery ---
                 openDeliveryModal(data) {
                     this.pickup = data;
                     if (data.is_third_party) { 
@@ -307,7 +304,6 @@
                         this.receiverName = ''; 
                     }
                     this.showDeliveryModal = true;
-                    // Iniciar Canvas de firma
                     setTimeout(() => { this.initPad(); }, 100);
                 },
 
@@ -315,12 +311,10 @@
                     this.showDeliveryModal = false; 
                 },
 
-                // --- Lógica Signature Pad ---
                 initPad() {
                     const canvas = this.$refs.signature_canvas;
                     if(!canvas) return;
 
-                    // Ajustar resolución para pantallas retina
                     const ratio = Math.max(window.devicePixelRatio || 1, 1);
                     canvas.width = canvas.offsetWidth * ratio;
                     canvas.height = canvas.offsetHeight * ratio;
@@ -352,10 +346,8 @@
                         alert('La firma es obligatoria.');
                         return;
                     }
-                    // Guardar firma en variable
                     this.signatureData = this.signaturePad.toDataURL('image/png');
                     
-                    // Enviar form
                     this.$nextTick(() => {
                         document.getElementById('deliveryForm').submit();
                     });

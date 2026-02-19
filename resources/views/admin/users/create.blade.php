@@ -5,6 +5,22 @@
     </div>
 
     <div class="bg-aromas-secondary rounded-xl shadow-xl border border-aromas-tertiary/20 max-w-4xl">
+        
+        {{-- NUEVO: Bloque para mostrar errores de validación o del sistema --}}
+        @if ($errors->any())
+            <div class="m-8 mb-0 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <h3 class="text-red-400 font-bold text-sm">No se pudo guardar la información:</h3>
+                </div>
+                <ul class="list-disc list-inside text-red-300 text-sm ml-1">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form action="{{ route('admin.users.store') }}" method="POST" class="p-8">
             @csrf
 
@@ -17,14 +33,14 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Nombre Completo</label>
-                        <input type="text" name="full_name" required 
+                        <input type="text" name="full_name" value="{{ old('full_name') }}" required 
                                class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
                                placeholder="Ej: Juan Pérez">
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Código de Empleado</label>
-                        <input type="text" name="employee_code" required 
+                        <input type="text" name="employee_code" value="{{ old('employee_code') }}" required 
                                class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
                                placeholder="Ej: AROM-001">
                     </div>
@@ -33,17 +49,16 @@
                         <label class="block text-sm font-medium text-gray-300 mb-2">Puesto / Rol</label>
                         <select name="job_position" required 
                                 class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
-                            <option value="SELLER">Vendedor (Piso)</option>
-                            <option value="MANAGER">Gerente</option>
-                            <option value="CHECKER">Checador (Recepción)</option>
-                            <option value="ADMIN">Administrador</option>
+                            <option value="SELLER" {{ old('job_position') == 'SELLER' ? 'selected' : '' }}>Vendedor (Piso)</option>
+                            <option value="MANAGER" {{ old('job_position') == 'MANAGER' ? 'selected' : '' }}>Gerente</option>
+                            <option value="CHECKER" {{ old('job_position') == 'CHECKER' ? 'selected' : '' }}>Checador (Recepción)</option>
+                            <option value="ADMIN" {{ old('job_position') == 'ADMIN' ? 'selected' : '' }}>Administrador</option>
                         </select>
                     </div>
 
-                    {{-- NUEVO SWITCH: Mostrar en Cola de Ventas --}}
                     <div class="flex items-center pt-8">
                         <label class="inline-flex items-center cursor-pointer">
-                            <input type="checkbox" name="appears_in_sales_queue" value="1" class="sr-only peer" checked>
+                            <input type="checkbox" name="appears_in_sales_queue" value="1" class="sr-only peer" {{ old('appears_in_sales_queue', true) ? 'checked' : '' }}>
                             <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
                             <span class="ms-3 text-sm font-medium text-gray-300">Mostrar en Pantalla de Turnos</span>
                         </label>
@@ -61,7 +76,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico</label>
-                        <input type="email" name="email" 
+                        <input type="email" name="email" value="{{ old('email') }}"
                                class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
                                placeholder="correo@aromas.com">
                     </div>

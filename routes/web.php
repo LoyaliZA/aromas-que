@@ -23,7 +23,7 @@ Route::get('/', function () {
     if (Auth::check() && Auth::user()->role === 'ADMIN') {
         return redirect()->route('admin.dashboard');
     }
-    return view('welcome');
+    return view('tv.public');
 });
 
 // Ruta "Dashboard" por defecto de Breeze (necesaria para redirigir fallos o perfiles básicos)
@@ -53,6 +53,11 @@ Route::prefix('admin')
 
         // CRUD de Usuarios/Empleados
         Route::resource('users', UserController::class);
+        // --- MÓDULO DE PUBLICIDAD TV ---
+        Route::get('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('tv_ads.index');
+        Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
+        Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
+        Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
         
     });
 

@@ -22,6 +22,7 @@ class SalesQueue extends Model
     protected $fillable = [
         'client_name',
         'service_type',       // Agregado: SALES o CASHIER
+        'turn_number',        // Número de turno asignado
         'source',             // QR_MOBILE, MANUAL_KIOSK
         'status',             // WAITING, SERVING, COMPLETED, ABANDONED
         'assigned_shift_id',  // El turno del vendedor que lo atiende

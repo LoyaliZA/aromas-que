@@ -14,8 +14,9 @@ class Employee extends Model
 
     protected $fillable = [
         'user_id',
+        'full_name', // <--- CAMBIO: Agregamos full_name a la lista permitida
         'employee_code',
-        'job_position', // <--- CORREGIDO (Antes decía 'position')
+        'job_position',
         'appears_in_sales_queue',
         'hire_date',
         'is_active',
@@ -29,8 +30,6 @@ class Employee extends Model
             'appears_in_sales_queue' => 'boolean',
         ];
     }
-
-    // ... (El resto del archivo y relaciones se quedan igual) ...
 
     public function user(): BelongsTo
     {
