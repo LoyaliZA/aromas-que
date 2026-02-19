@@ -14,7 +14,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        // Esto ya lo tienes configurado para tu tabla Dark Mode
+        // Ordenamos para ver primero activos y luego por puesto
         $employees = Employee::with('user')
             ->orderBy('is_active', 'desc')
             ->orderBy('job_position', 'asc')
@@ -25,116 +25,109 @@ class UserController extends Controller
 
     public function create()
     {
-        // Retornamos la vista del formulario (que haremos en el paso 2)
         return view('admin.users.create');
     }
 
     public function store(Request $request)
     {
-        // 1. Validamos datos del EMPLEADO (Lo más importante)
+        // 1. Validamos datos
         $validated = $request->validate([
             'full_name' => 'required|string|max:100',
             'employee_code' => 'required|string|unique:employees,employee_code',
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
-            // Datos opcionales para login (Solo si llenan el email)
+            'appears_in_sales_queue' => 'nullable|boolean', // <--- NUEVO CAMPO
+            // Login opcional
             'email' => 'nullable|email|unique:users,email',
             'password' => 'nullable|required_with:email|min:8',
         ]);
 
         try {
-            DB::transaction(function () use ($validated) {
-                
+            DB::transaction(function () use ($validated, $request) {
+                // A. Crear Usuario (Si aplica)
                 $userId = null;
-
-                // 2. ¿El administrador llenó email y contraseña?
-                // Entonces creamos un Usuario de Sistema (Login)
                 if (!empty($validated['email']) && !empty($validated['password'])) {
                     $user = User::create([
                         'name' => $validated['full_name'],
                         'email' => $validated['email'],
                         'password' => Hash::make($validated['password']),
-                        'role' => $validated['job_position'], // El rol de usuario iguala al puesto
+                        'role' => $validated['job_position'], 
                         'is_active' => true,
                     ]);
                     $userId = $user->id;
                 }
 
-                // 3. Creamos SIEMPRE al Empleado (Negocio)
+                // B. Crear Empleado
                 Employee::create([
-                    'user_id' => $userId, // Puede ser null si es solo vendedor
+                    'user_id' => $userId,
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
+                    // Si el checkbox viene marcado es '1' (true), si no viene es false
+                    'appears_in_sales_queue' => $request->has('appears_in_sales_queue'), 
                     'is_active' => true,
+                    'hire_date' => now(),
                 ]);
             });
 
             return redirect()->route('admin.users.index')
-                ->with('success', 'Colaborador registrado correctamente.');
+                ->with('success', 'Colaborador registrado exitosamente.');
 
         } catch (\Exception $e) {
-            return back()->withInput()->withErrors(['error' => 'Error: ' . $e->getMessage()]);
+            return back()->withInput()->withErrors(['error' => 'Error al guardar: ' . $e->getMessage()]);
         }
     }
 
-    /**
-     * Muestra el formulario de edición.
-     * Recibimos el ID del EMPLEADO (no del usuario).
-     */
     public function edit($id)
     {
         $employee = Employee::with('user')->findOrFail($id);
         return view('admin.users.edit', compact('employee'));
     }
 
-    /**
-     * Actualiza los datos del empleado y su acceso.
-     */
     public function update(Request $request, $id)
     {
         $employee = Employee::with('user')->findOrFail($id);
 
         $validated = $request->validate([
             'full_name' => 'required|string|max:100',
-            'employee_code' => 'required|string|unique:employees,employee_code,' . $employee->id,
+            'employee_code' => ['required', Rule::unique('employees')->ignore($employee->id)],
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
-            // Email es requerido SOLO si el checkbox 'enable_login' viene marcado
-            'email' => 'nullable|required_if:enable_login,on|email|unique:users,email,' . ($employee->user_id ?? 'null'),
-            'password' => 'nullable|min:8',
+            'appears_in_sales_queue' => 'nullable|boolean', // <--- NUEVO CAMPO
+            // Login
+            'email' => ['nullable', 'email', Rule::unique('users')->ignore($employee->user_id)],
+            'password' => 'nullable|min:8', 
         ]);
 
         try {
-            DB::transaction(function () use ($request, $validated, $employee) {
+            DB::transaction(function () use ($validated, $request, $employee) {
                 
-                // 1. Actualizar datos base del Empleado
+                // 1. Actualizar Empleado
                 $employee->update([
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
+                    'appears_in_sales_queue' => $request->has('appears_in_sales_queue'), // Actualizamos el switch
                 ]);
 
-                // 2. Gestión del Usuario (Login)
-                if ($request->has('enable_login')) {
-                    // CASO A: Quiere tener acceso web
-                    
+                // 2. Lógica de Usuario (Crear, Actualizar o Borrar)
+                if (!empty($validated['email'])) {
+                    // CASO A: Quiere acceso web
                     if ($employee->user) {
-                        // Si ya tenía usuario, actualizamos
-                        $userData = [
+                        // Ya tenía usuario -> Actualizamos
+                        $dataToUpdate = [
                             'name' => $validated['full_name'],
                             'email' => $validated['email'],
                             'role' => $validated['job_position'],
                         ];
-                        // Solo cambiamos password si escribió una nueva
                         if (!empty($validated['password'])) {
-                            $userData['password'] = Hash::make($validated['password']);
+                            $dataToUpdate['password'] = Hash::make($validated['password']);
                         }
-                        $employee->user->update($userData);
+                        $employee->user->update($dataToUpdate);
                     } else {
-                        // Si no tenía, creamos uno nuevo y vinculamos
+                        // No tenía usuario -> Creamos uno nuevo
                         $user = User::create([
                             'name' => $validated['full_name'],
                             'email' => $validated['email'],
-                            'password' => Hash::make($validated['password']), // Aquí sí es obligatoria
+                            'password' => Hash::make($validated['password'] ?? 'aromas123'), // Default si se les olvida
                             'role' => $validated['job_position'],
                             'is_active' => true,
                         ]);
@@ -144,7 +137,6 @@ class UserController extends Controller
                 } else {
                     // CASO B: No quiere acceso web (o se lo quitamos)
                     if ($employee->user) {
-                        // Borramos el usuario para liberar el email y limpiar la BD
                         $user = $employee->user;
                         $employee->update(['user_id' => null]);
                         $user->delete();
@@ -160,19 +152,13 @@ class UserController extends Controller
         }
     }
 
-    /**
-     * Desactivación Lógica (Soft Delete).
-     */
     public function destroy($id)
     {
         $employee = Employee::findOrFail($id);
         
-        // Invertimos el estado (si está activo lo desactiva, y viceversa)
         $newState = !$employee->is_active;
-        
         $employee->update(['is_active' => $newState]);
 
-        // Si tiene usuario, también actualizamos su acceso
         if ($employee->user) {
             $employee->user->update(['is_active' => $newState]);
         }

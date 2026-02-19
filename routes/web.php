@@ -76,6 +76,9 @@ Route::prefix('gerencia')
         Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
         
         Route::get('/history', [PickupController::class, 'history'])->name('history');
+
+        Route::get('/staff', [App\Http\Controllers\Gerencia\StaffController::class, 'index'])->name('staff.index');
+        Route::post('/staff/toggle', [App\Http\Controllers\Gerencia\StaffController::class, 'toggleShift'])->name('staff.toggle');
     });
 
 /*
@@ -101,9 +104,13 @@ Route::prefix('recepcion')
 */
 Route::prefix('ventas')
     ->name('ventas.')
-    ->middleware(['auth']) // TODO: Agregar 'role:SELLER' en el futuro
+    ->middleware(['auth']) 
     ->group(function () {
-        Route::get('/dashboard', [QueueController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [App\Http\Controllers\Ventas\QueueController::class, 'index'])->name('dashboard');
+        Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
+        Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
+        Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
+        // Nota: Quitamos toggle-shift de aquí porque ahora es exclusivo de gerencia/staff
     });
 
 /*

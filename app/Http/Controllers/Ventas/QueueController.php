@@ -4,208 +4,141 @@ namespace App\Http\Controllers\Ventas;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use App\Models\Employee;
 use App\Models\DailyShift;
 use App\Models\SalesQueue;
-use App\Models\ShiftStatusLog;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class QueueController extends Controller
 {
-    /**
-     * VISTA PRINCIPAL: El Dashboard del Vendedor.
-     */
     public function index()
     {
-        $user = Auth::user();
-        
-        // 1. Validar que tenga perfil de empleado
-        if (!$user->employee) {
-            abort(403, 'Usuario sin perfil de empleado asignado.');
-        }
-
-        // 2. Obtener o Crear el Turno de Hoy (Lazy Creation)
-        // Si es la primera vez que entra hoy, le creamos su registro en OFFLINE.
-        $shift = DailyShift::firstOrCreate(
-            [
-                'employee_id' => $user->employee->id,
-                'work_date'   => today(),
-            ],
-            [
-                'current_status' => 'OFFLINE',
-                'customers_served_count' => 0,
-                'last_status_change_at' => now(),
-                'last_action_at' => now(),
-            ]
-        );
-
-        // 3. Revisar si ya está atendiendo a alguien (Persistencia al recargar página)
-        $currentClient = SalesQueue::where('assigned_shift_id', $shift->id)
-                                   ->where('status', 'SERVING')
-                                   ->first();
-
-        return view('ventas.dashboard', compact('shift', 'currentClient'));
+        $sellers = $this->getSellersList();
+        $clientsWaiting = SalesQueue::waiting()->sales()->count();
+        return view('ventas.dashboard', compact('sellers', 'clientsWaiting'));
     }
 
-    /**
-     * CAMBIAR ESTADO: Online, Offline, Break.
-     */
-    public function updateStatus(Request $request)
+    public function poll()
     {
-        $request->validate([
-            'status' => 'required|in:ONLINE,OFFLINE,BREAK',
-            'break_reason' => 'nullable|in:BATHROOM,LUNCH,ERRAND,PACKAGING', // Validamos los motivos
-        ]);
+        // 1. Ejecutar Matchmaker
+        $this->runMatchmaker();
 
-        $user = Auth::user();
-        $shift = DailyShift::where('employee_id', $user->employee->id)
-                           ->whereDate('work_date', today())
-                           ->firstOrFail();
+        // 2. Obtener datos actualizados
+        $sellers = $this->getSellersList();
+        $clientsWaiting = SalesQueue::waiting()->sales()->count();
 
-        // Evitar cambios innecesarios
-        if ($shift->current_status === $request->status && $shift->break_reason === $request->break_reason) {
-            return response()->json(['status' => 'no_change']);
+        // 3. DETECTAR ASIGNACIÓN RECIENTE (Para la Mega Notificación)
+        // Buscamos si alguien empezó a ser atendido en los últimos 4 segundos
+        $recentAssignment = SalesQueue::where('status', 'SERVING')
+            ->where('started_serving_at', '>=', now()->subSeconds(4))
+            ->with('assignedShift.employee') // Traemos datos del vendedor
+            ->first();
+
+        $alertData = null;
+        if ($recentAssignment && $recentAssignment->assignedShift) {
+            $alertData = [
+                'client' => $recentAssignment->client_name,
+                'seller' => $recentAssignment->assignedShift->employee->full_name,
+                'folio'  => $recentAssignment->id
+            ];
         }
 
-        // Registrar en Bitácora (Log)
-        ShiftStatusLog::create([
-            'daily_shift_id' => $shift->id,
-            'previous_status' => $shift->current_status,
-            'new_status' => $request->status,
-            'changed_at' => now(),
-        ]);
-
-        // Actualizar Turno
-        $shift->current_status = $request->status;
-        $shift->break_reason = ($request->status === 'BREAK') ? $request->break_reason : null; // Limpiar razón si no es break
-        
-        // REGLA CLAVE: Si se pone ONLINE, reiniciamos su contador de espera (para la cola de justicia)
-        // A menos que venga de atender un cliente (eso se maneja en finish),
-        // pero si viene de Break/Offline, entra al final de la fila de vendedores.
-        if ($request->status === 'ONLINE') {
-            $shift->last_status_change_at = now();
-        }
-
-        $shift->last_action_at = now(); // Heartbeat
-        $shift->save();
+        $html = view('ventas.partials.sellers-grid', compact('sellers'))->render();
 
         return response()->json([
-            'success' => true,
-            'new_status' => $shift->current_status,
-            'message' => 'Estado actualizado.'
+            'html' => $html,
+            'waiting' => $clientsWaiting,
+            'alert' => $alertData
         ]);
     }
 
-    /**
-     * HEARTBEAT / POLLING: El cerebro de la asignación automática.
-     * Esta función será llamada por JS cada X segundos.
-     */
-    public function checkQueue(Request $request)
+    public function toggleBreak(Request $request)
     {
-        $user = Auth::user();
-        $shift = DailyShift::where('employee_id', $user->employee->id)
-                           ->whereDate('work_date', today())
-                           ->first();
+        $request->validate([
+            'shift_id' => 'required|exists:daily_shifts,id',
+            'reason' => 'nullable|string' 
+        ]);
+        
+        $shift = DailyShift::findOrFail($request->shift_id);
 
-        if (!$shift) return response()->json(['status' => 'error'], 404);
-
-        // Actualizamos "Heartbeat" para saber que sigue vivo
-        $shift->touchLastAction();
-
-        // CASO 1: YA ESTÁ ATENDIENDO (Recuperación de estado)
-        $activeClient = SalesQueue::where('assigned_shift_id', $shift->id)
-                                  ->where('status', 'SERVING')
-                                  ->first();
-
-        if ($activeClient) {
-            return response()->json([
-                'status' => 'serving',
-                'client' => $activeClient
-            ]);
+        if ($shift->current_status === 'ONLINE') {
+            $reason = $request->reason ?? 'GENERAL';
+            $shift->update(['current_status' => 'BREAK', 'break_reason' => $reason]);
+        } elseif ($shift->current_status === 'BREAK') {
+            $shift->update(['current_status' => 'ONLINE', 'break_reason' => null, 'last_status_change_at' => now()]);
         }
 
-        // CASO 2: NO ESTÁ ONLINE (No asignar nada)
-        if ($shift->current_status !== 'ONLINE') {
-            return response()->json(['status' => 'offline_or_break']);
-        }
+        return back();
+    }
 
-        // CASO 3: ESTÁ ONLINE Y LIBRE -> INTENTAR ASIGNAR (MATCH)
-        // Usamos una transacción para evitar "Race Conditions" (que 2 vendedores tomen al mismo)
-        $assignment = DB::transaction(function () use ($shift) {
+    public function finishService(Request $request)
+    {
+        $request->validate(['shift_id' => 'required|exists:daily_shifts,id']);
+        
+        DB::transaction(function () use ($request) {
+            $shift = DailyShift::lockForUpdate()->find($request->shift_id);
             
-            // A. ¿Soy el elegido? (Lógica del Modelo DailyShift)
-            $nextAgent = DailyShift::assignNextAgent();
+            $client = SalesQueue::where('assigned_shift_id', $shift->id)
+                                ->where('status', 'SERVING')
+                                ->first();
 
-            // Si no soy yo el siguiente en la lista de méritos, espero.
-            if (!$nextAgent || $nextAgent->id !== $shift->id) {
-                return null;
+            if ($client) {
+                $client->update(['status' => 'COMPLETED', 'completed_at' => now()]);
+                $shift->increment('customers_served_count');
+                $shift->update([
+                    'last_status_change_at' => now(),
+                    'last_action_at' => now()
+                ]);
             }
+        });
 
-            // B. ¿Hay clientes esperando en VENTAS? (Ignoramos los de CAJA)
-            // Usamos lockForUpdate para bloquear la fila mientras leemos
-            $nextClient = SalesQueue::waiting()
-                                    ->sales() // Scope que creamos (service_type = SALES)
-                                    ->lockForUpdate()
-                                    ->first();
+        return back()->with('success', 'Venta finalizada');
+    }
 
+    private function getSellersList()
+    {
+        // Traemos empleados marcados para venta
+        return Employee::sellers()->with(['todayShift'])->get();
+    }
+
+    private function runMatchmaker()
+    {
+        // (Tu lógica de matchmaker existente...)
+        $waitingClients = SalesQueue::waiting()->sales()->count();
+        if ($waitingClients === 0) return;
+
+        $availableShifts = DailyShift::where('work_date', today())
+            ->where('current_status', 'ONLINE')
+            ->where('flagged_as_idle', false)
+            ->get();
+
+        $freeShifts = $availableShifts->filter(function ($shift) {
+            return !SalesQueue::where('assigned_shift_id', $shift->id)
+                              ->where('status', 'SERVING')
+                              ->exists();
+        });
+
+        if ($freeShifts->isEmpty()) return;
+
+        $totalSales = $availableShifts->sum('customers_served_count');
+        
+        if ($totalSales == 0) {
+            $freeShifts = $freeShifts->shuffle();
+        } else {
+            $freeShifts = $freeShifts->sortBy('last_status_change_at');
+        }
+
+        foreach ($freeShifts as $shift) {
+            $nextClient = SalesQueue::waiting()->sales()->lockForUpdate()->first();
             if ($nextClient) {
-                // C. ¡MATCH! Asignar cliente al vendedor
                 $nextClient->update([
                     'status' => 'SERVING',
                     'assigned_shift_id' => $shift->id,
                     'started_serving_at' => now(),
                 ]);
-                return $nextClient;
+            } else {
+                break;
             }
-
-            return null;
-        });
-
-        if ($assignment) {
-            return response()->json([
-                'status' => 'assigned',
-                'client' => $assignment
-            ]);
         }
-
-        // CASO 4: ONLINE PERO SIN CLIENTES (ESPERANDO)
-        return response()->json(['status' => 'waiting']);
-    }
-
-    /**
-     * FINALIZAR ATENCIÓN: Cerrar ticket y volver a la cola.
-     */
-    public function finishService(Request $request)
-    {
-        $user = Auth::user();
-        $shift = DailyShift::where('employee_id', $user->employee->id)
-                           ->whereDate('work_date', today())
-                           ->firstOrFail();
-
-        // Buscar al cliente que estaba atendiendo
-        $client = SalesQueue::where('assigned_shift_id', $shift->id)
-                            ->where('status', 'SERVING')
-                            ->first();
-
-        if ($client) {
-            $client->update([
-                'status' => 'COMPLETED',
-                'completed_at' => now(),
-            ]);
-
-            // Actualizar estadísticas del vendedor
-            $shift->increment('customers_served_count');
-            
-            // IMPORTANTE: Al terminar, el vendedor queda ONLINE pero "al final de la fila"
-            // para recibir clientes (Round Robin justo).
-            // Actualizamos su timestamp para que DailyShift::assignNextAgent() lo ponga al final.
-            $shift->update([
-                'last_status_change_at' => now(),
-                'last_action_at' => now()
-            ]);
-        }
-
-        return response()->json(['success' => true]);
     }
 }

@@ -32,7 +32,6 @@
             <a href="{{ route('gerencia.dashboard') }}" class="block p-2 hover:opacity-80 transition-opacity">
                 <img src="{{ asset('images/logo_blanco.png') }}" alt="Aromas Logo" class="h-20 w-auto object-contain">
             </a>
-            {{-- Distintivo de Gerencia --}}
             <span class="mt-2 px-3 py-0.5 bg-aromas-highlight/10 text-aromas-highlight border border-aromas-highlight/20 rounded text-[10px] font-bold uppercase tracking-widest shadow-sm">
                 Gerencia
             </span>
@@ -44,7 +43,7 @@
             {{-- ENLACE 1: DASHBOARD --}}
              <a href="{{ route('gerencia.dashboard') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.dashboard') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
-               {{-- ... icono dashboard ... --}}
+               <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.dashboard') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                 Panel de Control
             </a>
             
@@ -55,11 +54,18 @@
                 Operación Diaria
             </a>
 
-            {{-- Enlace 3: Historial (NUEVO) --}}
+            {{-- Enlace 3: Historial --}}
             <a href="{{ route('gerencia.history') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.history') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.history') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 Historial Completo
+            </a>
+
+            {{-- Enlace 4: STAFF (NUEVO) --}}
+            <a href="{{ route('gerencia.staff.index') }}" 
+               class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.staff.index') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.staff.index') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                Personal y Turnos
             </a>
             
         </nav>
@@ -78,7 +84,7 @@
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button type="submit" class="flex items-center w-full text-gray-400 hover:text-aromas-error transition-colors px-2 py-1 rounded-md hover:bg-white/5">
-                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h4a3 3 0 013 3v1"></path></svg>
                     Cerrar Sesión
                 </button>
             </form>

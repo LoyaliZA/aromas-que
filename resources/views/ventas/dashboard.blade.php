@@ -1,281 +1,217 @@
-<x-app-layout>
-    {{-- 
-        APP DE VENDEDOR (SALES DASHBOARD) - DISEÑO AROMAS DARK
-    --}}
-    <div x-data="salesApp({{ json_encode($shift) }}, {{ json_encode($currentClient) }})" 
-         x-init="init()" 
-         class="min-h-screen transition-colors duration-500 bg-gray-900 text-white font-sans"
-         :class="{
-             'bg-gray-900': status === 'OFFLINE', 
-             'bg-gray-900': status === 'ONLINE',
-             'bg-gray-800': status === 'BREAK'
-         }">
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Tablero de Ventas - Aromas</title>
+    {{-- Cargamos los estilos compilados --}}
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="bg-gray-900 text-white font-sans antialiased overflow-hidden">
 
-        {{-- HEADER SUPERIOR --}}
-        <div class="bg-aromas-secondary border-b border-aromas-tertiary/20 px-6 py-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
-            <div class="flex items-center gap-4">
-                {{-- Indicador de Estado (Semáforo) --}}
-                <div class="p-2 rounded-lg border border-white/5 shadow-inner transition-colors duration-300" 
-                     :class="{
-                         'bg-red-500/20 text-red-400 border-red-500/30': status === 'OFFLINE',
-                         'bg-green-500/20 text-green-400 border-green-500/30': status === 'ONLINE',
-                         'bg-yellow-500/20 text-yellow-400 border-yellow-500/30': status === 'BREAK'
-                     }">
-                     <svg x-show="status === 'OFFLINE'" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                     <svg x-show="status === 'ONLINE'" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
-                     <svg x-show="status === 'BREAK'" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    {{-- APP CONTAINER --}}
+    <div class="min-h-screen flex flex-col" x-data="salesDashboard()">
+        
+        {{-- HEADER EXCLUSIVO VENDEDORES --}}
+        <div class="bg-gray-900/90 backdrop-blur-md border-b border-gray-800 px-8 py-5 shadow-2xl sticky top-0 z-50">
+            <div class="flex justify-between items-center w-full">
+                
+                {{-- TÍTULO --}}
+                <div class="flex items-center gap-5">
+                    <div class="bg-gradient-to-br from-aromas-highlight to-yellow-600 p-3 rounded-xl text-aromas-main shadow-lg shadow-yellow-500/20">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-black text-white tracking-tight uppercase">VENDEDORES</h1>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="w-2 h-2 rounded-full" :class="isLoading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'"></span>
+                            <p class="text-xs text-gray-400 font-medium" x-text="isLoading ? 'Sincronizando...' : 'Sistema en Línea'"></p>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-lg font-bold text-white leading-tight">{{ Auth::user()->name }}</h1>
-                    <p class="text-[10px] font-bold tracking-widest uppercase opacity-70" x-text="statusLabel"></p>
-                </div>
-            </div>
 
-            {{-- Reloj --}}
-            <div class="text-right hidden md:block">
-                <p class="text-[10px] text-aromas-highlight uppercase tracking-wider opacity-60">Hora Local</p>
-                <p class="text-xl font-mono font-bold text-white" x-text="currentTime"></p>
+                {{-- CONTADOR DE ESPERA --}}
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">En Fila</p>
+                        <div class="flex items-baseline justify-end gap-1">
+                            <span class="text-4xl font-black text-white" x-text="waitingCount">{{ $clientsWaiting }}</span>
+                            <span class="text-sm text-gray-600">clientes</span>
+                        </div>
+                    </div>
+                    
+                    {{-- Botón Salir (Discreto) --}}
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="p-3 rounded-full bg-gray-800 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-colors" title="Salir">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 
-        {{-- CONTENIDO PRINCIPAL --}}
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex items-center justify-center min-h-[80vh]">
+        {{-- GRID PRINCIPAL --}}
+        <div class="flex-1 overflow-y-auto p-8">
+            {{-- Mensajes Flash --}}
+            @if(session('success'))
+                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4000)" 
+                     class="fixed top-24 right-8 z-50 bg-green-500 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in-down">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span class="font-bold">{{ session('success') }}</span>
+                </div>
+            @endif
+
+            <div id="sellers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 h-full content-start">
+                @include('ventas.partials.sellers-grid', ['sellers' => $sellers])
+            </div>
+        </div>
+
+        {{-- MODAL DE BREAKS --}}
+        <div x-show="showBreakModal" style="display: none;" 
+             class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+             x-transition:enter="ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
             
-            {{-- 1. PANTALLA OFFLINE --}}
-            <div x-show="status === 'OFFLINE'" class="text-center space-y-8 animate-fade-in-up" style="display: none;">
-                <div class="relative inline-block">
-                    <div class="absolute inset-0 bg-aromas-highlight blur-2xl opacity-10 rounded-full"></div>
-                    <div class="relative p-6 rounded-full bg-black/40 border border-white/10 shadow-2xl">
-                        <svg class="w-20 h-20 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    </div>
-                </div>
-                <div>
-                    <h2 class="text-3xl font-black text-white mb-2 tracking-tight">SISTEMA DE VENTAS</h2>
-                    <p class="text-gray-400 text-lg font-light">Tu turno está cerrado. Inicia para recibir clientes.</p>
-                </div>
-                <button @click="updateStatus('ONLINE')" class="group relative px-8 py-4 bg-aromas-highlight text-aromas-main font-black text-lg rounded-xl shadow-lg hover:shadow-yellow-500/20 transition-all transform hover:scale-105 active:scale-95 overflow-hidden">
-                    <div class="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 transform -skew-x-12 -translate-x-full"></div>
-                    INICIAR MI TURNO
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 w-full max-w-lg shadow-2xl transform transition-all" @click.away="showBreakModal = false">
+                <h3 class="text-2xl font-black text-white mb-6 text-center uppercase tracking-wide">Selecciona Motivo</h3>
+                
+                <form action="{{ route('ventas.toggle-break') }}" method="POST" class="grid grid-cols-2 gap-4">
+                    @csrf
+                    <input type="hidden" name="shift_id" :value="breakShiftId">
+                    
+                    @foreach([
+                        ['val' => 'BATHROOM', 'icon' => '🚽', 'label' => 'Baño'],
+                        ['val' => 'LUNCH', 'icon' => '🍔', 'label' => 'Comida'],
+                        ['val' => 'ERRAND', 'icon' => '🏃', 'label' => 'Encargo'],
+                        ['val' => 'PACKAGING', 'icon' => '📦', 'label' => 'Paquetería']
+                    ] as $opt)
+                        <button type="submit" name="reason" value="{{ $opt['val'] }}" 
+                                class="p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
+                            <span class="text-4xl group-hover:scale-110 transition-transform">{{ $opt['icon'] }}</span>
+                            <span class="text-sm uppercase tracking-wider">{{ $opt['label'] }}</span>
+                        </button>
+                    @endforeach
+                </form>
+                
+                <button @click="showBreakModal = false" class="mt-6 w-full py-4 text-gray-500 font-bold hover:text-white transition-colors uppercase text-sm tracking-widest">
+                    Cancelar
                 </button>
             </div>
+        </div>
 
-            {{-- 2. PANTALLA ONLINE (BUSCANDO) --}}
-            <div x-show="status === 'ONLINE' && !client" class="text-center w-full max-w-2xl animate-fade-in" style="display: none;">
-                <div class="bg-aromas-secondary/50 backdrop-blur-sm border border-aromas-tertiary/20 p-10 rounded-3xl shadow-2xl relative overflow-hidden">
-                    
-                    {{-- Radar Animation --}}
-                    <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -mt-20 w-96 h-96 bg-aromas-highlight/5 rounded-full blur-3xl animate-pulse"></div>
-
-                    <div class="relative z-10">
-                        <div class="mb-8">
-                            <span class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-aromas-highlight/10 text-aromas-highlight ring-4 ring-aromas-highlight/20 animate-bounce">
-                                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                            </span>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white mb-2">Buscando Cliente...</h2>
-                        <p class="text-gray-400">El sistema te asignará el siguiente turno automáticamente.</p>
-                        
-                        {{-- Opciones de Break --}}
-                        <div class="mt-10 pt-8 border-t border-white/5">
-                            <p class="text-xs text-aromas-tertiary uppercase tracking-widest font-bold mb-4">Pausar Turno</p>
-                            <div class="grid grid-cols-2 gap-3">
-                                <button @click="takeBreak('BATHROOM')" class="flex items-center justify-center gap-2 p-3 rounded-lg border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white transition group">
-                                    <span class="group-hover:scale-110 transition-transform">🚽</span> Baño
-                                </button>
-                                <button @click="takeBreak('LUNCH')" class="flex items-center justify-center gap-2 p-3 rounded-lg border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white transition group">
-                                    <span class="group-hover:scale-110 transition-transform">🍔</span> Comida
-                                </button>
-                                <button @click="takeBreak('ERRAND')" class="flex items-center justify-center gap-2 p-3 rounded-lg border border-white/10 hover:bg-white/5 text-gray-300 hover:text-white transition group">
-                                    <span class="group-hover:scale-110 transition-transform">🏃</span> Encargo
-                                </button>
-                                <button @click="updateStatus('OFFLINE')" class="col-span-2 p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 font-bold uppercase text-xs tracking-wider transition">
-                                    Cerrar Sesión
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+        {{-- MEGA NOTIFICACIÓN --}}
+        <div x-show="showMegaAlert" style="display: none;" 
+             class="fixed inset-0 z-[100] flex items-center justify-center bg-blue-900/95 backdrop-blur-xl"
+             x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-90">
+            
+            <div class="text-center p-8 max-w-5xl w-full">
+                <div class="mb-8 animate-bounce">
+                    <span class="inline-block p-6 rounded-full bg-white/10 border-4 border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.2)]">
+                        <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    </span>
                 </div>
-            </div>
-
-            {{-- 3. PANTALLA ATENDIENDO (CLIENTE ASIGNADO) --}}
-            <div x-show="client" class="w-full max-w-4xl animate-fade-in-up" style="display: none;">
-                <div class="bg-aromas-secondary rounded-3xl shadow-2xl overflow-hidden border border-aromas-tertiary/30">
-                    {{-- Header Cliente --}}
-                    <div class="bg-gradient-to-r from-aromas-highlight to-yellow-500 px-8 py-6 flex justify-between items-center text-aromas-main">
+                
+                <h2 class="text-3xl text-blue-200 uppercase tracking-[0.2em] font-bold mb-8">Nueva Asignación</h2>
+                
+                <div class="bg-white text-gray-900 rounded-[2rem] p-12 shadow-2xl mx-auto transform transition-all hover:scale-105 border-4 border-blue-400/50">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                         <div>
-                            <p class="text-aromas-main/70 text-xs uppercase tracking-widest font-bold mb-1">Cliente Asignado</p>
-                            <h2 class="text-3xl font-black tracking-tight" x-text="client?.client_name"></h2>
+                            <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Vendedor</p>
+                            <p class="text-5xl font-black text-blue-600 leading-tight" x-text="alertData.seller"></p>
                         </div>
-                        <div class="bg-black/20 px-4 py-2 rounded-lg backdrop-blur-md border border-black/10">
-                            <span class="text-aromas-main font-mono text-2xl font-bold" x-text="timer">00:00</span>
-                        </div>
-                    </div>
-
-                    <div class="p-8">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            {{-- Info --}}
-                            <div class="col-span-2 space-y-6">
-                                <div class="bg-black/20 p-6 rounded-xl border border-white/5">
-                                    <h3 class="text-lg font-bold text-aromas-highlight mb-4">Detalles del Turno</h3>
-                                    <div class="space-y-4 text-sm">
-                                        <div class="flex justify-between border-b border-white/5 pb-2">
-                                            <span class="text-gray-400">Origen:</span>
-                                            <span class="font-bold text-white uppercase" x-text="client?.source"></span>
-                                        </div>
-                                        <div class="flex justify-between border-b border-white/5 pb-2">
-                                            <span class="text-gray-400">Hora de Llegada:</span>
-                                            <span class="font-bold text-white font-mono" x-text="formatTime(client?.queued_at)"></span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-400">Tiempo en Espera:</span>
-                                            <span class="font-bold text-green-400 font-mono" x-text="getWaitTime()"></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Acciones --}}
-                            <div class="flex flex-col gap-4 justify-center">
-                                <button @click="finishService()" class="w-full py-5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-xl shadow-lg transition transform active:scale-95 flex flex-col items-center border border-green-400/30">
-                                    <span>✅ VENTA REALIZADA</span>
-                                    <span class="text-xs font-normal opacity-80 mt-1">Finalizar y volver a cola</span>
-                                </button>
-                                
-                                <button @click="finishService()" class="w-full py-3 bg-transparent border-2 border-gray-600 text-gray-400 rounded-xl font-bold hover:border-gray-400 hover:text-white transition uppercase text-xs tracking-wider">
-                                    Cliente No Compró
-                                </button>
-                            </div>
+                        <div class="pt-8 md:pt-0 md:pl-12">
+                            <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Cliente</p>
+                            <p class="text-5xl font-black text-gray-800 leading-tight" x-text="alertData.client"></p>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {{-- 4. PANTALLA BREAK --}}
-            <div x-show="status === 'BREAK'" class="text-center w-full max-w-lg animate-fade-in" style="display: none;">
-                <div class="bg-aromas-secondary p-10 rounded-3xl shadow-xl border-t-4 border-yellow-500 relative overflow-hidden">
-                    <div class="absolute inset-0 bg-yellow-500/5 repeating-linear-gradient-45"></div>
-                    
-                    <div class="relative z-10">
-                        <div class="mb-6 animate-pulse">
-                            <span class="text-6xl filter drop-shadow-lg">⏸️</span>
-                        </div>
-                        <h2 class="text-3xl font-black text-white mb-2">EN PAUSA</h2>
-                        <div class="inline-block px-4 py-1 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-sm font-bold uppercase tracking-wide mb-8">
-                            <span x-text="breakReasonLabel"></span>
-                        </div>
-                        
-                        <button @click="updateStatus('ONLINE')" class="w-full py-4 bg-white text-gray-900 font-black rounded-xl text-lg shadow-lg hover:bg-gray-100 transition transform hover:-translate-y-1">
-                            REGRESAR AL TRABAJO
-                        </button>
-                    </div>
-                </div>
+                <button @click="closeAlert()" :disabled="alertTimer > 0"
+                        class="mt-12 px-12 py-5 rounded-2xl font-black text-xl transition-all duration-300 tracking-wider"
+                        :class="alertTimer > 0 ? 'bg-white/10 text-white/50 cursor-not-allowed' : 'bg-white text-blue-900 hover:bg-blue-50 shadow-xl shadow-white/10 transform hover:-translate-y-1'">
+                    <span x-show="alertTimer > 0">ESPERE (<span x-text="alertTimer"></span>)</span>
+                    <span x-show="alertTimer <= 0">ENTERADO</span>
+                </button>
             </div>
+        </div>
 
-        </main>
     </div>
 
-    {{-- LÓGICA JAVASCRIPT (SE MANTIENE IGUAL, SOLO CAMBIA EL DISEÑO) --}}
+    {{-- SCRIPT CORREGIDO --}}
     <script>
-        function salesApp(initialShift, initialClient) {
+        function salesDashboard() {
             return {
-                status: initialShift.current_status,
-                breakReason: initialShift.break_reason,
-                client: initialClient,
-                currentTime: '',
-                timer: '00:00',
-                timerInterval: null,
+                
+                waitingCount: @json($clientsWaiting ?? 0),
+                
+                showBreakModal: false,
+                breakShiftId: null,
+                
+                showMegaAlert: false,
+                alertData: { seller: '', client: '' },
+                alertTimer: 5,
+                isLoading: false,
 
                 init() {
-                    setInterval(() => {
-                        this.currentTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    }, 1000);
-
-                    if (this.client) {
-                        this.startServiceTimer();
-                    }
+                    window.addEventListener('open-break-modal', event => {
+                        this.breakShiftId = event.detail.id;
+                        this.showBreakModal = true;
+                    });
 
                     // Polling cada 3 segundos
-                    setInterval(() => {
-                        this.checkQueue();
-                    }, 3000);
+                    setInterval(() => { this.fetchUpdates(); }, 3000);
                 },
 
-                get statusLabel() {
-                    if (this.status === 'OFFLINE') return 'Desconectado';
-                    if (this.status === 'BREAK') return 'En Pausa';
-                    return this.client ? 'Atendiendo' : 'Disponible';
+                fetchUpdates() {
+                    // Si hay alerta en pantalla, pausamos el polling
+                    if(this.showMegaAlert) return; 
+
+                    this.isLoading = true;
+
+                    fetch("{{ route('ventas.poll') }}", { 
+                        headers: { 
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json' 
+                        } 
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.waitingCount = data.waiting;
+                        
+                        const grid = document.getElementById('sellers-grid');
+                        if(grid) grid.innerHTML = data.html;
+
+                        if (data.alert) this.triggerMegaAlert(data.alert);
+                    })
+                    .catch(e => console.error(e))
+                    .finally(() => {
+                        // Pequeño delay visual para que no parpadee tan rápido
+                        setTimeout(() => this.isLoading = false, 500);
+                    });
                 },
 
-                get breakReasonLabel() {
-                    const map = { 'BATHROOM': 'Baño', 'LUNCH': 'Comida', 'ERRAND': 'Mandado', 'PACKAGING': 'Paquetería' };
-                    return map[this.breakReason] || 'Descanso';
-                },
-
-                async updateStatus(newStatus, reason = null) {
-                    try {
-                        const res = await axios.post('/ventas/update-status', { status: newStatus, break_reason: reason });
-                        if (res.data.success) {
-                            this.status = res.data.new_status;
-                            this.breakReason = reason;
-                        }
-                    } catch (error) { alert('Error de conexión'); }
-                },
-
-                takeBreak(reason) { this.updateStatus('BREAK', reason); },
-
-                async checkQueue() {
-                    try {
-                        const res = await axios.get('/ventas/check-queue');
-                        if (res.data.status === 'assigned' || res.data.status === 'serving') {
-                            if (!this.client || this.client.id !== res.data.client.id) {
-                                this.client = res.data.client;
-                                this.status = 'ONLINE';
-                                this.startServiceTimer();
-                            }
-                        }
-                    } catch (error) { console.error('Error polling:', error); }
-                },
-
-                async finishService() {
-                    if (!confirm('¿Finalizar atención?')) return;
-                    try {
-                        await axios.post('/ventas/finish-service');
-                        this.client = null;
-                        this.stopServiceTimer();
-                    } catch (error) { alert('Error al finalizar.'); }
-                },
-
-                startServiceTimer() {
-                    this.stopServiceTimer();
-                    const start = new Date(this.client.started_serving_at).getTime();
-                    this.timerInterval = setInterval(() => {
-                        const now = new Date().getTime();
-                        const diff = now - start;
-                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                        this.timer = (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds);
+                triggerMegaAlert(data) {
+                    this.alertData = data;
+                    this.showMegaAlert = true;
+                    this.alertTimer = 5;
+                    
+                    let timerInterval = setInterval(() => {
+                        this.alertTimer--;
+                        if (this.alertTimer <= 0) clearInterval(timerInterval);
                     }, 1000);
+
+                    // Auto cerrar en 15s si nadie hace click
+                    setTimeout(() => { if(this.showMegaAlert) this.closeAlert(); }, 15000);
                 },
 
-                stopServiceTimer() {
-                    if (this.timerInterval) clearInterval(this.timerInterval);
-                    this.timer = '00:00';
-                },
-
-                formatTime(dateString) {
-                    if(!dateString) return '--:--';
-                    return new Date(dateString).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                },
-
-                getWaitTime() {
-                    if(!this.client) return '0 min';
-                    const queued = new Date(this.client.queued_at);
-                    const start = new Date(this.client.started_serving_at);
-                    const diffMs = start - queued;
-                    const diffMins = Math.floor(diffMs / 60000);
-                    return diffMins + ' min';
+                closeAlert() {
+                    this.showMegaAlert = false;
                 }
             }
         }
     </script>
-</x-app-layout>
+</body>
+</html>
