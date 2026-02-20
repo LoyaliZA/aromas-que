@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Aromas POS') }}</title>
+    <title>Panel de Administración - Aromas</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -55,6 +55,15 @@
                   : 'text-gray-300 hover:bg-aromas-tertiary/20 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 Personal
+            </a>
+
+            <a href="{{ route('admin.tv_ads.index') }}"
+                class="flex items-center px-4 py-3 rounded-lg transition-colors duration-200
+               {{ request()->routeIs('admin.tv_ads.*') 
+                  ? 'bg-aromas-main/50 text-aromas-highlight border-l-4 border-aromas-highlight' 
+                  : 'text-gray-300 hover:bg-aromas-tertiary/20 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                Publicidad (TV)
             </a>
         </nav>
 

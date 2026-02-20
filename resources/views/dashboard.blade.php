@@ -1,3 +1,14 @@
+/**
+ * Dashboard View
+ *
+ * This is the main dashboard page displayed after user authentication.
+ * It serves as the landing page for authenticated users within the application.
+ *
+ * Uses the app layout component and displays a welcome message to confirm
+ * successful user login.
+ *
+ * @return void
+ */
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">

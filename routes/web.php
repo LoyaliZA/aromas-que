@@ -115,7 +115,9 @@ Route::prefix('ventas')
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
-        // Nota: Quitamos toggle-shift de aquí porque ahora es exclusivo de gerencia/staff
+        
+        // --- NUEVA RUTA PARA EXTENDER TIEMPO ---
+        Route::post('/extend-service', [App\Http\Controllers\Ventas\QueueController::class, 'extendService'])->name('extend-service');
     });
 
 /*
