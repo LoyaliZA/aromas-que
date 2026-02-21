@@ -83,6 +83,8 @@ class QueueController extends Controller
                                 ->first();
 
             if ($client) {
+                // Si se envía un flag de 'auto_close' (por timeout), podrías guardarlo en logs o notas
+                // Por ahora cerramos el servicio estándar.
                 $client->update(['status' => 'COMPLETED', 'completed_at' => now()]);
                 $shift->increment('customers_served_count');
                 $shift->update([
@@ -92,7 +94,33 @@ class QueueController extends Controller
             }
         });
 
+        // Si es petición AJAX (desde el temporizador automático), devolvemos JSON
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => 'Venta finalizada automáticamente']);
+        }
+
         return back()->with('success', 'Venta finalizada');
+    }
+
+    // --- NUEVO MÉTODO: EXTENDER TIEMPO ---
+    public function extendService(Request $request)
+    {
+        $request->validate(['shift_id' => 'required|exists:daily_shifts,id']);
+
+        $client = SalesQueue::where('assigned_shift_id', $request->shift_id)
+                            ->where('status', 'SERVING')
+                            ->first();
+
+        if ($client) {
+            $client->update([
+                'last_extended_at' => now(), // Reinicia el contador de "última extensión"
+                'extension_count' => $client->extension_count + 1
+            ]);
+            
+            return response()->json(['success' => true]);
+        }
+
+        return response()->json(['error' => 'No hay cliente activo'], 404);
     }
 
     private function getSellersList()
@@ -103,7 +131,7 @@ class QueueController extends Controller
 
     private function runMatchmaker()
     {
-        // (Tu lógica de matchmaker existente...)
+        // Lógica de matchmaker existente...
         $waitingClients = SalesQueue::waiting()->sales()->count();
         if ($waitingClients === 0) return;
 
@@ -135,11 +163,12 @@ class QueueController extends Controller
                     'status' => 'SERVING',
                     'assigned_shift_id' => $shift->id,
                     'started_serving_at' => now(),
+                    // Aseguramos que last_extended_at nazca nulo o igual al inicio
+                    'last_extended_at' => null 
                 ]);
             } else {
                 break;
             }
         }
     }
-    
 }

@@ -21,7 +21,7 @@ class SalesQueue extends Model
 
     protected $fillable = [
         'client_name',
-        'service_type',       // Agregado: SALES o CASHIER
+        'service_type',       // SALES o CASHIER
         'turn_number',        // Número de turno asignado
         'source',             // QR_MOBILE, MANUAL_KIOSK
         'status',             // WAITING, SERVING, COMPLETED, ABANDONED
@@ -29,6 +29,8 @@ class SalesQueue extends Model
         'queued_at',
         'started_serving_at',
         'completed_at',
+        'last_extended_at',   // <-- NUEVO: Para el temporizador
+        'extension_count',    // <-- NUEVO: Contador de extensiones
     ];
 
     /**
@@ -40,6 +42,7 @@ class SalesQueue extends Model
             'queued_at' => 'datetime',
             'started_serving_at' => 'datetime',
             'completed_at' => 'datetime',
+            'last_extended_at' => 'datetime', // <-- NUEVO: Tratamiento de fecha
         ];
     }
 
@@ -49,9 +52,6 @@ class SalesQueue extends Model
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * El cliente en fila es atendido por un Turno específico (Vendedor en ese momento).
-     */
     public function assignedShift(): BelongsTo
     {
         return $this->belongsTo(DailyShift::class, 'assigned_shift_id');
@@ -61,9 +61,6 @@ class SalesQueue extends Model
     |--------------------------------------------------------------------------
     | Scopes (Consultas Pre-fabricadas)
     |--------------------------------------------------------------------------
-    | Los Scopes permiten escribir código legible.
-    | En vez de: SalesQueue::where('status', 'WAITING')->orderBy(...)->get();
-    | Escribiremos: SalesQueue::waiting()->get();
     */
 
     public function scopeWaiting(Builder $query): void
@@ -81,8 +78,6 @@ class SalesQueue extends Model
     {
         $query->whereDate('queued_at', today());
     }
-
-    // --- NUEVOS SCOPES PARA TIPO DE SERVICIO ---
 
     public function scopeSales(Builder $query): void
     {

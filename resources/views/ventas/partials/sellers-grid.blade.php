@@ -22,9 +22,28 @@
         } elseif ($isOnline) {
             $cardClasses = 'bg-aromas-secondary border-aromas-highlight/50 shadow-[0_0_15px_rgba(253,201,116,0.15)]';
         }
+
+        // --- CÁLCULO DE TIEMPO PARA EL CRONÓMETRO ---
+        $serveStartTime = '';
+        if ($isServing) {
+            // Si ya se extendió el tiempo, usamos esa fecha, si no, la de inicio de atención
+            $baseDate = $currentClient->last_extended_at ?? $currentClient->started_serving_at;
+            if ($baseDate) {
+                // Multiplicamos por 1000 para que JavaScript lo lea en milisegundos
+                $serveStartTime = $baseDate->timestamp * 1000;
+            } else {
+                $serveStartTime = now()->timestamp * 1000;
+            }
+        }
     @endphp
 
-    <div class="relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group animate-fade-in">
+    {{-- Agregamos atributos de datos (data-*) para que el JavaScript los pueda leer --}}
+    <div class="seller-card relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group animate-fade-in"
+         @if($isServing) 
+            data-serving="true" 
+            data-shift-id="{{ $shift->id }}" 
+            data-start-time="{{ $serveStartTime }}" 
+         @endif>
         
         {{-- Indicador de Estado --}}
         <div class="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -55,10 +74,16 @@
             {{-- ZONA CENTRAL --}}
             <div class="flex-1 flex flex-col justify-center min-h-[80px]">
                 @if($isServing)
-                    {{-- Tarjeta Cliente (LIMPIA: Sin source) --}}
+                    {{-- Tarjeta Cliente con Cronómetro Integrado --}}
                     <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 animate-fade-in-up">
                         <span class="text-[10px] text-blue-300 uppercase block mb-1 tracking-wider">Cliente</span>
                         <div class="text-2xl font-black text-white leading-none">{{ $currentClient->client_name }}</div>
+                        
+                        {{-- Contenedor del Cronómetro --}}
+                        <div class="mt-4 bg-black/30 border border-blue-500/20 rounded py-2 px-3">
+                            <span class="text-[9px] text-gray-400 uppercase tracking-widest block mb-1">Tiempo de Atención</span>
+                            <span class="seller-timer text-xl font-mono font-bold text-blue-300 tracking-wider">00:00</span>
+                        </div>
                     </div>
                 @elseif($isOnline)
                     <div class="space-y-1">

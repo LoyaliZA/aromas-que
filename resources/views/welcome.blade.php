@@ -102,6 +102,10 @@
             const alertModalContent = document.getElementById('alert-modal-content');
             let isAlertActive = false; 
 
+            // --- NUEVAS VARIABLES PARA GESTIÓN DE COLAS DE AUDIO/MODAL ---
+            let announcementQueue = [];
+            let isAnnouncing = false;
+
             const mediaContainer = document.getElementById('media-container');
             let currentAdIndex = 0;
             let carrouselTimer = null;
@@ -250,6 +254,36 @@
                 waitTimeEl.innerText = estimatedMinutes > 0 ? estimatedMinutes : '< 1';
             }
 
+            // --- NUEVO SISTEMA DE COLAS DE ANUNCIOS ---
+            function queueAnnouncement(ticket) {
+                announcementQueue.push(ticket);
+                processAnnouncementQueue();
+            }
+
+            function processAnnouncementQueue() {
+                // Si ya está anunciando o no hay nadie en fila, no hacemos nada
+                if (isAnnouncing || announcementQueue.length === 0) {
+                    return;
+                }
+
+                isAnnouncing = true;
+                const ticketToAnnounce = announcementQueue.shift(); // Saca el primero de la fila
+                
+                // Llama al modal visual y le pasamos una función que se ejecutará al terminar
+                triggerActiveInterruption(ticketToAnnounce, () => {
+                    isAnnouncing = false;
+                    
+                    // ¿Quedaron más turnos encolados mientras hablábamos?
+                    if (announcementQueue.length > 0) {
+                        // Esperamos medio segundo para que la pantalla respire, y anunciamos el siguiente
+                        setTimeout(processAnnouncementQueue, 500);
+                    } else {
+                        // Si la fila está vacía, YA PODEMOS REANUDAR LA PUBLICIDAD
+                        resumeCarrousel();
+                    }
+                });
+            }
+
             function renderServing(servingArray) {
                 if (servingArray.length === 0) {
                     servingList.innerHTML = '<div class="text-center text-aromas-tertiary mt-10 italic">No hay clientes siendo atendidos.</div>';
@@ -304,7 +338,8 @@
 
                 if (newestClient && newestClient.id !== lastCalledId) {
                     if (lastCalledId !== null) {
-                        triggerActiveInterruption(newestClient);
+                        // En lugar de llamar directo a trigger, lo mandamos a formar a la cola
+                        queueAnnouncement(newestClient);
                     }
                     lastCalledId = newestClient.id; 
                 }
@@ -338,7 +373,8 @@
                 waitingList.innerHTML = html;
             }
 
-            function triggerActiveInterruption(ticket) {
+            // --- REFACTORIZADO PARA ACEPTAR UN CALLBACK AL TERMINAR ---
+            function triggerActiveInterruption(ticket, onCompleteCallback) {
                 const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Un vendedor');
                 const ticketNumber = ticket.turn_number ? ticket.turn_number : '--';
                 const destLabel = ticket.service_type === 'CASHIER' ? 'Pase a:' : 'Vendedor asignado:';
@@ -361,6 +397,9 @@
                 chimeSound.currentTime = 0; 
                 chimeSound.play().catch(e => console.log("Se requiere clic inicial para audio."));
 
+                // IMPORTANTE: Limpiamos por si el navegador se quedó atorado hablando algo de antes
+                window.speechSynthesis.cancel(); 
+
                 let cleanNumber = ticketNumber;
                 if(ticketNumber.includes('-')) {
                     let parts = ticketNumber.split('-');
@@ -372,26 +411,28 @@
                 if (spanishVoice) utterance.voice = spanishVoice;
                 utterance.rate = 0.9; 
 
-                // --- NUEVA LÓGICA: CIERRE DINÁMICO ---
                 let isModalClosed = false;
+                let fallbackTimer = null;
 
                 const closeAlert = () => {
                     if (isModalClosed) return;
                     isModalClosed = true;
+                    clearTimeout(fallbackTimer); // Cancelamos el respaldo de seguridad porque cerró bien
                     
                     alertModal.classList.add('opacity-0', 'pointer-events-none');
                     alertModalContent.classList.remove('scale-100');
                     alertModalContent.classList.add('scale-90');
                     
-                    setTimeout(resumeCarrousel, 500); 
+                    // En lugar de reanudar el carrusel a la fuerza, le avisamos a la Fila que ya terminamos
+                    setTimeout(() => {
+                        onCompleteCallback(); 
+                    }, 500); // 500ms para que termine la animación de opacidad
                 };
 
-                // El modal espera a que la voz termine de hablar, da 1 segundo extra y luego se cierra
                 utterance.onend = () => {
                     setTimeout(closeAlert, 1000);
                 };
 
-                // Por si la API de voz falla
                 utterance.onerror = () => {
                     closeAlert();
                 };
@@ -400,14 +441,12 @@
                     if ('speechSynthesis' in window) {
                         window.speechSynthesis.speak(utterance);
                     } else {
-                        // Si el navegador no soporta voz, lo cerramos a los 6 segundos fijos
                         setTimeout(closeAlert, 6000);
                     }
                 }, 1500); 
 
-                // Respaldo de seguridad absoluto: Si la voz se traba por cualquier motivo, 
-                // forzamos el cierre a los 15 segundos para que la TV nunca se quede pasmada.
-                setTimeout(closeAlert, 15000); 
+                // Respaldo de seguridad absoluto
+                fallbackTimer = setTimeout(closeAlert, 15000); 
             }
 
             fetchQueueData(); 

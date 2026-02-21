@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Tablero de Ventas - Aromas</title>
-    {{-- Cargamos los estilos compilados --}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-900 text-white font-sans antialiased overflow-hidden">
@@ -41,7 +40,7 @@
                         </div>
                     </div>
                     
-                    {{-- Botón Salir (Discreto) --}}
+                    {{-- Botón Salir --}}
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="p-3 rounded-full bg-gray-800 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-colors" title="Salir">
@@ -54,7 +53,6 @@
 
         {{-- GRID PRINCIPAL --}}
         <div class="flex-1 overflow-y-auto p-8">
-            {{-- Mensajes Flash --}}
             @if(session('success'))
                 <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4000)" 
                      class="fixed top-24 right-8 z-50 bg-green-500 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in-down">
@@ -101,6 +99,35 @@
             </div>
         </div>
 
+        {{-- MODAL: EXTENSIÓN DE TIEMPO DE 15 MINUTOS --}}
+        <div x-show="showExtensionModal" style="display: none;" 
+             class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md"
+             x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-90">
+            
+            <div class="bg-gray-900 rounded-2xl border-2 border-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.2)] p-8 w-full max-w-lg text-center">
+                <div class="w-20 h-20 mx-auto bg-yellow-500/10 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-10 h-10 text-yellow-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-black text-yellow-400 mb-2 uppercase tracking-widest">Tiempo Excedido</h3>
+                <p class="text-gray-300 mb-2">El vendedor <strong x-text="extensionSellerName" class="text-white font-bold"></strong> lleva más de 15 minutos con el cliente <strong x-text="extensionClientName" class="text-white font-bold"></strong>.</p>
+                <p class="text-sm text-gray-500 mb-8 italic">¿El cliente sigue en atención o olvidaste finalizar el turno?</p>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button @click="confirmExtension()" class="py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-xl shadow-lg uppercase text-xs tracking-wider transition-transform active:scale-95">
+                        Sí, sigue aquí
+                    </button>
+                    <form method="POST" action="{{ route('ventas.finish-service') }}" class="w-full">
+                        @csrf
+                        <input type="hidden" name="shift_id" :value="extensionShiftId">
+                        <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg uppercase text-xs tracking-wider transition-transform active:scale-95">
+                            Ya terminó
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         {{-- MEGA NOTIFICACIÓN --}}
         <div x-show="showMegaAlert" style="display: none;" 
              class="fixed inset-0 z-[100] flex items-center justify-center bg-blue-900/95 backdrop-blur-xl"
@@ -140,16 +167,25 @@
 
     </div>
 
-    {{-- SCRIPT CORREGIDO --}}
+    {{-- SCRIPT ACTUALIZADO CON PREVENCIÓN DE FLICKER --}}
     <script>
         function salesDashboard() {
             return {
-                
                 waitingCount: @json($clientsWaiting ?? 0),
                 
+                // Break Modal
                 showBreakModal: false,
                 breakShiftId: null,
                 
+                // Extension Modal
+                showExtensionModal: false,
+                extensionShiftId: null,
+                extensionSellerName: '',
+                extensionClientName: '',
+                warnedShifts: [], 
+                autoClosedShifts: [],
+                
+                // Mega Alert
                 showMegaAlert: false,
                 alertData: { seller: '', client: '' },
                 alertTimer: 5,
@@ -163,10 +199,109 @@
 
                     // Polling cada 3 segundos
                     setInterval(() => { this.fetchUpdates(); }, 3000);
+
+                    // Refresco de Cronómetros cada segundo
+                    setInterval(() => { this.updateTimers(); }, 1000);
+                },
+
+                updateTimers() {
+                    const cards = document.querySelectorAll('.seller-card[data-serving="true"]');
+                    const now = Date.now();
+
+                    cards.forEach(card => {
+                        let startTime = parseInt(card.dataset.startTime);
+                        let shiftId = card.dataset.shiftId;
+                        
+                        let elapsedSecs = Math.floor((now - startTime) / 1000);
+                        if (elapsedSecs < 0) elapsedSecs = 0;
+
+                        let mins = Math.floor(elapsedSecs / 60);
+                        let secs = elapsedSecs % 60;
+                        let timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+                        let timerEl = card.querySelector('.seller-timer');
+                        if (timerEl) {
+                            timerEl.innerText = timeString;
+                            
+                            if (mins >= 15) {
+                                timerEl.className = "seller-timer text-xl font-mono font-black text-red-500 tracking-wider animate-pulse";
+                            } else if (mins >= 10) {
+                                timerEl.className = "seller-timer text-xl font-mono font-bold text-yellow-400 tracking-wider";
+                            } else {
+                                timerEl.className = "seller-timer text-xl font-mono font-bold text-blue-300 tracking-wider";
+                            }
+                        }
+
+                        // Alerta de 15 minutos (900s)
+                        if (elapsedSecs >= 900 && elapsedSecs < 1200) {
+                            if (!this.warnedShifts.includes(shiftId)) {
+                                this.warnedShifts.push(shiftId);
+                                
+                                let sellerName = card.querySelector('h3').innerText;
+                                let clientName = card.querySelector('.text-2xl.font-black').innerText;
+                                
+                                this.triggerExtensionAlert(shiftId, sellerName, clientName);
+                            }
+                        }
+
+                        // Cierre automático a los 20 minutos (1200s)
+                        if (elapsedSecs >= 1200) {
+                            if (!this.autoClosedShifts.includes(shiftId)) {
+                                this.autoClosedShifts.push(shiftId);
+                                this.forceAutoCloseService(shiftId);
+                            }
+                        }
+                    });
+                },
+
+                triggerExtensionAlert(shiftId, sellerName, clientName) {
+                    this.extensionShiftId = shiftId;
+                    this.extensionSellerName = sellerName;
+                    this.extensionClientName = clientName;
+                    this.showExtensionModal = true;
+                },
+
+                confirmExtension() {
+                    let shiftId = this.extensionShiftId;
+                    
+                    fetch("{{ route('ventas.extend-service') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ shift_id: shiftId })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showExtensionModal = false;
+                        this.warnedShifts = this.warnedShifts.filter(id => id != shiftId);
+                        this.fetchUpdates(); 
+                    });
+                },
+
+                forceAutoCloseService(shiftId) {
+                    fetch("{{ route('ventas.finish-service') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ shift_id: shiftId })
+                    })
+                    .then(() => {
+                        if (this.extensionShiftId == shiftId) {
+                            this.showExtensionModal = false; 
+                        }
+                        this.fetchUpdates(); 
+                    });
                 },
 
                 fetchUpdates() {
-                    // Si hay alerta en pantalla, pausamos el polling
                     if(this.showMegaAlert) return; 
 
                     this.isLoading = true;
@@ -182,13 +317,18 @@
                         this.waitingCount = data.waiting;
                         
                         const grid = document.getElementById('sellers-grid');
-                        if(grid) grid.innerHTML = data.html;
+                        if(grid) {
+                            grid.innerHTML = data.html;
+                            
+                            // ---- SOLUCIÓN AL FLICKER ----
+                            // Forzamos el cálculo de tiempo EXACTAMENTE al momento de inyectar el HTML
+                            this.updateTimers(); 
+                        }
 
                         if (data.alert) this.triggerMegaAlert(data.alert);
                     })
                     .catch(e => console.error(e))
                     .finally(() => {
-                        // Pequeño delay visual para que no parpadee tan rápido
                         setTimeout(() => this.isLoading = false, 500);
                     });
                 },
@@ -203,7 +343,6 @@
                         if (this.alertTimer <= 0) clearInterval(timerInterval);
                     }, 1000);
 
-                    // Auto cerrar en 15s si nadie hace click
                     setTimeout(() => { if(this.showMegaAlert) this.closeAlert(); }, 15000);
                 },
 
