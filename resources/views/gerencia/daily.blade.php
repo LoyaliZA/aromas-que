@@ -33,7 +33,9 @@
                 receiver_name: '',
                 is_third_party: false,
                 delivered_at: '',
-                signature_url: ''
+                signature_url: '',
+                notes: '',
+                evidence_url: ''
             },
 
             // Estado de Filtros y Carga
@@ -76,7 +78,7 @@
                 try {
                     const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                     const html = await response.text();
-                    document.getElementById('table-container').innerHTML = html; // Corregido ID
+                    document.getElementById('table-container').innerHTML = html;
                 } catch (error) { console.error(error); } finally { this.isLoading = false; }
             }
          }">
@@ -118,42 +120,26 @@
         {{-- ========================================================== --}}
         <div x-show="showCreateModal" style="display: none;" class="fixed inset-0 z-50 overflow-y-auto">
             <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                
-                {{-- Backdrop --}}
-                <div x-show="showCreateModal"
-                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-                     class="fixed inset-0 bg-black/80 transition-opacity backdrop-blur-sm" @click="resetCreateModal()"></div>
-
+                <div x-show="showCreateModal" x-transition class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="resetCreateModal()"></div>
                 <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                {{-- Panel --}}
-                <div x-show="showCreateModal"
-                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                     class="inline-block align-bottom bg-aromas-secondary rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-aromas-tertiary/20">
-                    
+                <div x-show="showCreateModal" x-transition class="inline-block align-bottom bg-aromas-secondary rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-aromas-tertiary/20">
                     <div class="px-6 pt-6 pb-4">
                         <h3 class="text-xl font-bold text-white mb-4 border-b border-aromas-tertiary/20 pb-2">Nuevo Resguardo</h3>
                         <form id="createForm" action="{{ route('gerencia.store') }}" method="POST">
                             @csrf
                             <div class="space-y-4">
-                                {{-- Folio y Fecha --}}
                                 <div class="grid grid-cols-2 gap-4">
-                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Folio Ticket</label><input type="text" name="ticket_folio" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"></div>
-                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Fecha</label><input type="date" name="ticket_date" value="{{ date('Y-m-d') }}" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"></div>
+                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Folio Ticket</label><input type="text" name="ticket_folio" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"></div>
+                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Fecha</label><input type="date" name="ticket_date" value="{{ date('Y-m-d') }}" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"></div>
                                 </div>
-                                {{-- Cliente --}}
                                 <div class="grid grid-cols-12 gap-4">
-                                    <div class="col-span-3"><label class="block text-sm font-medium text-aromas-tertiary mb-1">No. De Cliente</label><input type="text" name="client_ref_id" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"></div>
-                                    <div class="col-span-9"><label class="block text-sm font-medium text-aromas-tertiary mb-1">Nombre Cliente</label><input type="text" name="client_name" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"></div>
+                                    <div class="col-span-3"><label class="block text-sm font-medium text-aromas-tertiary mb-1">No. Cliente</label><input type="text" name="client_ref_id" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"></div>
+                                    <div class="col-span-9"><label class="block text-sm font-medium text-aromas-tertiary mb-1">Nombre Cliente</label><input type="text" name="client_name" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"></div>
                                 </div>
-                                {{-- Depto y Piezas --}}
                                 <div class="grid grid-cols-2 gap-4">
-                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Departamento</label><select name="department" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"><option value="AROMAS">Aromas</option><option value="BELLAROMA">Bellaroma</option></select></div>
-                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Piezas</label><input type="number" name="pieces" value="1" min="1" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors"></div>
+                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Departamento</label><select name="department" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"><option value="AROMAS">Aromas</option><option value="BELLAROMA">Bellaroma</option></select></div>
+                                    <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Piezas</label><input type="number" name="pieces" value="1" min="1" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight"></div>
                                 </div>
-                                {{-- Tercero --}}
                                 <div class="pt-2 border-t border-aromas-tertiary/10">
                                     <label class="inline-flex items-center cursor-pointer mb-2">
                                         <input type="checkbox" name="is_third_party" value="1" x-model="createState.isThirdParty" class="form-checkbox bg-black/20 border-aromas-tertiary/30 text-aromas-highlight rounded focus:ring-aromas-highlight">
@@ -161,17 +147,16 @@
                                     </label>
                                     <div x-show="createState.isThirdParty" x-transition class="mt-2">
                                         <label class="block text-sm font-medium text-aromas-tertiary mb-1">Nombre de quien recoge</label>
-                                        <input type="text" name="receiver_name" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors" placeholder="Ej. Familiar, Mensajero...">
+                                        <input type="text" name="receiver_name" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight" placeholder="Ej. Familiar, Mensajero...">
                                     </div>
                                 </div>
-                                {{-- Notas --}}
-                                <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Notas / Comentarios</label><textarea name="notes" rows="2" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight transition-colors" placeholder="Detalles adicionales..."></textarea></div>
+                                <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Notas / Comentarios</label><textarea name="notes" rows="2" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-aromas-highlight" placeholder="Detalles adicionales..."></textarea></div>
                             </div>
                         </form>
                     </div>
                     <div class="bg-black/20 px-6 py-4 sm:flex sm:flex-row-reverse border-t border-aromas-tertiary/10">
-                        <button type="submit" form="createForm" class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-aromas-highlight text-base font-bold text-aromas-main hover:bg-white sm:ml-3 sm:w-auto sm:text-sm transition-colors">Guardar</button>
-                        <button type="button" @click="resetCreateModal()" class="mt-3 w-full inline-flex justify-center rounded-lg border border-aromas-tertiary/30 shadow-sm px-4 py-2 bg-transparent text-base font-medium text-gray-300 hover:text-white hover:bg-white/5 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors">Cancelar</button>
+                        <button type="submit" form="createForm" class="w-full inline-flex justify-center rounded-lg bg-aromas-highlight text-aromas-main font-bold px-4 py-2 hover:bg-white sm:ml-3 sm:w-auto">Guardar</button>
+                        <button type="button" @click="resetCreateModal()" class="mt-3 w-full inline-flex justify-center rounded-lg border border-aromas-tertiary/30 px-4 py-2 text-gray-300 hover:text-white hover:bg-white/5 sm:mt-0 sm:ml-3 sm:w-auto">Cancelar</button>
                     </div>
                 </div>
             </div>
@@ -182,44 +167,23 @@
         {{-- ========================================================== --}}
         <div x-show="showEditModal" style="display: none;" class="fixed inset-0 z-50 overflow-y-auto">
             <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                
-                {{-- Backdrop --}}
-                <div x-show="showEditModal"
-                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-                     class="fixed inset-0 bg-black/80 transition-opacity backdrop-blur-sm" @click="showEditModal = false"></div>
-
+                <div x-show="showEditModal" x-transition class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="showEditModal = false"></div>
                 <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                {{-- Panel --}}
-                <div x-show="showEditModal"
-                     x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-                     x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                     class="inline-block align-bottom bg-aromas-secondary rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-yellow-500/30">
-                    
-                    {{-- Header Amarillo --}}
+                <div x-show="showEditModal" x-transition class="inline-block align-bottom bg-aromas-secondary rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-yellow-500/30">
                     <div class="bg-yellow-900/40 p-5 border-b border-yellow-500/20 flex items-start">
                         <div class="p-2 bg-yellow-500/20 rounded-full mr-3 shrink-0"><svg class="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
                         <div><h3 class="text-lg font-bold text-yellow-400">Modo de Edición</h3><p class="text-xs text-yellow-200/80 mt-1">Modificando registro existente. Acción registrada.</p></div>
                     </div>
-
                     <div class="px-6 py-6">
                         <form id="editForm" method="POST" :action="`{{ url('gerencia/update') }}/${editData.id}`">
                             @csrf @method('PUT')
                             <div class="space-y-4">
-                                {{-- Folio --}}
                                 <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Folio Ticket</label><input type="text" name="ticket_folio" x-model="editData.ticket_folio" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500"></div>
-                                
-                                {{-- Cliente --}}
                                 <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Cliente</label><input type="text" name="client_name" x-model="editData.client_name" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500"></div>
-                                
-                                {{-- Depto y Piezas --}}
                                 <div class="grid grid-cols-2 gap-4">
                                     <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Departamento</label><select name="department" x-model="editData.department" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500"><option value="AROMAS">Aromas</option><option value="BELLAROMA">Bellaroma</option></select></div>
                                     <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Piezas</label><input type="number" name="pieces" x-model="editData.pieces" min="1" required class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500"></div>
                                 </div>
-
-                                {{-- Tercero (Edición) --}}
                                 <div class="pt-2 border-t border-aromas-tertiary/10">
                                     <label class="inline-flex items-center cursor-pointer mb-2">
                                         <input type="checkbox" name="is_third_party" value="1" x-model="editData.is_third_party" class="form-checkbox bg-black/20 border-aromas-tertiary/30 text-yellow-500 rounded focus:ring-yellow-500">
@@ -230,33 +194,25 @@
                                         <input type="text" name="receiver_name" x-model="editData.receiver_name" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500">
                                     </div>
                                 </div>
-
-                                {{-- Notas (Edición) --}}
                                 <div><label class="block text-sm font-medium text-aromas-tertiary mb-1">Notas</label><textarea name="notes" x-model="editData.notes" rows="2" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg px-3 py-2 text-white focus:border-yellow-500"></textarea></div>
                             </div>
                         </form>
                     </div>
-
                     <div class="bg-black/20 px-6 py-4 sm:flex sm:flex-row-reverse border-t border-yellow-500/10">
-                        <button type="submit" form="editForm" class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-yellow-600 text-base font-bold text-white hover:bg-yellow-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors">Confirmar Cambio</button>
-                        <button type="button" @click="showEditModal = false" class="mt-3 w-full inline-flex justify-center rounded-lg border border-aromas-tertiary/30 shadow-sm px-4 py-2 bg-transparent text-base font-medium text-gray-300 hover:text-white hover:bg-white/5 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors">Cancelar</button>
+                        <button type="submit" form="editForm" class="w-full inline-flex justify-center rounded-lg bg-yellow-600 text-white font-bold px-4 py-2 hover:bg-yellow-500 sm:ml-3 sm:w-auto">Confirmar Cambio</button>
+                        <button type="button" @click="showEditModal = false" class="mt-3 w-full inline-flex justify-center rounded-lg border border-aromas-tertiary/30 px-4 py-2 text-gray-300 hover:text-white hover:bg-white/5 sm:mt-0 sm:ml-3 sm:w-auto">Cancelar</button>
                     </div>
                 </div>
             </div>
         </div>
 
         {{-- ========================================================== --}}
-        {{--           MODAL DE DETALLES DE ENTREGA (NUEVO)             --}}
+        {{--           MODAL DE DETALLES DE ENTREGA                     --}}
         {{-- ========================================================== --}}
-        <div x-show="showDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="display: none;"
-             x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-             x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-            
+        <div x-show="showDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="display: none;" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showDetailsModal = false"></div>
-
-            <div class="bg-aromas-secondary w-full max-w-lg rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col overflow-hidden">
-                
-                {{-- Header Modal --}}
+            
+            <div class="bg-aromas-secondary w-full max-w-2xl rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col overflow-hidden">
                 <div class="bg-black/20 p-5 border-b border-aromas-tertiary/20 flex justify-between items-center">
                     <div>
                         <h2 class="text-xl font-bold text-white flex items-center gap-2">
@@ -271,44 +227,50 @@
                 </div>
 
                 <div class="p-6 overflow-y-auto max-h-[80vh]">
-                    
-                    {{-- Datos del Receptor --}}
-                    <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-6">
+                    <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-4">
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Entregado el:</label>
-                                <p class="text-white font-mono" x-text="detailsData.delivered_at"></p>
-                            </div>
+                            <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Entregado el:</label><p class="text-white font-mono" x-text="detailsData.delivered_at"></p></div>
                             <div>
                                 <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Tipo Receptor:</label>
-                                <span class="px-2 py-1 rounded text-xs font-bold uppercase" 
-                                      :class="detailsData.is_third_party ? 'bg-yellow-500/20 text-yellow-500' : 'bg-blue-500/20 text-blue-400'"
-                                      x-text="detailsData.is_third_party ? 'Tercero' : 'Titular'">
-                                </span>
+                                <span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="detailsData.is_third_party ? 'bg-yellow-500/20 text-yellow-500' : 'bg-blue-500/20 text-blue-400'" x-text="detailsData.is_third_party ? 'Tercero' : 'Titular'"></span>
                             </div>
                             <div class="col-span-2 border-t border-aromas-tertiary/10 pt-3 mt-1">
                                 <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Nombre Quien Recibió:</label>
                                 <p class="text-lg text-white font-bold leading-tight" x-text="detailsData.receiver_name"></p>
-                                <p class="text-xs text-gray-500 mt-1" x-show="detailsData.is_third_party">
-                                    (Titular de cuenta: <span x-text="detailsData.client_name"></span>)
-                                </p>
+                                <p class="text-xs text-gray-500 mt-1" x-show="detailsData.is_third_party">(Titular de cuenta: <span x-text="detailsData.client_name"></span>)</p>
                             </div>
                         </div>
                     </div>
 
-                    {{-- Firma Digital --}}
-                    <div>
-                        <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma de Conformidad</label>
-                        <div class="bg-white rounded-lg p-2 border-2 border-gray-300">
-                            {{-- La imagen se carga dinámicamente --}}
-                            <template x-if="detailsData.signature_url">
-                                <img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48">
-                            </template>
-                            <template x-if="!detailsData.signature_url">
-                                <div class="h-32 flex items-center justify-center text-gray-400 italic">
-                                    Firma no disponible
-                                </div>
-                            </template>
+                    {{-- Notas del Checador --}}
+                    <template x-if="detailsData.notes">
+                        <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-4">
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Observaciones / Notas:</label>
+                            <p class="text-white text-sm whitespace-pre-line" x-text="detailsData.notes"></p>
+                        </div>
+                    </template>
+
+                    {{-- Firmas y Evidencias --}}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma del Cliente</label>
+                            <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
+                                <template x-if="detailsData.signature_url">
+                                    <img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48">
+                                </template>
+                                <template x-if="!detailsData.signature_url">
+                                    <div class="text-gray-400 italic text-sm">Firma no disponible</div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div x-show="detailsData.evidence_url">
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Foto de Evidencia</label>
+                            <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
+                                <template x-if="detailsData.evidence_url">
+                                    <img :src="detailsData.evidence_url" alt="Evidencia" class="w-full h-auto object-contain max-h-48">
+                                </template>
+                            </div>
                         </div>
                     </div>
 

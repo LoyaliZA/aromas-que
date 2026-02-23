@@ -38,11 +38,13 @@
                             @if($pickup->status === 'DELIVERED')
                                 <button @click="openDetailsModal({
                                             ticket_folio: '{{ $pickup->ticket_folio }}',
-                                            client_name: '{{ $pickup->client_name }}',
-                                            receiver_name: '{{ $pickup->receiver_name }}',
+                                            client_name: '{{ addslashes($pickup->client_name) }}',
+                                            receiver_name: '{{ addslashes($pickup->receiver_name) }}',
                                             is_third_party: {{ $pickup->is_third_party ? 'true' : 'false' }},
                                             delivered_at: '{{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m/Y h:i A') : '' }}',
-                                            signature_url: '{{ asset('storage/'.$pickup->signature_path) }}'
+                                            signature_url: '{{ $pickup->signature_path ? asset('storage/'.$pickup->signature_path) : '' }}',
+                                            notes: '{{ addslashes(str_replace(["\r", "\n"], " ", (string)$pickup->notes)) }}',
+                                            evidence_url: '{{ $pickup->evidence_path ? asset('storage/'.$pickup->evidence_path) : '' }}'
                                         })"
                                         class="text-green-500 hover:text-white hover:bg-green-500/20 p-2 rounded transition-colors" title="Ver Detalles">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>

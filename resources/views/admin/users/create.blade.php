@@ -6,7 +6,6 @@
 
     <div class="bg-aromas-secondary rounded-xl shadow-xl border border-aromas-tertiary/20 max-w-4xl">
         
-        {{-- NUEVO: Bloque para mostrar errores de validación o del sistema --}}
         @if ($errors->any())
             <div class="m-8 mb-0 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                 <div class="flex items-center mb-2">
@@ -30,7 +29,8 @@
                     Información Laboral
                 </h3>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {{-- ALPINE.JS: Reactive state para ocultar/mostrar opciones según el puesto --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ role: '{{ old('job_position', 'SELLER') }}' }">
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Nombre Completo</label>
                         <input type="text" name="full_name" value="{{ old('full_name') }}" required 
@@ -47,12 +47,12 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Puesto / Rol</label>
-                        <select name="job_position" required 
+                        <select name="job_position" required x-model="role"
                                 class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
-                            <option value="SELLER" {{ old('job_position') == 'SELLER' ? 'selected' : '' }}>Vendedor (Piso)</option>
-                            <option value="MANAGER" {{ old('job_position') == 'MANAGER' ? 'selected' : '' }}>Gerente</option>
-                            <option value="CHECKER" {{ old('job_position') == 'CHECKER' ? 'selected' : '' }}>Checador (Recepción)</option>
-                            <option value="ADMIN" {{ old('job_position') == 'ADMIN' ? 'selected' : '' }}>Administrador</option>
+                            <option value="SELLER">Vendedor (Piso)</option>
+                            <option value="MANAGER">Gerente</option>
+                            <option value="CHECKER">Checador (Recepción)</option>
+                            <option value="ADMIN">Administrador</option>
                         </select>
                     </div>
 
@@ -63,6 +63,21 @@
                             <span class="ms-3 text-sm font-medium text-gray-300">Mostrar en Pantalla de Turnos</span>
                         </label>
                     </div>
+
+                    {{-- NUEVO: Permiso Especial de Rezagados (Solo se muestra si es MANAGER) --}}
+                    <div class="col-span-full" x-show="role === 'MANAGER'" x-cloak>
+                        <div class="p-4 bg-aromas-main border border-yellow-500/30 rounded-lg shadow-inner">
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="can_manage_rezagados" value="1" class="sr-only peer" {{ old('can_manage_rezagados') ? 'checked' : '' }}>
+                                <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                                <div class="ms-3">
+                                    <span class="block text-sm font-bold text-yellow-400">Permiso Especial: Gestor de Rezagados</span>
+                                    <span class="block text-xs text-gray-400 mt-1">Habilita a este gerente para entregar los paquetes que llevan más de 15 días en tienda.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 

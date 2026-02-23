@@ -19,19 +19,16 @@ use App\Http\Controllers\Public\TvController;
 */
 
 Route::get('/', function () {
-    // Opcional: Si ya estás logueado, que te mande directo al admin
     if (Auth::check() && Auth::user()->role === 'ADMIN') {
         return redirect()->route('admin.dashboard');
     }
-    return view('tv.public');
+    return redirect()->route('tv.public');
 });
 
-// Ruta "Dashboard" por defecto de Breeze (necesaria para redirigir fallos o perfiles básicos)
 Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// Rutas de Perfil (Estándar de Breeze)
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -45,20 +42,14 @@ Route::middleware('auth')->group(function () {
 */
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['auth']) // IMPORTANTE: Aquí luego pondremos 'role:ADMIN'
+    ->middleware(['auth']) 
     ->group(function () {
-        
-        // Dashboard
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
-
-        // CRUD de Usuarios/Empleados
         Route::resource('users', UserController::class);
-        // --- MÓDULO DE PUBLICIDAD TV ---
         Route::get('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('tv_ads.index');
         Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
         Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
         Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
-        
     });
 
 /*
@@ -71,16 +62,14 @@ Route::prefix('gerencia')
     ->middleware(['auth']) 
     ->group(function () {
         Route::get('/dashboard', [PickupController::class, 'index'])->name('dashboard');
-        
-        // --- NUEVA RUTA OPERATIVA ---
-        Route::get('/daily', [PickupController::class, 'daily'])->name('daily'); // Tabla de trabajo
-        
+        Route::get('/daily', [PickupController::class, 'daily'])->name('daily'); 
         Route::post('/store', [PickupController::class, 'store'])->name('store');
-        
-        // --- RUTA PARA EDITAR ---
         Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
-        
         Route::get('/history', [PickupController::class, 'history'])->name('history');
+
+        // --- NUEVAS RUTAS: REZAGADOS ---
+        Route::get('/rezagados', [PickupController::class, 'rezagados'])->name('rezagados.index');
+        Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
 
         Route::get('/staff', [App\Http\Controllers\Gerencia\StaffController::class, 'index'])->name('staff.index');
         Route::post('/staff/toggle', [App\Http\Controllers\Gerencia\StaffController::class, 'toggleShift'])->name('staff.toggle');
@@ -96,10 +85,8 @@ Route::prefix('recepcion')
     ->middleware(['auth']) 
     ->group(function () {
         Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
-        
-        // --- NUEVAS RUTAS ---
-        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); // Procesar entrega
-        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); // Ingresar a cola
+        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); 
+        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); 
     });
 
 /*
@@ -115,8 +102,6 @@ Route::prefix('ventas')
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
-        
-        // --- NUEVA RUTA PARA EXTENDER TIEMPO ---
         Route::post('/extend-service', [App\Http\Controllers\Ventas\QueueController::class, 'extendService'])->name('extend-service');
     });
 
@@ -126,6 +111,5 @@ Route::prefix('ventas')
 |--------------------------------------------------------------------------
 */
 Route::get('/tv', [TvController::class, 'index'])->name('tv.public');
-
 
 require __DIR__.'/auth.php';

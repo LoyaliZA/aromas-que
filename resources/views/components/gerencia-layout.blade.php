@@ -40,28 +40,33 @@
         <nav class="mt-5 px-4 space-y-2">
             <p class="px-4 text-xs font-semibold text-aromas-tertiary uppercase tracking-wider mb-2">Operación</p>
             
-            {{-- ENLACE 1: DASHBOARD --}}
-             <a href="{{ route('gerencia.dashboard') }}" 
+            <a href="{{ route('gerencia.dashboard') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.dashboard') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
                <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.dashboard') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                 Panel de Control
             </a>
             
-            {{-- ENLACE 2: OPERACIÓN DIARIA --}}
             <a href="{{ route('gerencia.daily') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.daily') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.daily') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                 Operación Diaria
             </a>
 
-            {{-- Enlace 3: Historial --}}
             <a href="{{ route('gerencia.history') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.history') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.history') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 Historial Completo
             </a>
 
-            {{-- Enlace 4: STAFF (NUEVO) --}}
+            {{-- NUEVO: REZAGADOS (Protegido por Permiso) --}}
+            @if(Auth::user()->canManageRezagados())
+            <a href="{{ route('gerencia.rezagados.index') }}" 
+               class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.rezagados.*') ? 'bg-yellow-500 text-black font-bold shadow-lg shadow-yellow-500/20' : 'text-yellow-500/80 hover:bg-yellow-500/10 hover:text-yellow-400' }}">
+                <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.rezagados.*') ? 'text-black' : 'text-yellow-500/80 group-hover:text-yellow-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                Resguardos Rezagados
+            </a>
+            @endif
+
             <a href="{{ route('gerencia.staff.index') }}" 
                class="flex items-center px-4 py-3 rounded-lg transition-all group {{ request()->routeIs('gerencia.staff.index') ? 'bg-aromas-highlight text-aromas-main font-bold shadow-lg shadow-aromas-highlight/20' : 'text-gray-400 hover:bg-white/5 hover:text-white' }}">
                 <svg class="w-5 h-5 mr-3 {{ request()->routeIs('gerencia.staff.index') ? 'text-aromas-main' : 'text-gray-500 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
@@ -93,7 +98,6 @@
 
     <div class="flex-1 flex flex-col lg:ml-64 min-h-screen transition-all duration-300">
         <div class="h-16 lg:hidden shrink-0"></div> <main class="flex-1 p-4 lg:p-6 overflow-x-hidden">
-            {{-- Mensajes Flash --}}
             @if(session('success'))
             <div class="mb-6 bg-aromas-success/20 border-l-4 border-aromas-success text-white p-4 rounded-r shadow-lg backdrop-blur-sm flex items-start animate-fade-in-down">
                 <div class="p-1 text-aromas-success mr-3">
@@ -102,6 +106,18 @@
                 <div>
                     <p class="font-bold">¡Operación Exitosa!</p>
                     <p class="text-sm opacity-90">{{ session('success') }}</p>
+                </div>
+            </div>
+            @endif
+            
+            @if(session('error'))
+            <div class="mb-6 bg-red-500/20 border-l-4 border-red-500 text-white p-4 rounded-r shadow-lg backdrop-blur-sm flex items-start animate-fade-in-down">
+                <div class="p-1 text-red-500 mr-3">
+                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div>
+                    <p class="font-bold">Acceso Denegado</p>
+                    <p class="text-sm opacity-90">{{ session('error') }}</p>
                 </div>
             </div>
             @endif

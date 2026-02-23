@@ -16,7 +16,7 @@ class DeliveryController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Iniciamos consulta BASE con SEGURIDAD (Oculta los de +15 días)
+        // 1. Iniciamos consulta BASE con SEGURIDAD
         $query = Pickup::visibleForChecker();
 
         // 2. Filtros
@@ -50,8 +50,8 @@ class DeliveryController extends Controller
         $peopleInQueue = SalesQueue::where('status', 'WAITING')->count();
 
         if ($request->ajax()) {
-            // CORREGIDO: Usamos el nombre exacto de tu vista (card-grid) para evitar el Error 500
-            $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
+            // CORREGIDO: Restaurado a pickup-table
+            $html = view('recepcion.partials.pickup-table', compact('pickups'))->render();
             
             return response()->json([
                 'html' => $html,
@@ -75,7 +75,8 @@ class DeliveryController extends Controller
             'evidence_file' => 'nullable|image|max:10240',
         ]);
 
-        // SEGURIDAD: Evita que confirmen un rezagado inyectando el ID por POST
+        // SEGURIDAD SENIOR: Evitamos que confirmen un rezagado inyectando el ID por POST
+        // Si el ID tiene más de 15 días, visibleForChecker() lo oculta y findOrFail lanzará error 404.
         $pickup = Pickup::visibleForChecker()->findOrFail($id);
         
         $signatureBase64 = $request->signature;
@@ -116,12 +117,12 @@ class DeliveryController extends Controller
         // 1. Definimos la letra inicial según el destino
         $prefix = $request->service_type === 'SALES' ? 'V' : 'C';
 
-        // 2. Contamos cuántos turnos de ese TIPO se han dado HOY (para reiniciar a 001 cada día)
+        // 2. Contamos cuántos turnos de ese TIPO se han dado HOY
         $todayCount = SalesQueue::where('service_type', $request->service_type)
                                 ->whereDate('queued_at', today())
                                 ->count();
 
-        // 3. Formateamos el número (Ej: V-001, C-014)
+        // 3. Formateamos el número
         $turnNumber = sprintf('%s-%03d', $prefix, $todayCount + 1);
 
         // Guardamos en Base de Datos

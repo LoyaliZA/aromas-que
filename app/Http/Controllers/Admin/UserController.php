@@ -14,7 +14,6 @@ class UserController extends Controller
 {
     public function index()
     {
-        // Ordenamos para ver primero activos y luego por puesto
         $employees = Employee::with('user')
             ->orderBy('is_active', 'desc')
             ->orderBy('job_position', 'asc')
@@ -30,13 +29,12 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        // 1. Validamos datos
         $validated = $request->validate([
             'full_name' => 'required|string|max:100',
             'employee_code' => 'required|string|unique:employees,employee_code',
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
-            'appears_in_sales_queue' => 'nullable|boolean', // <--- NUEVO CAMPO
-            // Login opcional
+            'appears_in_sales_queue' => 'nullable|boolean',
+            'can_manage_rezagados' => 'nullable|boolean', // <-- NUEVO CAMPO
             'email' => 'nullable|email|unique:users,email',
             'password' => 'nullable|required_with:email|min:8',
         ]);
@@ -52,6 +50,8 @@ class UserController extends Controller
                         'password' => Hash::make($validated['password']),
                         'role' => $validated['job_position'], 
                         'is_active' => true,
+                        // Solo otorgamos el poder si es Manager y marcó la casilla
+                        'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                     ]);
                     $userId = $user->id;
                 }
@@ -62,7 +62,6 @@ class UserController extends Controller
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
-                    // Si el checkbox viene marcado es '1' (true), si no viene es false
                     'appears_in_sales_queue' => $request->has('appears_in_sales_queue'), 
                     'is_active' => true,
                     'hire_date' => now(),
@@ -91,8 +90,8 @@ class UserController extends Controller
             'full_name' => 'required|string|max:100',
             'employee_code' => ['required', Rule::unique('employees')->ignore($employee->id)],
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
-            'appears_in_sales_queue' => 'nullable|boolean', // <--- NUEVO CAMPO
-            // Login
+            'appears_in_sales_queue' => 'nullable|boolean',
+            'can_manage_rezagados' => 'nullable|boolean', // <-- NUEVO CAMPO
             'email' => ['nullable', 'email', Rule::unique('users')->ignore($employee->user_id)],
             'password' => 'nullable|min:8', 
         ]);
@@ -105,37 +104,36 @@ class UserController extends Controller
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
-                    'appears_in_sales_queue' => $request->has('appears_in_sales_queue'), // Actualizamos el switch
+                    'appears_in_sales_queue' => $request->has('appears_in_sales_queue'),
                 ]);
 
-                // 2. Lógica de Usuario (Crear, Actualizar o Borrar)
+                // 2. Lógica de Usuario
                 if (!empty($validated['email'])) {
-                    // CASO A: Quiere acceso web
                     if ($employee->user) {
-                        // Ya tenía usuario -> Actualizamos
                         $dataToUpdate = [
                             'name' => $validated['full_name'],
                             'email' => $validated['email'],
                             'role' => $validated['job_position'],
+                            // Actualizamos el permiso de rezagados
+                            'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                         ];
                         if (!empty($validated['password'])) {
                             $dataToUpdate['password'] = Hash::make($validated['password']);
                         }
                         $employee->user->update($dataToUpdate);
                     } else {
-                        // No tenía usuario -> Creamos uno nuevo
                         $user = User::create([
                             'name' => $validated['full_name'],
                             'email' => $validated['email'],
-                            'password' => Hash::make($validated['password'] ?? 'aromas123'), // Default si se les olvida
+                            'password' => Hash::make($validated['password'] ?? 'aromas123'),
                             'role' => $validated['job_position'],
                             'is_active' => true,
+                            'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                         ]);
                         $employee->update(['user_id' => $user->id]);
                     }
 
                 } else {
-                    // CASO B: No quiere acceso web (o se lo quitamos)
                     if ($employee->user) {
                         $user = $employee->user;
                         $employee->update(['user_id' => null]);

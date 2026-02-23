@@ -15,7 +15,16 @@
         
         // MODAL DE DETALLES
         showDetailsModal: false,
-        detailsData: { ticket_folio: '', client_name: '', receiver_name: '', is_third_party: false, delivered_at: '', signature_url: '' },
+        detailsData: { 
+            ticket_folio: '', 
+            client_name: '', 
+            receiver_name: '', 
+            is_third_party: false, 
+            delivered_at: '', 
+            signature_url: '',
+            notes: '',
+            evidence_url: '' 
+        },
 
         openDetailsModal(data) {
             this.detailsData = data;
@@ -55,20 +64,67 @@
         {{-- MODAL DE DETALLES --}}
         <div x-show="showDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="display: none;" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showDetailsModal = false"></div>
-            <div class="bg-aromas-secondary w-full max-w-lg rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col overflow-hidden">
+            
+            <div class="bg-aromas-secondary w-full max-w-2xl rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col overflow-hidden">
                 <div class="bg-black/20 p-5 border-b border-aromas-tertiary/20 flex justify-between items-center">
-                    <div><h2 class="text-xl font-bold text-white flex items-center gap-2"><svg class="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Detalles de Entrega</h2><p class="text-sm text-aromas-tertiary">Folio: <span class="text-aromas-highlight font-mono" x-text="detailsData.ticket_folio"></span></p></div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                            <svg class="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Detalles de Entrega
+                        </h2>
+                        <p class="text-sm text-aromas-tertiary">Folio: <span class="text-aromas-highlight font-mono" x-text="detailsData.ticket_folio"></span></p>
+                    </div>
                     <button @click="showDetailsModal = false" class="text-gray-500 hover:text-white p-2"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
+
                 <div class="p-6 overflow-y-auto max-h-[80vh]">
-                    <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-6">
+                    <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Entregado el:</label><p class="text-white font-mono" x-text="detailsData.delivered_at"></p></div>
-                            <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Tipo Receptor:</label><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="detailsData.is_third_party ? 'bg-yellow-500/20 text-yellow-500' : 'bg-blue-500/20 text-blue-400'" x-text="detailsData.is_third_party ? 'Tercero' : 'Titular'"></span></div>
-                            <div class="col-span-2 border-t border-aromas-tertiary/10 pt-3 mt-1"><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Nombre Quien Recibió:</label><p class="text-lg text-white font-bold leading-tight" x-text="detailsData.receiver_name"></p></div>
+                            <div>
+                                <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Tipo Receptor:</label>
+                                <span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="detailsData.is_third_party ? 'bg-yellow-500/20 text-yellow-500' : 'bg-blue-500/20 text-blue-400'" x-text="detailsData.is_third_party ? 'Tercero' : 'Titular'"></span>
+                            </div>
+                            <div class="col-span-2 border-t border-aromas-tertiary/10 pt-3 mt-1">
+                                <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Nombre Quien Recibió:</label>
+                                <p class="text-lg text-white font-bold leading-tight" x-text="detailsData.receiver_name"></p>
+                                <p class="text-xs text-gray-500 mt-1" x-show="detailsData.is_third_party">(Titular de cuenta: <span x-text="detailsData.client_name"></span>)</p>
+                            </div>
                         </div>
                     </div>
-                    <div><label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma de Conformidad</label><div class="bg-white rounded-lg p-2 border-2 border-gray-300"><template x-if="detailsData.signature_url"><img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48"></template><template x-if="!detailsData.signature_url"><div class="h-32 flex items-center justify-center text-gray-400 italic">Firma no disponible</div></template></div></div>
+
+                    {{-- Notas del Checador --}}
+                    <template x-if="detailsData.notes">
+                        <div class="bg-black/20 p-4 rounded-xl border border-aromas-tertiary/10 mb-4">
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-1">Observaciones / Notas:</label>
+                            <p class="text-white text-sm whitespace-pre-line" x-text="detailsData.notes"></p>
+                        </div>
+                    </template>
+
+                    {{-- Firmas y Evidencias --}}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma del Cliente</label>
+                            <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
+                                <template x-if="detailsData.signature_url">
+                                    <img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48">
+                                </template>
+                                <template x-if="!detailsData.signature_url">
+                                    <div class="text-gray-400 italic text-sm">Firma no disponible</div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div x-show="detailsData.evidence_url">
+                            <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Foto de Evidencia</label>
+                            <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
+                                <template x-if="detailsData.evidence_url">
+                                    <img :src="detailsData.evidence_url" alt="Evidencia" class="w-full h-auto object-contain max-h-48">
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <div class="p-4 bg-black/20 border-t border-aromas-tertiary/20 flex justify-end"><button @click="showDetailsModal = false" class="px-6 py-2 bg-aromas-tertiary/20 border border-aromas-tertiary/30 rounded-lg text-white hover:bg-white/10 transition-colors">Cerrar</button></div>
             </div>

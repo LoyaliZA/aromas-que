@@ -16,7 +16,6 @@ class PickupController extends Controller
      */
     public function index()
     {
-        // KPIs para los Widgets
         $pendingCount = Pickup::inCustody()->count();
         $deliveredTodayCount = Pickup::where('status', 'DELIVERED')
                                      ->whereDate('updated_at', today())
@@ -28,15 +27,18 @@ class PickupController extends Controller
 
     /**
      * OPERACIÓN DIARIA: Tabla de trabajo con Filtros y Modales.
-     * MODIFICADO: Ahora incluye rezagados (pendientes de días anteriores).
+     * MODIFICADO: Ahora EXCLUYE los rezagados (>15 días). Esos van en su propia vista.
      */
     public function daily(Request $request)
     {
         // 1. Iniciamos consulta BASE
-        // Regla: Mostrar todo lo creado HOY -O- todo lo que siga EN CUSTODIA (Rezagados)
+        // Regla: Mostrar lo de HOY -O- lo EN CUSTODIA (pero menor a 15 días)
         $query = Pickup::query()->where(function($q) {
             $q->whereDate('created_at', today())
-              ->orWhere('status', 'IN_CUSTODY');
+              ->orWhere(function($subQ) {
+                  $subQ->where('status', 'IN_CUSTODY')
+                       ->where('created_at', '>=', now()->subDays(15)->startOfDay());
+              });
         });
 
         // 2. Aplicamos Filtros (Buscador, Estatus, Depto)
@@ -44,18 +46,15 @@ class PickupController extends Controller
               ->byStatus($request->status)
               ->byDepartment($request->department);
 
-        // 3. Obtenemos resultados ordenados:
-        // Primero los pendientes para darles prioridad visual, luego por fecha descendente
+        // 3. Obtenemos resultados ordenados
         $todaysPickups = $query->orderByRaw("FIELD(status, 'IN_CUSTODY', 'DELIVERED')")
                                ->orderBy('created_at', 'desc')
                                ->get();
 
-        // 4. Si es AJAX (Búsqueda en vivo), devolvemos solo la tabla
         if ($request->ajax()) {
             return view('gerencia.partials.daily-table', compact('todaysPickups'))->render();
         }
 
-        // 5. Carga normal
         return view('gerencia.daily', compact('todaysPickups'));
     }
 
@@ -80,6 +79,61 @@ class PickupController extends Controller
         }
 
         return view('gerencia.history', compact('pickups'));
+    }
+
+    /**
+     * VISTA EXCLUSIVA: REZAGADOS (+15 Días)
+     */
+    public function rezagados()
+    {
+        // CORREGIDO: Leemos la propiedad directamente para evitar errores del editor
+        if (!Auth::user()->can_manage_rezagados) {
+            return redirect()->route('gerencia.dashboard')->with('error', 'No tienes permisos para acceder a la bóveda de rezagados.');
+        }
+
+        // Usamos el scope que ya tenías creado en el modelo
+        $rezagados = Pickup::rezagados()->orderBy('created_at', 'asc')->get();
+
+        return view('gerencia.rezagados', compact('rezagados'));
+    }
+
+    /**
+     * ENTREGAR REZAGADO (Acción exclusiva)
+     */
+    public function entregarRezagado(Request $request, $id)
+    {
+        // CORREGIDO: Leemos la propiedad directamente para evitar errores del editor
+        if (!Auth::user()->can_manage_rezagados) {
+            return redirect()->route('gerencia.dashboard')->with('error', 'No tienes permisos para entregar paquetes rezagados.');
+        }
+
+        $pickup = Pickup::rezagados()->findOrFail($id);
+
+        $request->validate([
+            'receiver_name' => 'required|string|max:150',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        DB::transaction(function() use ($pickup, $request) {
+            // Actualizamos el paquete a entregado
+            $pickup->update([
+                'status' => 'DELIVERED',
+                'receiver_name' => $request->receiver_name,
+                // Le forzamos una nota indicando que fue una entrega excepcional
+                'notes' => $request->notes ? "ENTREGA DE REZAGO. Notas: " . $request->notes : "ENTREGA DE REZAGO.",
+                'delivered_at' => now(),
+            ]);
+
+            // Auditoría Obligatoria
+            PickupEdit::create([
+                'pickup_id' => $pickup->id,
+                'user_id' => Auth::id(),
+                'changes' => json_encode(['status' => ['old' => 'IN_CUSTODY', 'new' => 'DELIVERED']]),
+                'reason' => 'Entrega especial de resguardo rezagado (+15 días) gestionada por: ' . Auth::user()->name
+            ]);
+        });
+
+        return redirect()->route('gerencia.rezagados.index')->with('success', 'El paquete rezagado ha sido entregado de forma segura.');
     }
 
     /**
@@ -118,8 +172,6 @@ class PickupController extends Controller
     {
         $pickup = Pickup::findOrFail($id);
 
-        // VALIDACIÓN ADICIONAL: Proteger rezagados desde el backend
-        // Si no es de hoy, no se debería poder editar (Regla de Negocio)
         if (!$pickup->created_at->isToday()) {
              return redirect()->route('gerencia.daily')->with('error', 'Los registros de días anteriores son de solo lectura.');
         }
