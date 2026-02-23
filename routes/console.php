@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // NUESTRO PILOTO AUTOMATICO DE CAJA
 Schedule::command('queue:process-cashier')->everyMinute();
+
+// EL BARRENDERO: Limpieza automática de la cola fantasma todos los días a las 11:59 PM
+Schedule::command('queue:clean-ghosts')->dailyAt('23:59');

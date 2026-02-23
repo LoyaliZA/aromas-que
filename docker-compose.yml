@@ -19,6 +19,27 @@ services:
     networks:
       - aromas-net
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        user: laravel
+        uid: 1000
+    image: aromas-app
+    container_name: aromas-scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan schedule:work
+    volumes:
+      - ./:/var/www
+      - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - aromas-net
+    depends_on:
+      - app
+      - db
+
   db:
     image: mysql:8.0
     container_name: aromas-db
