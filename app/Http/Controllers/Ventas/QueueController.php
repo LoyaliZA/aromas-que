@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Employee;
 use App\Models\DailyShift;
 use App\Models\SalesQueue;
+use App\Models\ShiftStatusLog; // <-- Agregamos el modelo de Logs
 use Illuminate\Support\Facades\DB;
 
 class QueueController extends Controller
@@ -28,10 +29,9 @@ class QueueController extends Controller
         $clientsWaiting = SalesQueue::waiting()->sales()->count();
 
         // 3. DETECTAR ASIGNACIÓN RECIENTE (Para la Mega Notificación)
-        // Buscamos si alguien empezó a ser atendido en los últimos 4 segundos
         $recentAssignment = SalesQueue::where('status', 'SERVING')
             ->where('started_serving_at', '>=', now()->subSeconds(4))
-            ->with('assignedShift.employee') // Traemos datos del vendedor
+            ->with('assignedShift.employee')
             ->first();
 
         $alertData = null;
@@ -60,12 +60,41 @@ class QueueController extends Controller
         ]);
         
         $shift = DailyShift::findOrFail($request->shift_id);
+        $previousStatus = $shift->current_status; // <-- Guardamos el estado anterior
 
         if ($shift->current_status === 'ONLINE') {
             $reason = $request->reason ?? 'GENERAL';
-            $shift->update(['current_status' => 'BREAK', 'break_reason' => $reason]);
+            
+            // Actualizamos el turno
+            $shift->update([
+                'current_status' => 'BREAK', 
+                'break_reason' => $reason,
+                'last_status_change_at' => now()
+            ]);
+
+            // Creamos el registro histórico (Inicio de Pausa)
+            ShiftStatusLog::create([
+                'daily_shift_id' => $shift->id,
+                'previous_status' => $previousStatus,
+                'new_status' => 'BREAK',
+                'changed_at' => now(),
+            ]);
+
         } elseif ($shift->current_status === 'BREAK') {
-            $shift->update(['current_status' => 'ONLINE', 'break_reason' => null, 'last_status_change_at' => now()]);
+            // Actualizamos el turno
+            $shift->update([
+                'current_status' => 'ONLINE', 
+                'break_reason' => null, 
+                'last_status_change_at' => now()
+            ]);
+
+            // Creamos el registro histórico (Fin de Pausa)
+            ShiftStatusLog::create([
+                'daily_shift_id' => $shift->id,
+                'previous_status' => $previousStatus, // En este caso era 'BREAK'
+                'new_status' => 'ONLINE',
+                'changed_at' => now(),
+            ]);
         }
 
         return back();
@@ -83,8 +112,6 @@ class QueueController extends Controller
                                 ->first();
 
             if ($client) {
-                // Si se envía un flag de 'auto_close' (por timeout), podrías guardarlo en logs o notas
-                // Por ahora cerramos el servicio estándar.
                 $client->update(['status' => 'COMPLETED', 'completed_at' => now()]);
                 $shift->increment('customers_served_count');
                 $shift->update([
@@ -94,7 +121,6 @@ class QueueController extends Controller
             }
         });
 
-        // Si es petición AJAX (desde el temporizador automático), devolvemos JSON
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => true, 'message' => 'Venta finalizada automáticamente']);
         }
@@ -102,7 +128,6 @@ class QueueController extends Controller
         return back()->with('success', 'Venta finalizada');
     }
 
-    // --- NUEVO MÉTODO: EXTENDER TIEMPO ---
     public function extendService(Request $request)
     {
         $request->validate(['shift_id' => 'required|exists:daily_shifts,id']);
@@ -113,7 +138,7 @@ class QueueController extends Controller
 
         if ($client) {
             $client->update([
-                'last_extended_at' => now(), // Reinicia el contador de "última extensión"
+                'last_extended_at' => now(),
                 'extension_count' => $client->extension_count + 1
             ]);
             
@@ -125,13 +150,11 @@ class QueueController extends Controller
 
     private function getSellersList()
     {
-        // Traemos empleados marcados para venta
         return Employee::sellers()->with(['todayShift'])->get();
     }
 
     private function runMatchmaker()
     {
-        // Lógica de matchmaker existente...
         $waitingClients = SalesQueue::waiting()->sales()->count();
         if ($waitingClients === 0) return;
 
@@ -163,7 +186,6 @@ class QueueController extends Controller
                     'status' => 'SERVING',
                     'assigned_shift_id' => $shift->id,
                     'started_serving_at' => now(),
-                    // Aseguramos que last_extended_at nazca nulo o igual al inicio
                     'last_extended_at' => null 
                 ]);
             } else {

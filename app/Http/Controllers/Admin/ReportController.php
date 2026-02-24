@@ -6,202 +6,245 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
-// Importamos los modelos
 use App\Models\SalesQueue;
-use App\Models\DailyShift;
-use App\Models\Pickup;
-use App\Models\PickupEdit;
 use App\Models\Employee;
-use App\Models\ShiftStatusLog; 
-
-use Rap2hpoutre\FastExcel\FastExcel;
+use App\Models\DailyShift;
+use App\Models\ShiftStatusLog;
 
 class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $period = $request->query('period', 'today');
-        $selectedEmployeeId = $request->query('employee_id'); // <-- NUEVO: Capturamos si se seleccionó un empleado
-        $activeTab = $request->query('tab', 'dashboard');     // <-- NUEVO: Capturamos la pestaña activa
-
-        $querySales = SalesQueue::query();
-        $queryPickups = Pickup::query();
-        $queryShifts = DailyShift::query(); 
+        // 1. CONFIGURACIÓN DE FECHAS Y PESTAÑAS
+        $period = $request->input('period', 'today');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $activeTab = $request->input('tab', 'dashboard');
+        $selectedEmployeeId = $request->input('employee_id');
 
         if ($period === 'today') {
-            $querySales->whereDate('queued_at', Carbon::today());
-            $queryPickups->whereDate('created_at', Carbon::today());
-            $queryShifts->whereDate('work_date', Carbon::today());
-        } elseif ($period === '7days') {
-            $querySales->where('queued_at', '>=', Carbon::today()->subDays(7));
-            $queryPickups->where('created_at', '>=', Carbon::today()->subDays(7));
-            $queryShifts->where('work_date', '>=', Carbon::today()->subDays(7));
+            $start = Carbon::today()->startOfDay();
+            $end = Carbon::today()->endOfDay();
+        } elseif ($period === 'week') {
+            $start = Carbon::now()->startOfWeek();
+            $end = Carbon::now()->endOfWeek();
         } elseif ($period === 'month') {
-            $querySales->whereMonth('queued_at', Carbon::now()->month)
-                       ->whereYear('queued_at', Carbon::now()->year);
-            $queryPickups->whereMonth('created_at', Carbon::now()->month)
-                         ->whereYear('created_at', Carbon::now()->year);
-            $queryShifts->whereMonth('work_date', Carbon::now()->month)
-                        ->whereYear('work_date', Carbon::now()->year);
+            $start = Carbon::now()->startOfMonth();
+            $end = Carbon::now()->endOfMonth();
+        } elseif ($period === 'custom' && $startDate && $endDate) {
+            $start = Carbon::parse($startDate)->startOfDay();
+            $end = Carbon::parse($endDate)->endOfDay();
+        } else {
+            $start = Carbon::today()->startOfDay();
+            $end = Carbon::today()->endOfDay();
+            $period = 'today';
         }
 
-        // --- 1. MÉTRICAS CORE (DASHBOARD GENERAL) ---
-        $totalAtendidos = (clone $querySales)->where('status', 'COMPLETED')->count();
-        $totalAbandonos = (clone $querySales)->where('status', 'ABANDONED')->count();
-        $peticionesTiempo = (clone $querySales)->sum('extension_count');
+        // Variable para saber si estamos consultando 1 solo día o varios
+        $isSingleDay = $start->isSameDay($end);
+
+        // ==========================================
+        // SECCIÓN A: MÉTRICAS GENERALES (DASHBOARD)
+        // ==========================================
         
-        $tiempos = (clone $querySales)->select(
-            DB::raw('AVG(TIMESTAMPDIFF(MINUTE, queued_at, started_serving_at)) as avg_wait'),
-            DB::raw('AVG(TIMESTAMPDIFF(MINUTE, started_serving_at, completed_at)) as avg_service')
-        )->where('status', 'COMPLETED')->first();
+        $totalServed = SalesQueue::whereBetween('completed_at', [$start, $end])
+            ->where('status', 'COMPLETED')
+            ->count();
 
-        $avgWaitTime = round($tiempos->avg_wait ?? 0); 
-        $avgServiceTime = round($tiempos->avg_service ?? 0); 
+        $totalAbandoned = SalesQueue::whereBetween('queued_at', [$start, $end])
+            ->whereIn('status', ['ABANDONED', 'CANCELED'])
+            ->count();
 
-        $topSellers = (clone $querySales)->select('employees.full_name', DB::raw('COUNT(sales_queue.id) as total_sales'))
-            ->join('daily_shifts', 'sales_queue.assigned_shift_id', '=', 'daily_shifts.id')
-            ->join('employees', 'daily_shifts.employee_id', '=', 'employees.id')
-            ->where('sales_queue.status', 'COMPLETED')
-            ->groupBy('employees.id', 'employees.full_name')
-            ->orderByDesc('total_sales')
-            ->limit(5)
-            ->get();
+        $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])
+            ->whereNotNull('started_serving_at')
+            ->whereNotNull('completed_at')
+            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
+            ->value('avg_time');
 
-        $serviceTypes = (clone $querySales)->select('service_type', DB::raw('COUNT(*) as total'))
-            ->groupBy('service_type')
-            ->get();
+        $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])
+            ->whereNotNull('queued_at')
+            ->whereNotNull('started_serving_at')
+            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')
+            ->value('avg_time');
 
-        $pickupsByDept = (clone $queryPickups)->select('department', DB::raw('COUNT(*) as total'))
-            ->groupBy('department')
-            ->get();
+        $employeesMetrics = Employee::sellers()
+            ->get()
+            ->map(function ($employee) use ($start, $end) {
+                $servedCount = SalesQueue::whereHas('assignedShift', function($query) use ($employee) {
+                        $query->where('employee_id', $employee->id);
+                    })
+                    ->whereBetween('completed_at', [$start, $end])
+                    ->where('status', 'COMPLETED')
+                    ->count();
 
-        $breakReasons = (clone $queryShifts)->select('break_reason', DB::raw('COUNT(*) as total'))
-            ->whereNotNull('break_reason')
-            ->groupBy('break_reason')
-            ->get();
+                $totalBreakSeconds = 0;
+                $shifts = DailyShift::where('employee_id', $employee->id)
+                    ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                    ->with(['statusLogs' => function($q) { $q->orderBy('changed_at', 'asc'); }])
+                    ->get();
 
-        $thirdPartyPickups = (clone $queryPickups)->select('is_third_party', DB::raw('COUNT(*) as total'))
-            ->groupBy('is_third_party')
-            ->get();
+                foreach ($shifts as $shift) {
+                    $breakStart = null;
+                    foreach ($shift->statusLogs as $log) {
+                        if ($log->new_status === 'BREAK') {
+                            $breakStart = Carbon::parse($log->changed_at);
+                        } elseif ($breakStart && $log->previous_status === 'BREAK') {
+                            $totalBreakSeconds += $breakStart->diffInSeconds(Carbon::parse($log->changed_at));
+                            $breakStart = null;
+                        }
+                    }
+                }
 
-        $warehouseTime = (clone $queryPickups)->select(
-            DB::raw('AVG(TIMESTAMPDIFF(MINUTE, created_at, delivered_at)) as avg_warehouse_time')
-        )->whereNotNull('delivered_at')->first();
+                return [
+                    'id' => $employee->id,
+                    'name' => $employee->full_name ?? 'Desconocido', 
+                    'served' => $servedCount,
+                    'formatted_break_time' => $this->formatSeconds($totalBreakSeconds),
+                ];
+            });
+
+        // 4. PREPARACIÓN DE DATOS PARA GRÁFICAS (JSON) CON GRANULARIDAD DINÁMICA
+        $chartTitle = $isSingleDay ? 'Flujo de Atención por Hora' : 'Flujo de Atención por Día';
+        $chartData = ['labels' => [], 'data' => []];
+
+        if ($isSingleDay) {
+            // SI ES UN DÍA: Agrupamos por hora (9am a 9pm)
+            $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])
+                ->where('status', 'COMPLETED')
+                ->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')
+                ->groupBy('hour')
+                ->pluck('count', 'hour')
+                ->toArray();
+                
+            for ($i = 9; $i <= 21; $i++) { 
+                $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
+                $chartData['data'][] = $salesByHour[$i] ?? 0;
+            }
+        } else {
+            // SI SON VARIOS DÍAS: Agrupamos por fecha
+            $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])
+                ->where('status', 'COMPLETED')
+                ->selectRaw('DATE(completed_at) as date, COUNT(*) as count')
+                ->groupBy('date')
+                ->pluck('count', 'date')
+                ->toArray();
+                
+            $currentDate = $start->copy();
+            while ($currentDate->lte($end)) {
+                $dateStr = $currentDate->format('Y-m-d');
+                $chartData['labels'][] = $currentDate->format('d/m'); // Ej: 24/02
+                $chartData['data'][] = $salesByDate[$dateStr] ?? 0;
+                $currentDate->addDay();
+            }
+        }
+
+        // ==========================================
+        // SECCIÓN B: MÉTRICAS INDIVIDUALES (RENDIMIENTO)
+        // ==========================================
         
-        $avgWarehouseTime = round($warehouseTime->avg_warehouse_time ?? 0);
-
-        // --- 2. NUEVO: MÉTRICAS INDIVIDUALES (PESTAÑA RENDIMIENTO) ---
-        $employees = Employee::sellers()->where('is_active', true)->get();
-        
+        $employeesList = Employee::sellers()->get(); 
+        $empKpis = ['served' => 0, 'formatted_avg_time' => '0s', 'extensions' => 0, 'abandoned' => 0];
         $empPerformanceData = [];
         $empBreaksData = [];
-        $empKpis = ['served' => 0, 'abandoned' => 0, 'extensions' => 0, 'avg_time' => 0];
+        $empClientsPaginated = null;
 
-        if ($selectedEmployeeId) {
-            // Historial de tiempos para la gráfica de líneas curvas
-            $empPerformanceData = (clone $querySales)
-                ->join('daily_shifts', 'sales_queue.assigned_shift_id', '=', 'daily_shifts.id')
-                ->where('daily_shifts.employee_id', $selectedEmployeeId)
-                ->where('sales_queue.status', 'COMPLETED')
-                ->select(
-                    'sales_queue.queued_at',
-                    DB::raw('TIMESTAMPDIFF(MINUTE, queued_at, started_serving_at) as wait_time'),
-                    DB::raw('TIMESTAMPDIFF(MINUTE, started_serving_at, completed_at) as service_time')
-                )
-                ->orderBy('sales_queue.queued_at', 'asc')
+        if ($selectedEmployeeId && $activeTab === 'performance') {
+            $empSalesQuery = SalesQueue::whereHas('assignedShift', function($q) use ($selectedEmployeeId) {
+                $q->where('employee_id', $selectedEmployeeId);
+            })->whereBetween('queued_at', [$start, $end]);
+
+            $empKpis['served'] = (clone $empSalesQuery)->where('status', 'COMPLETED')->count();
+            $empKpis['abandoned'] = (clone $empSalesQuery)->whereIn('status', ['ABANDONED', 'CANCELED'])->count();
+            $empKpis['extensions'] = (clone $empSalesQuery)->sum('extension_count');
+            
+            $empAvgSeconds = (clone $empSalesQuery)->where('status', 'COMPLETED')
+                ->whereNotNull('started_serving_at')
+                ->whereNotNull('completed_at')
+                ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
+                ->value('avg_time');
+            
+            $empKpis['formatted_avg_time'] = $this->formatSeconds($empAvgSeconds ?? 0);
+
+            $completedSales = (clone $empSalesQuery)->where('status', 'COMPLETED')
+                ->whereNotNull('queued_at')
+                ->whereNotNull('started_serving_at')
+                ->whereNotNull('completed_at')
+                ->orderBy('queued_at', 'asc')
                 ->get();
 
-            // Historial de Breaks del empleado
-            $empBreaksData = (clone $queryShifts)
-                ->where('employee_id', $selectedEmployeeId)
+            $empPerformanceData = $completedSales->map(function($sale) {
+                return [
+                    'queued_at' => Carbon::parse($sale->queued_at)->toIso8601String(),
+                    'wait_time' => round(Carbon::parse($sale->queued_at)->diffInSeconds(Carbon::parse($sale->started_serving_at)) / 60, 2),
+                    'service_time' => round(Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)) / 60, 2),
+                ];
+            });
+
+            $empClientsPaginated = (clone $empSalesQuery)->where('status', 'COMPLETED')
+                ->orderBy('completed_at', 'desc')
+                ->paginate(10)
+                ->withQueryString()
+                ->through(function ($client) {
+                    $wait = $client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0;
+                    $serve = $client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0;
+                    $client->formatted_wait = $this->formatSeconds($wait);
+                    $client->formatted_serve = $this->formatSeconds($serve);
+                    return $client;
+                });
+
+            $empBreaksData = DailyShift::where('employee_id', $selectedEmployeeId)
+                ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                 ->whereNotNull('break_reason')
-                ->select('break_reason', DB::raw('COUNT(*) as total'))
+                ->selectRaw('break_reason, COUNT(*) as total')
                 ->groupBy('break_reason')
                 ->get();
-
-            // KPIs individuales
-            $baseEmpQuery = (clone $querySales)->join('daily_shifts', 'sales_queue.assigned_shift_id', '=', 'daily_shifts.id')->where('daily_shifts.employee_id', $selectedEmployeeId);
-            $empKpis['served'] = (clone $baseEmpQuery)->where('sales_queue.status', 'COMPLETED')->count();
-            $empKpis['abandoned'] = (clone $baseEmpQuery)->where('sales_queue.status', 'ABANDONED')->count();
-            $empKpis['extensions'] = (clone $baseEmpQuery)->sum('extension_count');
-            
-            $empAvgTime = (clone $baseEmpQuery)->where('sales_queue.status', 'COMPLETED')
-                ->select(DB::raw('AVG(TIMESTAMPDIFF(MINUTE, started_serving_at, completed_at)) as avg_s'))->first();
-            $empKpis['avg_time'] = round($empAvgTime->avg_s ?? 0);
         }
 
-        // --- 3. AUDITORÍA ---
-        $audits = PickupEdit::select('pickup_edits.*', 'users.name as user_name', 'users.role as user_role')
-            ->join('users', 'pickup_edits.user_id', '=', 'users.id')
-            ->orderBy('pickup_edits.created_at', 'desc')
-            ->paginate(20);
+        return view('admin.reports.index', [
+            'period' => $period,
+            'start_date' => $start->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
+            'activeTab' => $activeTab,
+            'is_single_day' => $isSingleDay, // <-- Mandamos el dato a la vista
+            'chart_title' => $chartTitle,    // <-- Mandamos el título a la vista
+            
+            'metrics' => [
+                'total_served' => $totalServed,
+                'total_abandoned' => $totalAbandoned,
+                'formatted_service_time' => $this->formatSeconds($avgServiceSeconds ?? 0),
+                'formatted_wait_time' => $this->formatSeconds($avgWaitSeconds ?? 0),
+            ],
+            'employees_metrics' => $employeesMetrics,
+            'chart_data' => $chartData,
 
-        return view('admin.reports.index', compact(
-            'period', 'activeTab', 'selectedEmployeeId',
-            'totalAtendidos', 'totalAbandonos', 'peticionesTiempo', 'avgWaitTime', 'avgServiceTime',
-            'topSellers', 'serviceTypes', 'pickupsByDept', 'breakReasons', 'thirdPartyPickups', 'avgWarehouseTime',   
-            'employees', 'audits',
-            'empPerformanceData', 'empBreaksData', 'empKpis' // <-- Enviamos datos individuales
-        ));
+            'employees' => $employeesList,
+            'selectedEmployeeId' => $selectedEmployeeId,
+            'empKpis' => $empKpis,
+            'empPerformanceData' => $empPerformanceData,
+            'empBreaksData' => $empBreaksData,
+            'empClientsPaginated' => $empClientsPaginated,
+        ]);
     }
 
-    public function export(Request $request)
+    private function formatSeconds($totalSeconds)
     {
-        $query = SalesQueue::query()
-            ->leftJoin('daily_shifts', 'sales_queue.assigned_shift_id', '=', 'daily_shifts.id')
-            ->leftJoin('employees', 'daily_shifts.employee_id', '=', 'employees.id')
-            ->select(
-                'sales_queue.client_name',
-                'sales_queue.service_type',
-                'sales_queue.status',
-                'sales_queue.queued_at',
-                'sales_queue.started_serving_at',
-                'sales_queue.completed_at',
-                'sales_queue.extension_count',
-                'employees.full_name as seller_name'
-            )
-            ->orderBy('sales_queue.queued_at', 'desc');
-
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('sales_queue.queued_at', [
-                $request->start_date . ' 00:00:00',
-                $request->end_date . ' 23:59:59'
-            ]);
-        }
-
-        if ($request->filled('employee_id')) {
-            $query->where('employees.id', $request->employee_id);
-        }
-
-        $timestamp = Carbon::now()->format('Y_m_d_His');
+        if (!$totalSeconds || $totalSeconds <= 0) return '0s';
         
-        $generator = function () use ($query) {
-            foreach ($query->cursor() as $row) {
-                yield $row;
-            }
-        };
+        $hours = floor($totalSeconds / 3600);
+        $minutes = floor(($totalSeconds % 3600) / 60);
+        $seconds = round($totalSeconds % 60);
 
-        return (new FastExcel($generator()))->download("reporte_atencion_{$timestamp}.xlsx", function ($row) {
-            $queued = $row->queued_at ? Carbon::parse($row->queued_at) : null;
-            $started = $row->started_serving_at ? Carbon::parse($row->started_serving_at) : null;
-            $completed = $row->completed_at ? Carbon::parse($row->completed_at) : null;
+        $result = '';
+        if ($hours > 0) {
+            $result .= $hours . 'h ';
+        }
+        if ($minutes > 0 || $hours > 0) {
+            $result .= $minutes . 'm ';
+        }
+        if ($seconds > 0 || ($hours == 0 && $minutes == 0)) {
+            $result .= $seconds . 's';
+        }
 
-            $waitSeconds = ($queued && $started) ? $queued->diffInSeconds($started) : 0;
-            $serviceSeconds = ($started && $completed) ? $started->diffInSeconds($completed) : 0;
-            
-            return [
-                'Cliente' => $row->client_name,
-                'Servicio' => $row->service_type === 'SALES' ? 'Ventas' : 'Cajas',
-                'Atendido Por' => $row->seller_name ?? 'Sin asignar',
-                'Estatus' => $row->status,
-                'Llegada' => $queued ? $queued->format('d/m/Y H:i:s') : 'N/A',
-                'Inicio Atención' => $started ? $started->format('d/m/Y H:i:s') : 'N/A',
-                'Fin Atención' => $completed ? $completed->format('d/m/Y H:i:s') : 'N/A',
-                'Tiempo Espera' => gmdate('H:i:s', $waitSeconds),
-                'Tiempo Atención' => gmdate('H:i:s', $serviceSeconds),
-                'Extensiones' => $row->extension_count,
-            ];
-        });
+        return trim($result);
     }
 }
