@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\ReportController; // <-- NUEVO: Importamos el controlador de reportes
 
 // --- NUEVOS CONTROLADORES (MODULOS) ---
 use App\Http\Controllers\Gerencia\PickupController;
@@ -46,6 +47,12 @@ Route::prefix('admin')
     ->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
         Route::resource('users', UserController::class);
+        
+        // --- NUEVAS RUTAS: REPORTES Y AUDITORÍA ---
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+        Route::get('/reports/audit', [ReportController::class, 'audit'])->name('reports.audit');
+        
         Route::get('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('tv_ads.index');
         Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
         Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');

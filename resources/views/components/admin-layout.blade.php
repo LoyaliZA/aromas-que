@@ -8,6 +8,8 @@
 
     <title>Panel de Administración - Aromas</title>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
@@ -65,13 +67,32 @@
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                 Publicidad (TV)
             </a>
+
+            <a href="{{ route('admin.reports.index') }}"
+                class="flex items-center px-4 py-3 rounded-lg transition-colors duration-200
+               {{ request()->routeIs('admin.reports.*') 
+                  ? 'bg-aromas-main/50 text-aromas-highlight border-l-4 border-aromas-highlight' 
+                  : 'text-gray-300 hover:bg-aromas-tertiary/20 hover:text-white' }}">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                Reportes
+            </a>
         </nav>
 
         <div class="absolute bottom-0 w-full p-4 border-t border-aromas-tertiary/20 bg-black/10">
+            <div class="flex items-center mb-4 px-2">
+                <div class="w-8 h-8 rounded-full bg-aromas-highlight flex items-center justify-center text-aromas-main font-bold text-sm shadow-md ring-2 ring-aromas-main">
+                    {{ substr(Auth::user()->name, 0, 1) }}
+                </div>
+                <div class="ml-3 overflow-hidden">
+                    <p class="text-sm font-medium text-white truncate">{{ Auth::user()->name }}</p>
+                    <p class="text-xs text-gray-500 truncate">Administrador</p>
+                </div>
+            </div>
+
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
-                <button type="submit" class="flex items-center w-full text-gray-400 hover:text-aromas-error transition-colors">
-                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                <button type="submit" class="flex items-center w-full text-gray-400 hover:text-aromas-error transition-colors px-2 py-1 rounded-md hover:bg-white/5">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h4a3 3 0 013 3v1"></path></svg>
                     Cerrar Sesión
                 </button>
             </form>
@@ -97,5 +118,7 @@
     </div>
 
     <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 z-30 bg-black/80 backdrop-blur-sm lg:hidden"></div>
+
+    
 </body>
 </html>
