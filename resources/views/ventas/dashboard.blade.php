@@ -9,8 +9,8 @@
 </head>
 <body class="bg-gray-900 text-white font-sans antialiased overflow-hidden">
 
-    {{-- APP CONTAINER --}}
-    <div class="min-h-screen flex flex-col" x-data="salesDashboard()">
+    {{-- APP CONTAINER: Cambiamos min-h-screen por h-screen para arreglar el scroll --}}
+    <div class="h-screen w-full flex flex-col" x-data="salesDashboard()">
         
         {{-- HEADER EXCLUSIVO VENDEDORES --}}
         <div class="bg-gray-900/90 backdrop-blur-md border-b border-gray-800 px-8 py-5 shadow-2xl sticky top-0 z-50">
@@ -61,7 +61,7 @@
                 </div>
             @endif
 
-            <div id="sellers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 h-full content-start">
+            <div id="sellers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
                 @include('ventas.partials.sellers-grid', ['sellers' => $sellers])
             </div>
         </div>
@@ -150,7 +150,7 @@
                             <p class="text-5xl font-black text-blue-600 leading-tight" x-text="alertData.seller"></p>
                         </div>
                         <div class="pt-8 md:pt-0 md:pl-12">
-                            <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Cliente</p>
+                            <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Cliente (Turno: <span x-text="alertData.folio"></span>)</p>
                             <p class="text-5xl font-black text-gray-800 leading-tight" x-text="alertData.client"></p>
                         </div>
                     </div>
@@ -167,7 +167,10 @@
 
     </div>
 
-    {{-- SCRIPT ACTUALIZADO CON PREVENCIÓN DE FLICKER --}}
+    {{-- AUDIO ALARMA --}}
+    <audio id="bell-sound" src="{{ asset('audio/bell.mp3') }}" preload="auto"></audio>
+
+    {{-- SCRIPT ACTUALIZADO CON PREVENCIÓN DE FLICKER, AUDIO Y NOTIFICACIONES --}}
     <script>
         function salesDashboard() {
             return {
@@ -187,7 +190,7 @@
                 
                 // Mega Alert
                 showMegaAlert: false,
-                alertData: { seller: '', client: '' },
+                alertData: { seller: '', client: '', folio: '' },
                 alertTimer: 5,
                 isLoading: false,
 
@@ -196,6 +199,19 @@
                         this.breakShiftId = event.detail.id;
                         this.showBreakModal = true;
                     });
+
+                    // Solicitar permisos para Notificaciones de Escritorio
+                    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                        Notification.requestPermission();
+                    }
+
+                    // Por políticas de los navegadores, a veces se requiere una interacción del usuario 
+                    // para permitir reproducir audio o mostrar notificaciones.
+                    document.body.addEventListener('click', () => {
+                        if ("Notification" in window && Notification.permission !== "granted") {
+                            Notification.requestPermission();
+                        }
+                    }, { once: true });
 
                     // Polling cada 3 segundos
                     setInterval(() => { this.fetchUpdates(); }, 3000);
@@ -320,7 +336,6 @@
                         if(grid) {
                             grid.innerHTML = data.html;
                             
-                            // ---- SOLUCIÓN AL FLICKER ----
                             // Forzamos el cálculo de tiempo EXACTAMENTE al momento de inyectar el HTML
                             this.updateTimers(); 
                         }
@@ -337,6 +352,21 @@
                     this.alertData = data;
                     this.showMegaAlert = true;
                     this.alertTimer = 5;
+
+                    // 1. Reproducir Alarma Sonora
+                    let audio = document.getElementById('bell-sound');
+                    if (audio) {
+                        // El catch previene errores en consola si el navegador bloquea el autoplay
+                        audio.play().catch(error => console.log("Audio bloqueado por el navegador, se requiere interacción previa:", error));
+                    }
+
+                    // 2. Enviar Notificación de Escritorio
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("¡Nuevo Cliente Asignado!", {
+                            body: `Turno/Folio: ${data.folio}\nCliente: ${data.client}\nVendedor asignado: ${data.seller}`,
+                            icon: '/images/aromas_logo_recortado.png' // Usamos el logo que vi en tus archivos
+                        });
+                    }
                     
                     let timerInterval = setInterval(() => {
                         this.alertTimer--;
