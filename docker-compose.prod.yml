@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        user: laravel
+        uid: 1000
+    image: aromas-app-prod
+    container_name: aromas_app_prod
+    restart: unless-stopped
+    working_dir: /var/www
+    environment:
+      - TZ=America/Mexico_City
+    volumes:
+      - ./:/var/www
+      - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - aromas-network-prod
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        user: laravel
+        uid: 1000
+    image: aromas-app-prod
+    container_name: aromas_scheduler_prod
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan schedule:work
+    environment:
+      - TZ=America/Mexico_City
+    volumes:
+      - ./:/var/www
+      - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - aromas-network-prod
+    depends_on:
+      - app
+      - db
+
+  web:
+    image: nginx:alpine
+    container_name: aromas_web_prod
+    restart: unless-stopped
+    environment:
+      - TZ=America/Mexico_City
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - aromas-network-prod
+
+  db:
+    image: mysql:8.0
+    container_name: aromas_db_prod
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      TZ: America/Mexico_City
+    volumes:
+      - dbdata_prod:/var/lib/mysql
+    networks:
+      - aromas-network-prod
+    command: --default-authentication-plugin=mysql_native_password
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: aromas_tunnel_prod
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiZGI3MTQwY2I2NTA1MjU3MmZhYjgwMmQ2MGY0ODU2MjkiLCJ0IjoiMjUyZWMwYjItNGQzYS00YjA5LTkwZTAtMGE5NmJhMmMxMzc0IiwicyI6Ik1UZGpabU5tTlRNdE5qVXdaQzAwWmpjekxUbGxOR0l0TWpRMVltTm1ZakEyTURNNCJ9
+    networks:
+      - aromas-network-prod
+    depends_on:
+      - web
+
+networks:
+  aromas-network-prod:
+    driver: bridge
+
+volumes:
+  dbdata_prod:
