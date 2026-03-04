@@ -1,11 +1,18 @@
 <x-tablet-layout>
-    {{-- x-data: Inicializamos la app. Importante: $peopleInQueue debe llegar desde el controlador --}}
     <div x-data="deliveryApp({{ $peopleInQueue }})" x-init="init()" class="pb-10 relative">
 
         {{-- ========================================================== --}}
-        {{--    ZONA SUPERIOR: BOTONES (DISEÑO RESTAURADO)              --}}
+        {{--    SECCIÓN 1: GESTIÓN DE FILA Y TURNOS                     --}}
         {{-- ========================================================== --}}
-        <div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="mb-4 flex items-center gap-3">
+            <div class="p-2 bg-aromas-highlight/20 rounded-lg text-aromas-highlight shadow-inner">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </div>
+            <h2 class="text-xl font-black text-white uppercase tracking-widest">Gestión de Fila</h2>
+        </div>
+
+        <div class="mb-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {{-- Botón 1: Ticket de Turno --}}
             <button @click="openQueueModal()" 
                     class="bg-aromas-highlight text-aromas-main rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01] hover:shadow-[0_0_15px_rgba(253,201,116,0.4)] border-2 border-transparent hover:border-white/20">
                 <div class="flex items-center gap-4">
@@ -23,15 +30,36 @@
                 </div>
             </button>
 
-            <button disabled class="bg-aromas-highlight/50 text-aromas-main/50 border-2 border-dashed border-aromas-main/10 rounded-xl p-4 flex items-center justify-center gap-3 cursor-not-allowed">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                <span class="font-bold">Escanear QR (Próximamente)</span>
+            {{-- Botón 2: Ver Fila (Reemplaza al antiguo botón QR) --}}
+            <button @click="openQueueListModal()" 
+                    class="bg-gray-800 border border-gray-700 hover:border-aromas-highlight text-white rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01]">
+                <div class="flex items-center gap-4">
+                    <div class="bg-gray-900 p-3 rounded-lg text-gray-400 group-hover:text-aromas-highlight transition-colors border border-gray-700">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    </div>
+                    <div class="text-left">
+                        <h2 class="text-xl font-bold leading-none text-white group-hover:text-aromas-highlight transition-colors">Ver Fila Actual</h2>
+                        <p class="text-gray-400 text-sm font-medium mt-1">Revisar clientes y abandonos</p>
+                    </div>
+                </div>
+                <div>
+                    <svg class="w-6 h-6 text-gray-600 group-hover:text-aromas-highlight group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </div>
             </button>
         </div>
 
+
         {{-- ========================================================== --}}
-        {{--    ZONA MEDIA: FILTROS Y BÚSQUEDA (DISEÑO ORIGINAL)        --}}
+        {{--    SECCIÓN 2: PAQUETES EN RESGUARDO                        --}}
         {{-- ========================================================== --}}
+        <div class="mb-4 flex items-center gap-3">
+            <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400 shadow-inner">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            </div>
+            <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
+        </div>
+
+        {{-- Barra de Búsqueda y Filtros --}}
         <div class="bg-aromas-secondary rounded-xl p-4 shadow-md border border-aromas-tertiary/20 mb-6 sticky top-2 z-30">
             <div class="flex flex-col md:flex-row gap-4">
                 <div class="flex-1 relative">
@@ -58,30 +86,21 @@
             </div>
         </div>
 
-        {{-- ========================================================== --}}
-        {{--    MENSAJES FLASH Y ALERTA DE TURNO (NUEVO)                --}}
-        {{-- ========================================================== --}}
-        
+        {{-- Alertas Flash --}}
         @if(session('new_turn'))
             <div x-data="{ showTurn: true }" x-show="showTurn" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-transition>
-                
                 <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="showTurn = false"></div>
-                
                 <div class="bg-aromas-secondary border-2 border-aromas-highlight rounded-2xl shadow-[0_0_30px_rgba(253,201,116,0.3)] p-8 max-w-sm w-full text-center relative z-10 animate-fade-in-down">
-                    
                     <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
                         <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
-                    
                     <h3 class="text-xl font-bold text-white mb-2">Turno Asignado</h3>
                     <p class="text-aromas-tertiary text-sm mb-6">Indíquele al cliente su número:</p>
-                    
                     <div class="bg-gray-900 rounded-xl py-6 border border-gray-700 mb-6 shadow-inner">
                         <div class="text-5xl font-black text-aromas-highlight tracking-widest mb-2">{{ session('new_turn') }}</div>
                         <div class="text-white font-bold text-lg">{{ session('client_name') }}</div>
                         <div class="text-gray-400 text-sm uppercase tracking-wider mt-1">Destino: <span class="{{ session('destination') == 'Caja' ? 'text-green-400' : 'text-yellow-400' }}">{{ session('destination') }}</span></div>
                     </div>
-
                     <button @click="showTurn = false" class="w-full bg-aromas-highlight text-aromas-main font-bold text-lg py-3 rounded-xl hover:bg-white transition-all shadow-lg">
                         Cerrar y Continuar
                     </button>
@@ -94,9 +113,7 @@
             </div>
         @endif
 
-        {{-- ========================================================== --}}
-        {{--    CONTENEDOR CARDS (AJAX)                                 --}}
-        {{-- ========================================================== --}}
+        {{-- CONTENEDOR CARDS (AJAX) Y PAGINACIÓN --}}
         <div id="results-container">
             @include('recepcion.partials.card-grid', ['pickups' => $pickups])
         </div>
@@ -107,8 +124,10 @@
 
 
         {{-- ========================================================== --}}
-        {{--    MODAL 1: CONFIRMAR ENTREGA                              --}}
+        {{--    MODALES                                                 --}}
         {{-- ========================================================== --}}
+
+        {{-- MODAL 1: CONFIRMAR ENTREGA --}}
         <div x-show="showDeliveryModal" style="display: none;" 
              class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
              x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
@@ -117,7 +136,6 @@
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="closeModal()"></div>
 
             <div class="bg-aromas-secondary w-full max-w-2xl rounded-xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col my-auto max-h-[90vh] overflow-y-auto">
-                
                 <div class="bg-black/20 p-4 border-b border-aromas-tertiary/20 flex justify-between items-center sticky top-0 backdrop-blur-md z-20">
                     <div>
                         <h2 class="text-lg font-bold text-white">Confirmar Entrega</h2>
@@ -180,30 +198,27 @@
             </div>
         </div>
 
-        {{-- ========================================================== --}}
-        {{--    MODAL 2: TICKET DE TURNO                                --}}
-        {{-- ========================================================== --}}
-        <div x-show="showQueueModal" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-transition>
+        {{-- MODAL 2: TICKET DE TURNO --}}
+        <div x-show="showQueueModal" style="display: none;" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showQueueModal = false"></div>
             
             <div class="bg-aromas-secondary w-full max-w-md rounded-xl shadow-2xl border border-aromas-highlight/30 flex flex-col relative z-10">
-                <div class="bg-aromas-highlight/10 p-4 border-b border-aromas-tertiary/20 rounded-t-xl">
+                <div class="bg-aromas-highlight/10 p-4 border-b border-aromas-tertiary/20 rounded-t-xl flex justify-between items-center">
                     <h2 class="text-xl font-bold text-white flex items-center gap-2">
                         <svg class="w-6 h-6 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                         Nuevo Ticket
                     </h2>
+                    <button @click="showQueueModal = false" class="text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
 
                 <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6">
                     @csrf
-                    
                     <div>
                         <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Nombre del Cliente</label>
                         <input type="text" name="client_name" x-ref="queueInput" required 
                                class="w-full bg-aromas-main border-2 border-aromas-tertiary/30 rounded-lg px-4 py-3 text-lg text-white placeholder-gray-600 focus:border-aromas-highlight focus:ring-0 transition-colors" 
                                placeholder="Ej. María Pérez">
                     </div>
-
                     <div>
                         <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-3">Destino</label>
                         <div class="grid grid-cols-2 gap-4">
@@ -224,12 +239,63 @@
                             </button>
                         </div>
                     </div>
-
                     <div class="flex gap-3 pt-2">
                         <button type="button" @click="showQueueModal = false" class="flex-1 py-3 rounded-lg border border-aromas-tertiary/30 text-gray-400 font-bold hover:bg-white/5">CANCELAR</button>
                         <button type="submit" class="flex-1 py-3 rounded-lg bg-aromas-highlight text-aromas-main font-bold shadow-lg hover:bg-white transition-all transform hover:-translate-y-1">REGISTRAR</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        {{-- MODAL 3: GESTIÓN DE LA FILA (VER Y ABANDONAR) --}}
+        <div x-show="showQueueListModal" style="display: none;" class="fixed inset-0 z-[70] flex items-center justify-center p-4" x-transition>
+            <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showQueueListModal = false"></div>
+            
+            <div class="bg-aromas-secondary w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-700 flex flex-col relative z-10 max-h-[85vh]">
+                <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 rounded-t-2xl">
+                    <div>
+                        <h2 class="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-3">
+                            <svg class="w-7 h-7 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            Fila Actual
+                        </h2>
+                        <p class="text-sm text-gray-400 mt-1">Total esperando: <strong class="text-white" x-text="queueCount"></strong></p>
+                    </div>
+                    <button @click="showQueueListModal = false" class="text-gray-400 hover:text-white p-2 rounded-lg bg-gray-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                </div>
+
+                <div class="p-6 overflow-y-auto flex-1 bg-black/20">
+                    <div x-show="waitingClients.length === 0" class="text-center py-10 flex flex-col items-center">
+                        <div class="bg-gray-800 p-4 rounded-full mb-3">
+                            <svg class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <p class="text-gray-400 font-bold text-lg">No hay clientes esperando actualmente.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <template x-for="client in waitingClients" :key="client.id">
+                            <div class="bg-gray-800/80 border border-gray-700 rounded-xl p-4 flex justify-between items-center hover:border-aromas-tertiary transition-colors">
+                                <div class="flex items-center gap-4">
+                                    <div class="bg-gray-900 border border-gray-700 px-4 py-3 rounded-lg text-center min-w-[80px]">
+                                        <span class="text-2xl font-black text-aromas-highlight leading-none" x-text="client.turn_number"></span>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-white leading-tight" x-text="client.client_name"></h4>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" 
+                                                  :class="client.service_type === 'SALES' ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'" 
+                                                  x-text="client.service_type === 'SALES' ? 'Ventas' : 'Caja'"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button @click="markAbandoned(client.id, client.client_name)" class="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 px-4 py-3 rounded-lg text-sm font-bold hover:bg-red-500 hover:text-white transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zm11-2l-4-4m0 0l-4 4m4-4v12"></path></svg>
+                                    <span class="hidden md:inline">Abandonó Fila</span>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -245,6 +311,7 @@
 
                 showDeliveryModal: false, 
                 showQueueModal: false,
+                showQueueListModal: false, // <-- NUEVO ESTADO
 
                 pickup: {}, 
                 isThirdParty: false, 
@@ -254,13 +321,14 @@
                 isPadEmpty: true,
 
                 queueType: 'SALES',
+                waitingClients: [], // <-- ARREGLO PARA CLIENTES EN FILA
 
                 init() {
                     this.$watch('search', (value) => { this.fetchData(value); });
 
                     setInterval(() => {
-                        // Respetamos la recarga solo si no hay modales abiertos
-                        if (this.showDeliveryModal || this.showQueueModal || this.search.length > 0) return;
+                        // Pausamos el refresco si CUALQUIER modal está abierto
+                        if (this.showDeliveryModal || this.showQueueModal || this.showQueueListModal || this.search.length > 0) return;
                         this.fetchData('');
                     }, 5000);
 
@@ -293,6 +361,48 @@
                         if(this.$refs.queueInput) this.$refs.queueInput.focus(); 
                     }, 100);
                 },
+
+                // --- NUEVAS FUNCIONES PARA GESTIÓN DE FILA ---
+                openQueueListModal() {
+                    this.fetchQueueList();
+                    this.showQueueListModal = true;
+                },
+
+                fetchQueueList() {
+                    fetch("{{ route('recepcion.queue.list') }}", {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.clients) {
+                            this.waitingClients = data.clients;
+                            this.queueCount = data.clients.length;
+                        }
+                    });
+                },
+
+                markAbandoned(id, name) {
+                    if(!confirm(`¿Estás seguro de que el cliente ${name} ya se retiró de la fila?`)) return;
+
+                    fetch(`/recepcion/queue/${id}/abandon`, {
+                        method: 'PUT',
+                        headers: { 
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json'
+                        }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data.success) {
+                            this.fetchQueueList(); // Refresca el modal interior
+                            this.fetchData(this.search); // Refresca los conteos del dashboard
+                        } else {
+                            alert(data.message || 'Error al procesar la solicitud.');
+                        }
+                    });
+                },
+                // ---------------------------------------------
 
                 openDeliveryModal(data) {
                     this.pickup = data;

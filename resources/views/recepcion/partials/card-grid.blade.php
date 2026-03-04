@@ -1,84 +1,104 @@
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
     @forelse($pickups as $pickup)
-        <div class="bg-aromas-secondary rounded-xl border border-aromas-tertiary/20 shadow-lg flex flex-col justify-between group hover:border-aromas-highlight/50 transition-all relative overflow-hidden">
+        <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-700 shadow-xl flex flex-col overflow-hidden group hover:border-aromas-highlight/50 transition-colors">
             
             {{-- CABECERA CARD --}}
-            <div class="p-5 pb-0">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="font-mono text-2xl font-bold text-aromas-highlight tracking-wider">Folio:{{ $pickup->ticket_folio }}</span>
-                    
-                    {{-- Etiqueta de Depto (Badge Visible) --}}
+            <div class="px-5 py-4 border-b border-gray-700 bg-gray-900/50 flex justify-between items-center">
+                <div>
+                    <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold block mb-1">Folio del Paquete</span>
+                    <span class="font-mono text-2xl font-black text-aromas-highlight leading-none">{{ $pickup->ticket_folio }}</span>
+                </div>
+                <div class="text-right">
                     @if($pickup->department === 'AROMAS')
-                        <span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            🟣 Aromas
+                        <span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-purple-400"></span> Aromas
                         </span>
                     @else
-                        <span class="bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                            🌸 Bellaroma
+                        <span class="bg-pink-500/20 text-pink-300 border border-pink-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-pink-400"></span> Bellaroma
                         </span>
                     @endif
                 </div>
-                <div class="text-xs text-gray-500 mb-4">{{ $pickup->created_at->format('d/M h:i A') }}</div>
             </div>
 
             {{-- CUERPO CARD --}}
-            <div class="px-5 flex-1">
-                {{-- Quién Recoge (Destacado) --}}
-                <div class="mb-4 p-3 rounded-lg bg-black/20 border border-aromas-tertiary/10">
+            <div class="p-5 flex-1 flex flex-col gap-5">
+                
+                {{-- Info del Cliente --}}
+                <div>
+                    <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold flex justify-between">
+                        <span>Titular del Paquete</span>
+                        <span>{{ $pickup->created_at->format('d/M - h:i A') }}</span>
+                    </span>
+                    <h3 class="text-xl font-bold text-white leading-tight mt-1">{{ $pickup->client_name }}</h3>
+                    
                     @if($pickup->is_third_party)
-                        <div class="text-[10px] text-yellow-500 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            Recoge Tercero
+                        <div class="mt-2 inline-flex items-center gap-2 text-yellow-500 text-sm bg-yellow-500/10 border border-yellow-500/20 px-3 py-1.5 rounded-lg">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <span><strong class="font-bold">Recibe:</strong> {{ $pickup->receiver_name }}</span>
                         </div>
-                        <div class="text-lg text-white font-bold leading-tight">{{ $pickup->receiver_name }}</div>
-                        <div class="text-xs text-gray-400 mt-1">Titular: {{ $pickup->client_name }}</div>
-                    @else
-                        <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cliente Titular</div>
-                        <div class="text-lg text-white font-bold leading-tight">{{ $pickup->client_name }}</div>
-                        <div class="text-xs text-gray-500 mt-1">ID: {{ $pickup->client_ref_id }}</div>
                     @endif
                 </div>
 
+                {{-- Bloques Destacados (Piezas y No. Cliente) --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-gray-900/60 border border-gray-700 rounded-xl p-3 flex items-center gap-3">
+                        <div class="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold block">Piezas</span>
+                            {{-- Aquí corregimos a $pickup->pieces --}}
+                            <span class="text-xl font-black text-white leading-none">{{ $pickup->pieces }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-900/60 border border-gray-700 rounded-xl p-3 flex items-center gap-3">
+                        <div class="bg-green-500/20 p-2 rounded-lg text-green-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                        </div>
+                        <div class="overflow-hidden">
+                            <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold block truncate">No. Cliente</span>
+                            <span class="text-lg font-bold text-white leading-none truncate block">{{ $pickup->client_ref_id ?? 'N/A' }}</span>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Notas --}}
-                @if($pickup->notes)
-                    <div class="flex gap-2 items-start mb-3">
-                        <svg class="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                        <p class="text-xs text-yellow-200/80 italic leading-snug">{{ $pickup->notes }}</p>
+                <div class="mt-auto flex flex-col gap-3">
+                    @if($pickup->notes)
+                        <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-3">
+                            <span class="font-bold text-red-400 uppercase text-[10px] tracking-widest block mb-1">⚠️ Observaciones de Check-in</span>
+                            <p class="text-sm text-red-200 leading-snug">{{ $pickup->notes }}</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            {{-- FOOTER / ACCIÓN --}}
+            <div class="p-4 pt-0">
+                @if($pickup->status === 'IN_CUSTODY')
+                    <button @click="$dispatch('open-delivery-modal', {{ json_encode($pickup) }})"
+                            class="w-full py-4 rounded-xl bg-aromas-highlight text-aromas-main font-black tracking-widest uppercase flex items-center justify-center gap-3 hover:bg-white transition-all shadow-[0_0_20px_rgba(253,201,116,0.15)] active:scale-95">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                        Entregar Paquete
+                    </button>
+                @else
+                    <div class="w-full bg-gray-900/80 text-green-500 font-bold py-4 rounded-xl text-center border border-green-500/20 text-sm tracking-widest uppercase flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Entregado
                     </div>
                 @endif
-                
-                <div class="text-xs text-gray-400 mb-4 flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                    {{ $pickup->pieces }} Piezas
-                </div>
             </div>
-
-            {{-- BOTÓN ACCIÓN --}}
-            @if($pickup->status === 'IN_CUSTODY')
-                <button @click="openDeliveryModal({{ $pickup }})" 
-                        class="w-full bg-aromas-tertiary/10 hover:bg-aromas-highlight hover:text-aromas-main text-gray-300 hover:font-bold py-4 transition-all border-t border-aromas-tertiary/20 flex items-center justify-center gap-2 group-hover:shadow-[0_-4px_20px_rgba(253,201,116,0.1)]">
-                    <span>ENTREGAR</span>
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
-                </button>
-            @else
-                <div class="w-full bg-green-900/20 text-green-500 font-bold py-3 text-center border-t border-green-500/20 text-xs tracking-widest uppercase">
-                    Entregado
-                </div>
-            @endif
+            
         </div>
     @empty
-        <div class="col-span-full py-12 text-center">
-            <div class="inline-block p-4 rounded-full bg-white/5 mb-3">
-                <svg class="w-12 h-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+        <div class="col-span-full py-20 flex flex-col items-center justify-center text-center">
+            <div class="p-6 rounded-full bg-gray-800/50 mb-4 border border-gray-700">
+                <svg class="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
             </div>
-            <p class="text-xl text-gray-400 font-bold">Sin resultados</p>
+            <h3 class="text-xl font-bold text-gray-400">Sin paquetes en resguardo</h3>
+            <p class="text-gray-500 text-sm mt-2">No hay paquetes pendientes de entrega con los filtros actuales.</p>
         </div>
     @endforelse
-
-    {{-- Paginación AJAX (Opcional si usas librerias de paginación ajax, o estándar) --}}
-    @if($pickups->hasPages())
-        <div class="col-span-full pt-4">
-            {{ $pickups->links() }}
-        </div>
-    @endif
 </div>

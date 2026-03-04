@@ -94,6 +94,10 @@ Route::prefix('recepcion')
         Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
         Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); 
         Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); 
+        
+        // --- RUTAS NUEVAS PARA LA GESTIÓN DE FILA ---
+        Route::get('/queue/list', [DeliveryController::class, 'getQueueList'])->name('queue.list');
+        Route::put('/queue/{id}/abandon', [DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
     });
 
 /*

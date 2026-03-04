@@ -42,17 +42,17 @@ class DeliveryController extends Controller
         }
 
         // Ordenamos
-        $pickups = $query->orderBy('created_at', 'desc')
-                         ->paginate(9)
-                         ->withQueryString();
-        
-        // CÁLCULO DE LA FILA
-        $peopleInQueue = SalesQueue::where('status', 'WAITING')->count();
+        $query->orderBy('created_at', 'desc');
 
+        // Paginación
+        $pickups = $query->paginate(12)->withQueryString();
+
+        // Para el botón de Tickets: Cuántos hay en fila HOY
+        $peopleInQueue = SalesQueue::waiting()->count();
+
+        // Si es AJAX (Polling o Filtros/Buscador), solo devolvemos el HTML del grid
         if ($request->ajax()) {
-            // CORREGIDO: Usamos el nombre exacto de tu vista (card-grid) para evitar el Error 500
             $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
-            
             return response()->json([
                 'html' => $html,
                 'queueCount' => $peopleInQueue
@@ -63,48 +63,50 @@ class DeliveryController extends Controller
     }
 
     /**
-     * CONFIRMAR ENTREGA
+     * CONFIRMAR ENTREGA DE PAQUETE
      */
     public function confirm(Request $request, $id)
     {
+        $pickup = Pickup::findOrFail($id);
+
         $request->validate([
             'signature' => 'required|string',
-            'is_third_party' => 'nullable',
-            'receiver_name' => 'nullable|string|max:150',
-            'notes' => 'nullable|string|max:500',
-            'evidence_file' => 'nullable|image|max:10240',
+            'is_third_party' => 'nullable|boolean',
+            'receiver_name' => 'nullable|string|max:255',
+            'evidence_file' => 'nullable|image|max:5120',
+            'notes' => 'nullable|string'
         ]);
 
-        // SEGURIDAD: Evita que confirmen un rezagado inyectando el ID por POST
-        $pickup = Pickup::visibleForChecker()->findOrFail($id);
-        
-        $signatureBase64 = $request->signature;
-        $signatureBase64 = str_replace('data:image/png;base64,', '', $signatureBase64);
-        $signatureBase64 = str_replace(' ', '+', $signatureBase64);
-        $sigFilename = 'signatures/pickup_' . $pickup->ticket_folio . '_' . time() . '.png';
-        Storage::disk('public')->put($sigFilename, base64_decode($signatureBase64));
+        $signaturePath = null;
+        if (preg_match('/^data:image\/(\w+);base64,/', $request->signature, $type)) {
+            $data = substr($request->signature, strpos($request->signature, ',') + 1);
+            $data = base64_decode($data);
+            $fileName = 'signatures/' . uniqid() . '.png';
+            Storage::disk('public')->put($fileName, $data);
+            $signaturePath = $fileName;
+        }
 
         $evidencePath = null;
         if ($request->hasFile('evidence_file')) {
-            $evidencePath = $request->file('evidence_file')->store('evidence', 'public');
+            $evidencePath = $request->file('evidence_file')->store('evidences', 'public');
         }
 
-        $isThirdParty = $request->has('is_third_party');
-        $receiverName = $isThirdParty ? $request->receiver_name : $pickup->client_name;
+        $pickup->update([
+            'status' => 'DELIVERED',
+            'delivered_at' => now(),
+            'checker_id' => auth()->user->id(),
+            'signature_path' => $signaturePath,
+            'is_third_party' => $request->boolean('is_third_party'),
+            'receiver_name' => $request->boolean('is_third_party') ? $request->receiver_name : $pickup->client_name,
+            'evidence_path' => $evidencePath,
+            'checker_notes' => $request->notes,
+        ]);
 
-        $pickup->markAsDelivered(
-            $receiverName,
-            $isThirdParty,
-            $sigFilename,
-            $evidencePath,
-            $request->notes 
-        );
-
-        return redirect()->route('recepcion.dashboard')->with('success', "Entrega confirmada: {$pickup->ticket_folio}");
+        return redirect()->route('recepcion.dashboard')->with('success', 'Paquete entregado correctamente.');
     }
 
     /**
-     * AGREGAR A FILA (Kiosco Manual)
+     * AGREGAR A LA FILA DE VENTAS/CAJA (Kiosco Manual)
      */
     public function addToQueue(Request $request)
     {
@@ -141,5 +143,45 @@ class DeliveryController extends Controller
                          ->with('new_turn', $turnNumber)
                          ->with('client_name', $request->client_name)
                          ->with('destination', $tipo);
+    }
+
+    /**
+     * NUEVO: OBTENER LISTA DE CLIENTES EN FILA (Para modal de recepcionista)
+     */
+    public function getQueueList(Request $request)
+    {
+        if ($request->ajax()) {
+            $waitingClients = SalesQueue::whereDate('queued_at', today())
+                                        ->where('status', 'WAITING')
+                                        ->orderBy('queued_at', 'asc')
+                                        ->get();
+
+            return response()->json([
+                'clients' => $waitingClients
+            ]);
+        }
+        return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    /**
+     * NUEVO: MARCAR COMO ABANDONADO
+     */
+    public function markAsAbandoned(Request $request, $id)
+    {
+        $client = SalesQueue::findOrFail($id);
+        
+        // Solo podemos marcar como abandonado si estaba esperando
+        if ($client->status === 'WAITING') {
+            $client->update([
+                'status' => 'ABANDONED',
+                'completed_at' => now(), // Guardamos la fecha de cierre
+            ]);
+
+            if ($request->ajax()) {
+                return response()->json(['success' => true, 'message' => 'Turno marcado como abandonado.']);
+            }
+        }
+
+        return response()->json(['success' => false, 'message' => 'No se pudo actualizar el estado.'], 400);
     }
 }
