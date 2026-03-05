@@ -184,7 +184,7 @@
                                 <label class="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-colors"
                                     :class="isThirdParty ? 'bg-aromas-highlight/10 border border-aromas-highlight/30' : 'bg-gray-800 border border-gray-700'">
                                     <div class="flex items-center gap-4">
-                                        <input type="checkbox" name="is_third_party" x-model="isThirdParty" class="w-7 h-7 rounded border-gray-500 text-aromas-highlight focus:ring-aromas-highlight bg-gray-900 cursor-pointer">
+                                        <input type="checkbox" name="is_third_party" value="1" x-model="isThirdParty" class="w-7 h-7 rounded border-gray-500 text-aromas-highlight focus:ring-aromas-highlight bg-gray-900 cursor-pointer">
                                         <div>
                                             <span class="block text-lg font-bold text-white">¿Recoge otra persona?</span>
                                             <span class="block text-sm text-gray-400">Marcar si no es el titular</span>
@@ -621,10 +621,18 @@
                 },
 
                 submitDelivery() {
+                    // 1. Validar Firma
                     if (!this.signaturePad || this.signaturePad.isEmpty()) {
                         alert('La firma es obligatoria.');
                         return;
                     }
+
+                    // 2. Validar Foto (¡Esto era lo que faltaba!)
+                    if (!this.evidencePreview) {
+                        alert('La foto de evidencia es obligatoria. Por favor toma una foto antes de continuar.');
+                        return;
+                    }
+
                     this.signatureData = this.signaturePad.toDataURL('image/png');
 
                     this.$nextTick(() => {
