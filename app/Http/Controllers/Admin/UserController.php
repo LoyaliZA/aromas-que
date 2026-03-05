@@ -34,7 +34,8 @@ class UserController extends Controller
             'employee_code' => 'required|string|unique:employees,employee_code',
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
             'appears_in_sales_queue' => 'nullable|boolean',
-            'can_manage_rezagados' => 'nullable|boolean', // <-- NUEVO CAMPO
+            'can_manage_rezagados' => 'nullable|boolean', 
+            'can_manage_shifts' => 'nullable|boolean', // <-- NUEVO CAMPO
             'email' => 'nullable|email|unique:users,email',
             'password' => 'nullable|required_with:email|min:8',
         ]);
@@ -50,8 +51,9 @@ class UserController extends Controller
                         'password' => Hash::make($validated['password']),
                         'role' => $validated['job_position'], 
                         'is_active' => true,
-                        // Solo otorgamos el poder si es Manager y marcó la casilla
+                        // Permisos especiales solo para Managers
                         'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
+                        'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false, // <-- GUARDAMOS PERMISO
                     ]);
                     $userId = $user->id;
                 }
@@ -91,7 +93,8 @@ class UserController extends Controller
             'employee_code' => ['required', Rule::unique('employees')->ignore($employee->id)],
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
             'appears_in_sales_queue' => 'nullable|boolean',
-            'can_manage_rezagados' => 'nullable|boolean', // <-- NUEVO CAMPO
+            'can_manage_rezagados' => 'nullable|boolean', 
+            'can_manage_shifts' => 'nullable|boolean', // <-- NUEVO CAMPO
             'email' => ['nullable', 'email', Rule::unique('users')->ignore($employee->user_id)],
             'password' => 'nullable|min:8', 
         ]);
@@ -114,8 +117,9 @@ class UserController extends Controller
                             'name' => $validated['full_name'],
                             'email' => $validated['email'],
                             'role' => $validated['job_position'],
-                            // Actualizamos el permiso de rezagados
+                            // Actualizamos permisos especiales
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
+                            'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false, // <-- ACTUALIZAMOS PERMISO
                         ];
                         if (!empty($validated['password'])) {
                             $dataToUpdate['password'] = Hash::make($validated['password']);
@@ -129,6 +133,7 @@ class UserController extends Controller
                             'role' => $validated['job_position'],
                             'is_active' => true,
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
+                            'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
                         ]);
                         $employee->update(['user_id' => $user->id]);
                     }

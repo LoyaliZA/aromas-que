@@ -123,4 +123,6 @@ Route::prefix('ventas')
 */
 Route::get('/tv', [TvController::class, 'index'])->name('tv.public');
 
+
+
 require __DIR__.'/auth.php';

@@ -24,6 +24,7 @@ class User extends Authenticatable
         'role',      // Agregado: Vital para definir permisos
         'is_active', // Agregado: Para el "Soft Ban" (quitar acceso sin borrar)
         'can_manage_rezagados', // Nuevo: Permiso especial para logística vieja
+        'can_manage_shifts', // Nuevo: Permiso para gestionar turnos (activar vendedores)
     ];
 
     /**
@@ -45,6 +46,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean', // SQL guarda 1/0, PHP ve true/false
             'can_manage_rezagados' => 'boolean', // Igual aquí
+            'can_manage_shifts' => 'boolean', // Y aquí para el nuevo permiso de turnos
         ];
     }
 
@@ -109,5 +111,13 @@ class User extends Authenticatable
         // Solo un Manager o Admin debería poder tener este flag true,
         // pero por seguridad, validamos el flag directamente.
         return $this->can_manage_rezagados;
+    }
+
+    /**
+     * Nuevo Helper: Verifica si tiene permiso para gestionar los turnos (Activar vendedores)
+     */
+    public function canManageShifts(): bool
+    {
+        return $this->can_manage_shifts;
     }
 }
