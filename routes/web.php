@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\ReportController; // <-- NUEVO: Importamos el controlador de reportes
+use App\Http\Controllers\Admin\ReportController;
 
 // --- NUEVOS CONTROLADORES (MODULOS) ---
 use App\Http\Controllers\Gerencia\PickupController;
@@ -43,7 +43,7 @@ Route::middleware('auth')->group(function () {
 */
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['auth']) 
+    ->middleware(['auth', 'role:ADMIN']) 
     ->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
         Route::resource('users', UserController::class);
@@ -66,7 +66,7 @@ Route::prefix('admin')
 */
 Route::prefix('gerencia')
     ->name('gerencia.')
-    ->middleware(['auth']) 
+    ->middleware(['auth', 'role:MANAGER']) 
     ->group(function () {
         Route::get('/dashboard', [PickupController::class, 'index'])->name('dashboard');
         Route::get('/daily', [PickupController::class, 'daily'])->name('daily'); 
@@ -89,7 +89,7 @@ Route::prefix('gerencia')
 */
 Route::prefix('recepcion')
     ->name('recepcion.')
-    ->middleware(['auth']) 
+    ->middleware(['auth' => 'auth', 'role:CHECKER']) 
     ->group(function () {
         Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
         Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); 
@@ -107,7 +107,7 @@ Route::prefix('recepcion')
 */
 Route::prefix('ventas')
     ->name('ventas.')
-    ->middleware(['auth']) 
+    ->middleware(['auth', 'role:SELLER']) 
     ->group(function () {
         Route::get('/dashboard', [App\Http\Controllers\Ventas\QueueController::class, 'index'])->name('dashboard');
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
