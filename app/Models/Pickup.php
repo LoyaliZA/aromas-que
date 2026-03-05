@@ -10,52 +10,37 @@ class Pickup extends Model
 {
     use HasFactory;
 
-    /**
-     * Campos asignables masivamente.
-     * Observa que 'delivered_at' es editable porque se llena al momento de la entrega.
-     */
     protected $fillable = [
         'ticket_folio',
         'ticket_date',
-        'client_ref_id', // ID numérico del cliente (legacy)
+        'client_ref_id',
         'client_name',
-        'department',    // Aromas o Bellaroma
+        'department',
         'pieces',
-        'status',        // IN_CUSTODY, DELIVERED
+        'status',
         'receiver_name',
         'is_third_party',
-        'signature_path', // Ruta a la firma
-        'evidence_path',  // Agregado: Foto de evidencia de entrega
+        'signature_path',
+        'evidence_path',
+        'received_by_checker_at', // <-- NUEVO: Fecha de confirmación en almacén
         'delivered_at',
-        'notes',          // Campo de comentarios/observaciones
+        'notes',
     ];
 
-    /**
-     * Casting de tipos para manejo robusto de fechas y booleanos.
-     */
     protected function casts(): array
     {
         return [
             'ticket_date' => 'date',
             'pieces' => 'integer',
             'is_third_party' => 'boolean',
+            'received_by_checker_at' => 'datetime', // <-- NUEVO CAST
             'delivered_at' => 'datetime',
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes (Filtros de Búsqueda)
-    |--------------------------------------------------------------------------
-    */
-
-    public function scopeInCustody(Builder $query): void
-    {
-        $query->where('status', 'IN_CUSTODY');
-    }
-
-    public function scopeSearch(Builder $query, $term): void
-    {
+    /* scopes omitidos por brevedad, dejamos todo igual hasta abajo */
+    public function scopeInCustody(Builder $query): void { $query->where('status', 'IN_CUSTODY'); }
+    public function scopeSearch(Builder $query, $term): void {
         if ($term) {
             $query->where(function ($q) use ($term) {
                 $q->where('ticket_folio', 'like', "%{$term}%")
@@ -64,80 +49,30 @@ class Pickup extends Model
             });
         }
     }
-
-    public function scopeByDate(Builder $query, $start, $end): void
-    {
-        if ($start) {
-            $query->whereDate('created_at', '>=', $start);
-        }
-        if ($end) {
-            $query->whereDate('created_at', '<=', $end);
-        }
+    public function scopeByDate(Builder $query, $start, $end): void {
+        if ($start) { $query->whereDate('created_at', '>=', $start); }
+        if ($end) { $query->whereDate('created_at', '<=', $end); }
     }
-
-    /**
-     * Filtro por estado específico.
-     */
-    public function scopeByStatus(Builder $query, $status = null): void
-    {
-        if ($status && $status !== 'ALL') {
-            $query->where('status', $status);
-        }
+    public function scopeByStatus(Builder $query, $status = null): void {
+        if ($status && $status !== 'ALL') { $query->where('status', $status); }
     }
-
-    /**
-     * Filtro por Departamento (Aromas / Bellaroma).
-     */
-    public function scopeByDepartment(Builder $query, $department = null): void
-    {
-        if ($department && $department !== 'ALL') {
-            $query->where('department', $department);
-        }
+    public function scopeByDepartment(Builder $query, $department = null): void {
+        if ($department && $department !== 'ALL') { $query->where('department', $department); }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes de Lógica de Negocio (Rezagados vs Recientes)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Filtra lo que el Checador puede ver (Solo registros recientes <= 15 días).
-     * Por seguridad, el checador no debe ver paquetes viejos olvidados.
-     */
-    public function scopeVisibleForChecker(Builder $query): void
-    {
+    public function scopeVisibleForChecker(Builder $query): void {
         $query->where('created_at', '>=', now()->subDays(15)->startOfDay());
     }
-
-    /**
-     * Filtra los "Rezagados": Paquetes en custodia con más de 15 días de antigüedad.
-     * Estos solo los debe ver el Gerente con permisos especiales.
-     */
-    public function scopeRezagados(Builder $query): void
-    {
-        $query->where('status', 'IN_CUSTODY')
-              ->where('created_at', '<', now()->subDays(15)->startOfDay());
+    public function scopeRezagados(Builder $query): void {
+        $query->where('status', 'IN_CUSTODY')->where('created_at', '<', now()->subDays(15)->startOfDay());
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Lógica de Dominio
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Verifica si el paquete ya fue entregado.
-     */
-    public function isDelivered(): bool
-    {
-        return $this->status === 'DELIVERED';
+    public function isDelivered(): bool { return $this->status === 'DELIVERED'; }
+    
+    // NUEVO HELPER
+    public function isReceivedByChecker(): bool {
+        return !is_null($this->received_by_checker_at);
     }
 
-    /**
-     * Marca el paquete como entregado, guardando la evidencia y firma.
-     * Esta función encapsula toda la lógica de cierre.
-     */
     public function markAsDelivered(string $receiverName, bool $isThirdParty, string $signaturePath, ?string $evidencePath = null, ?string $notes = null): void
     {
         $data = [
@@ -147,15 +82,8 @@ class Pickup extends Model
             'signature_path' => $signaturePath,
             'delivered_at' => now(),
         ];
-
-        // Solo actualizamos si nos mandan los datos (opcionales)
-        if ($evidencePath) {
-            $data['evidence_path'] = $evidencePath;
-        }
-        if ($notes) {
-            $data['notes'] = $notes;
-        }
-
+        if ($evidencePath) { $data['evidence_path'] = $evidencePath; }
+        if ($notes) { $data['notes'] = $notes; }
         $this->update($data);
     }
 }

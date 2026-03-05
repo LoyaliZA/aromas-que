@@ -86,7 +86,7 @@
         {{-- ENCABEZADO --}}
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-white">Operación Diaria</h1>
+                <h1 class="text-2xl font-bold text-white">Resguardos PDV</h1>
                 <p class="text-aromas-tertiary text-sm">Registro y gestión de resguardos del día.</p>
             </div>
             <button @click="showCreateModal = true" class="bg-aromas-highlight hover:bg-white text-aromas-main font-bold py-2 px-6 rounded-lg transition-all shadow-lg flex items-center transform hover:scale-105 active:scale-95">

@@ -47,23 +47,37 @@
                         {{-- PIEZAS --}}
                         <td class="px-6 py-3 text-center text-white font-bold">{{ $pickup->pieces }}</td>
 
-                        {{-- ESTADO --}}
+                        {{-- ESTADO Y CADENA DE CUSTODIA --}}
                         <td class="px-6 py-3">
                             @if($pickup->status === 'IN_CUSTODY')
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-500 border border-yellow-500/20 animate-pulse">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> En Custodia
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-500 border border-yellow-500/20 mb-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> En Custodia
                                 </span>
+                                
+                                {{-- NUEVO: Estado de Recepción del Checador --}}
+                                @if($pickup->received_by_checker_at)
+                                    <div class="text-[13px] text-green-400 font-medium flex items-center gap-1 mt-1">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                        Recibido por checador a las: {{ $pickup->received_by_checker_at->format('H:i:s') }}
+                                    </div>
+                                @else
+                                    <div class="text-[10px] text-gray-400 font-medium flex items-center gap-1 mt-1">
+                                        <svg class="w-3 h-3 animate-spin text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                        Esperando confirmación...
+                                    </div>
+                                @endif
+                                
                             @else
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
-                                    Entregado
+                                    Entregado al cliente
                                 </span>
                             @endif
                         </td>
 
                         {{-- FECHAS --}}
-                        <td class="px-6 py-3 text-right text-gray-400 text-xs">{{ $pickup->created_at->format('d/m H:i') }}</td>
+                        <td class="px-6 py-3 text-right text-gray-400 text-xs">{{ $pickup->created_at->format('d/m H:i:s') }}</td>
                         <td class="px-6 py-3 text-right text-gray-400 text-xs">
-                            {{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i') : '---' }}
+                            {{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i:s') : '---' }}
                         </td>
 
                         {{-- ACCIONES --}}

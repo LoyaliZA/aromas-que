@@ -78,11 +78,24 @@
             {{-- FOOTER / ACCIÓN --}}
             <div class="p-4 pt-0">
                 @if($pickup->status === 'IN_CUSTODY')
-                    <button @click="$dispatch('open-delivery-modal', {{ json_encode($pickup) }})"
-                            class="w-full py-4 rounded-xl bg-aromas-highlight text-aromas-main font-black tracking-widest uppercase flex items-center justify-center gap-3 hover:bg-white transition-all shadow-[0_0_20px_rgba(253,201,116,0.15)] active:scale-95">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
-                        Entregar Paquete
-                    </button>
+                    @if(is_null($pickup->received_by_checker_at))
+                        {{-- BOTÓN: CONFIRMAR RECEPCIÓN (Bloquea entrega) --}}
+                        <button @click="confirmReceipt({{ $pickup->id }})"
+                                class="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-black tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[0_0_20px_rgba(59,130,246,0.2)] active:scale-95">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Confirmar Recepción
+                        </button>
+                    @else
+                        {{-- BOTÓN: ENTREGAR (Desbloqueado) --}}
+                        <button @click="$dispatch('open-delivery-modal', {{ json_encode($pickup) }})"
+                                class="w-full py-4 rounded-xl bg-aromas-highlight text-aromas-main font-black tracking-widest uppercase flex items-center justify-center gap-3 hover:bg-white transition-all shadow-[0_0_20px_rgba(253,201,116,0.15)] active:scale-95">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                            Entregar Paquete
+                        </button>
+                        <div class="text-center mt-2 text-[13px] text-gray-500 font-mono tracking-widest uppercase">
+                            Recibido a las: {{ $pickup->received_by_checker_at->format('H:i:s') }}
+                        </div>
+                    @endif
                 @else
                     <div class="w-full bg-gray-900/80 text-green-500 font-bold py-4 rounded-xl text-center border border-green-500/20 text-sm tracking-widest uppercase flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>

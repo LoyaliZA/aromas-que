@@ -8,6 +8,7 @@ use App\Models\Pickup;
 use App\Models\SalesQueue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class DeliveryController extends Controller
 {
@@ -94,7 +95,7 @@ class DeliveryController extends Controller
         $pickup->update([
             'status' => 'DELIVERED',
             'delivered_at' => now(),
-            'checker_id' => auth()->user->id(),
+            'checker_id' => Auth::id(),
             'signature_path' => $signaturePath,
             'is_third_party' => $request->boolean('is_third_party'),
             'receiver_name' => $request->boolean('is_third_party') ? $request->receiver_name : $pickup->client_name,
@@ -183,5 +184,26 @@ class DeliveryController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'No se pudo actualizar el estado.'], 400);
+    }
+
+    /**
+     * NUEVO: MARCAR PAQUETE COMO RECIBIDO EN ALMACÉN
+     */
+    public function markAsReceived(Request $request, $id)
+    {
+        $pickup = Pickup::findOrFail($id);
+        
+        // Verificamos que esté en custodia y no haya sido confirmado antes
+        if ($pickup->status === 'IN_CUSTODY' && is_null($pickup->received_by_checker_at)) {
+            $pickup->update([
+                'received_by_checker_at' => now(), // Guardamos fecha y hora exacta
+            ]);
+
+            if ($request->ajax()) {
+                return response()->json(['success' => true, 'message' => 'Recepción confirmada.']);
+            }
+        }
+
+        return response()->json(['success' => false, 'message' => 'No se pudo confirmar la recepción.'], 400);
     }
 }

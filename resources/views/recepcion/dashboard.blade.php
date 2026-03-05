@@ -402,6 +402,26 @@
                         }
                     });
                 },
+
+                // NUEVA FUNCIÓN: Confirmar Recepción en Almacén
+                confirmReceipt(id) {
+                    fetch(`/recepcion/receive/${id}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json'
+                        }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data.success) {
+                            this.fetchData(this.search); // Refresca las tarjetas visualmente
+                        } else {
+                            alert(data.message || 'Error al confirmar recepción.');
+                        }
+                    });
+                },
                 // ---------------------------------------------
 
                 openDeliveryModal(data) {
