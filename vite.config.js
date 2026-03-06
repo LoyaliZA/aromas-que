@@ -17,7 +17,7 @@ export default defineConfig({
         strictPort: true,
         cors: true, 
         hmr: {
-            host: '192.168.1.66', '100.75.11.59'
+            host: '192.168.1.66',
             // Al quitarla, el navegador usará la IP que esté en la barra de direcciones
         },
     },
