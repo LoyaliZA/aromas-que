@@ -21,7 +21,7 @@
             <div class="flex items-center gap-4">
                 <div class="h-12 w-auto">
                     {{-- Logo Blanco del Proyecto --}}
-                    <img src="{{ asset('images/logo_blanco.png') }}" alt="Aromas Logo" class="h-full w-auto object-contain drop-shadow-md">
+                    <img src="{{ asset('images/aromas_logo_blanco.png') }}" alt="Aromas Logo" class="h-full w-auto object-contain drop-shadow-md">
                 </div>
                 <div class="hidden md:block pl-4 border-l border-aromas-tertiary/20">
                     <h1 class="text-lg font-bold text-white leading-tight tracking-wide">Recepción</h1>

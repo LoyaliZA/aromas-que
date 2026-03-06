@@ -17,7 +17,7 @@
 
     <header class="bg-aromas-secondary shadow-md lg:hidden flex items-center justify-between px-4 fixed w-full h-16 z-50 top-0 border-b border-aromas-tertiary/30">
         <a href="{{ route('admin.dashboard') }}" class="block hover:opacity-80 transition-opacity">
-            <img src="{{ asset('images/logo_blanco.png') }}" alt="Aromas Logo" class="h-10 w-auto object-contain">
+            <img src="{{ asset('images/aromas_logo_blanco.png') }}" alt="Aromas Logo" class="h-10 w-auto object-contain">
         </a>
 
         <button @click="sidebarOpen = !sidebarOpen" class="text-gray-300 focus:outline-none p-2 rounded-md hover:bg-aromas-tertiary/20">
