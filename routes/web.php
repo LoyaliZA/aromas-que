@@ -20,10 +20,20 @@ use App\Http\Controllers\Public\TvController;
 */
 
 Route::get('/', function () {
-    if (Auth::check() && Auth::user()->role === 'ADMIN') {
-        return redirect()->route('admin.dashboard');
+    // Si el usuario ya inició sesión, lo redirigimos a su panel según su rol
+    if (Auth::check()) {
+        $role = Auth::user()->role;
+        
+        if ($role === 'ADMIN') return redirect()->route('admin.dashboard');
+        if ($role === 'MANAGER') return redirect()->route('gerencia.dashboard');
+        if ($role === 'CHECKER') return redirect()->route('recepcion.dashboard');
+        if ($role === 'SELLER') return redirect()->route('ventas.dashboard');
+        
+        return redirect()->route('dashboard');
     }
-    return redirect()->route('tv.public');
+    
+    // Si no está autenticado, lo forzamos a ir al login
+    return redirect()->route('login');
 });
 
 Route::get('/dashboard', function () {

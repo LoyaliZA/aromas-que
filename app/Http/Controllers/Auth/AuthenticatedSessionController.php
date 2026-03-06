@@ -29,12 +29,19 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
 
         // 2. Lógica de Redirección por ROL
-        // Si es ADMIN, lo mandamos a su panel exclusivo
-        if ($request->user()->role === 'ADMIN') {
+        $role = $request->user()->role;
+
+        if ($role === 'ADMIN') {
             return redirect()->intended(route('admin.dashboard'));
         }
-        if ($request->user()->role === 'MANAGER') {
+        if ($role === 'MANAGER') {
             return redirect()->intended(route('gerencia.dashboard'));
+        }
+        if ($role === 'CHECKER') {
+            return redirect()->intended(route('recepcion.dashboard'));
+        }
+        if ($role === 'SELLER') {
+            return redirect()->intended(route('ventas.dashboard'));
         }
 
         // 3. Fallback (Por defecto)
