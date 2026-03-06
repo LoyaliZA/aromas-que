@@ -131,7 +131,7 @@
                 if (tvAds.length === 0) {
                     mediaContainer.innerHTML = `
                         <div class="text-center space-y-4 z-20">
-                            <img src="/images/logo_blanco.png" alt="Aromas Logo" class="w-64 mx-auto mb-8">
+                            <img src="/images/aromas_logo_blanco.png" alt="Aromas Logo" class="w-64 mx-auto mb-8">
                             <h1 class="text-4xl font-bold text-gray-300 tracking-widest">BIENVENIDOS</h1>
                             <p class="text-xl text-aromas-tertiary">Tome su turno en la entrada</p>
                         </div>
