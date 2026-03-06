@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Employee;
 use App\Models\DailyShift;
 use App\Models\SalesQueue;
-use App\Models\ShiftStatusLog; // <-- Agregamos el modelo de Logs
+use App\Models\ShiftStatusLog;
 use Illuminate\Support\Facades\DB;
 
 class QueueController extends Controller
@@ -60,16 +60,32 @@ class QueueController extends Controller
         ]);
         
         $shift = DailyShift::findOrFail($request->shift_id);
-        $previousStatus = $shift->current_status; // <-- Guardamos el estado anterior
+        $previousStatus = $shift->current_status;
 
         if ($shift->current_status === 'ONLINE') {
             $reason = $request->reason ?? 'GENERAL';
+            
+            // --- NUEVA LÓGICA DE COMIDA ---
+            if ($reason === 'LUNCH') {
+                if ($shift->has_taken_lunch) {
+                    return back()->with('error', 'El vendedor ya ha tomado su break de comida hoy.');
+                }
+                
+                // Marcamos que ya tomó su comida
+                $shift->has_taken_lunch = true;
+                
+                // Le damos 3 minutos de "gracia" desplazando el inicio del cronómetro hacia el futuro
+                $statusChangeAt = now()->addMinutes(3);
+            } else {
+                $statusChangeAt = now();
+            }
             
             // Actualizamos el turno
             $shift->update([
                 'current_status' => 'BREAK', 
                 'break_reason' => $reason,
-                'last_status_change_at' => now()
+                'has_taken_lunch' => $shift->has_taken_lunch,
+                'last_status_change_at' => $statusChangeAt
             ]);
 
             // Creamos el registro histórico (Inicio de Pausa)
@@ -77,7 +93,7 @@ class QueueController extends Controller
                 'daily_shift_id' => $shift->id,
                 'previous_status' => $previousStatus,
                 'new_status' => 'BREAK',
-                'changed_at' => now(),
+                'changed_at' => now(), // El historial se guarda con la hora real en que se pulsó el botón
             ]);
 
         } elseif ($shift->current_status === 'BREAK') {
@@ -91,7 +107,7 @@ class QueueController extends Controller
             // Creamos el registro histórico (Fin de Pausa)
             ShiftStatusLog::create([
                 'daily_shift_id' => $shift->id,
-                'previous_status' => $previousStatus, // En este caso era 'BREAK'
+                'previous_status' => $previousStatus,
                 'new_status' => 'ONLINE',
                 'changed_at' => now(),
             ]);

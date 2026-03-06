@@ -23,26 +23,29 @@
             $cardClasses = 'bg-aromas-secondary border-aromas-highlight/50 shadow-[0_0_15px_rgba(253,201,116,0.15)]';
         }
 
-        // --- CÁLCULO DE TIEMPO PARA EL CRONÓMETRO ---
+        // --- CÁLCULO DE TIEMPO PARA LOS CRONÓMETROS ---
         $serveStartTime = '';
         if ($isServing) {
-            // Si ya se extendió el tiempo, usamos esa fecha, si no, la de inicio de atención
             $baseDate = $currentClient->last_extended_at ?? $currentClient->started_serving_at;
-            if ($baseDate) {
-                // Multiplicamos por 1000 para que JavaScript lo lea en milisegundos
-                $serveStartTime = $baseDate->timestamp * 1000;
-            } else {
-                $serveStartTime = now()->timestamp * 1000;
-            }
+            $serveStartTime = $baseDate ? $baseDate->timestamp * 1000 : now()->timestamp * 1000;
+        }
+
+        $breakStartTime = '';
+        if ($isOnBreak && $shift->last_status_change_at) {
+            // Pasamos el tiempo a milisegundos para JavaScript
+            $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
         }
     @endphp
 
-    {{-- Agregamos atributos de datos (data-*) para que el JavaScript los pueda leer --}}
     <div class="seller-card relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group animate-fade-in"
          @if($isServing) 
             data-serving="true" 
             data-shift-id="{{ $shift->id }}" 
             data-start-time="{{ $serveStartTime }}" 
+         @endif
+         @if($isOnBreak)
+            data-on-break="true"
+            data-break-start-time="{{ $breakStartTime }}"
          @endif>
         
         {{-- Indicador de Estado --}}
@@ -74,20 +77,27 @@
             {{-- ZONA CENTRAL --}}
             <div class="flex-1 flex flex-col justify-center min-h-[80px]">
                 @if($isServing)
-                    {{-- Tarjeta Cliente con Cronómetro Integrado --}}
+                    {{-- Tarjeta Cliente con Cronómetro de Atención --}}
                     <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 animate-fade-in-up">
                         <span class="text-[10px] text-blue-300 uppercase block mb-1 tracking-wider">Cliente</span>
                         <div class="text-2xl font-black text-white leading-none">{{ $currentClient->client_name }}</div>
                         
-                        {{-- Contenedor del Cronómetro --}}
                         <div class="mt-4 bg-black/30 border border-blue-500/20 rounded py-2 px-3">
                             <span class="text-[9px] text-gray-400 uppercase tracking-widest block mb-1">Tiempo de Atención</span>
                             <span class="seller-timer text-xl font-mono font-bold text-blue-300 tracking-wider">00:00</span>
                         </div>
                     </div>
+                @elseif($isOnBreak)
+                    {{-- Tarjeta de Cronómetro de Pausa (NUEVA) --}}
+                    <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 animate-fade-in-up">
+                        <span class="text-[10px] text-yellow-300 uppercase block mb-1 tracking-wider">Tiempo en Pausa</span>
+                        <div class="mt-2 bg-black/30 border border-yellow-500/20 rounded py-2 px-3">
+                            <span class="break-timer text-2xl font-mono font-bold text-yellow-300 tracking-wider">--:--</span>
+                        </div>
+                    </div>
                 @elseif($isOnline)
                     <div class="space-y-1">
-                        <div class="text-3xl text-gray-700 opacity-20 group-hover:opacity-40 transition-opacity">⏳</div>
+                        <div class="text-xs text-gray-500 uppercase tracking-widest font-bold opacity-50">. . .</div>
                     </div>
                 @endif
             </div>
@@ -108,14 +118,14 @@
                             @csrf
                             <input type="hidden" name="shift_id" value="{{ $shift->id }}">
                             <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
-                                ▶ Regresar
+                                Regresar a Activo
                             </button>
                         </form>
                     @else
-                        {{-- Botón Break (Abre Modal) --}}
-                        <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }} })" 
+                        {{-- Botón Break: Envía el id del turno y si ya tomó su comida hoy --}}
+                        <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, hasTakenLunch: {{ $shift->has_taken_lunch ? 'true' : 'false' }} })" 
                                 class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
-                            <span>⏸</span> Pausar Turno
+                            Pausar Turno
                         </button>
                     @endif
                 @else

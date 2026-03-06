@@ -22,6 +22,7 @@ class DailyShift extends Model
         'work_date',
         'current_status',       // ONLINE, BREAK, BUSY, OFFLINE
         'break_reason',         // Agregado: BATHROOM, LUNCH, ERRAND, PACKAGING
+        'has_taken_lunch',      // Nuevo: Indica si ya tomó su comida hoy
         'flagged_as_idle',      // Si el sistema detectó abandono (True/False)
         'customers_served_count',
         'last_status_change_at',
@@ -35,6 +36,7 @@ class DailyShift extends Model
     {
         return [
             'work_date' => 'date',
+            'has_taken_lunch' => 'boolean',
             'flagged_as_idle' => 'boolean',
             'last_status_change_at' => 'datetime',
             'last_action_at' => 'datetime',

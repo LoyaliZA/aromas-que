@@ -9,7 +9,6 @@
 </head>
 <body class="bg-gray-900 text-white font-sans antialiased overflow-hidden">
 
-    {{-- APP CONTAINER: Cambiamos min-h-screen por h-screen para arreglar el scroll --}}
     <div class="h-screen w-full flex flex-col" x-data="salesDashboard()">
         
         {{-- HEADER EXCLUSIVO VENDEDORES --}}
@@ -60,6 +59,14 @@
                     <span class="font-bold">{{ session('success') }}</span>
                 </div>
             @endif
+            
+            @if(session('error'))
+                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 6000)" 
+                     class="fixed top-24 right-8 z-50 bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in-down">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="font-bold">{{ session('error') }}</span>
+                </div>
+            @endif
 
             <div id="sellers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
                 @include('ventas.partials.sellers-grid', ['sellers' => $sellers])
@@ -75,27 +82,63 @@
             <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 w-full max-w-lg shadow-2xl transform transition-all" @click.away="showBreakModal = false">
                 <h3 class="text-2xl font-black text-white mb-6 text-center uppercase tracking-wide">Selecciona Motivo</h3>
                 
-                <form action="{{ route('ventas.toggle-break') }}" method="POST" class="grid grid-cols-2 gap-4">
+                <form id="break-form" action="{{ route('ventas.toggle-break') }}" method="POST" class="grid grid-cols-2 gap-4">
                     @csrf
                     <input type="hidden" name="shift_id" :value="breakShiftId">
+                    <input type="hidden" name="reason" id="break-reason-input">
                     
-                    @foreach([
-                        ['val' => 'BATHROOM', 'icon' => '🚽', 'label' => 'Baño'],
-                        ['val' => 'LUNCH', 'icon' => '🍔', 'label' => 'Comida'],
-                        ['val' => 'ERRAND', 'icon' => '🏃', 'label' => 'Encargo'],
-                        ['val' => 'PACKAGING', 'icon' => '📦', 'label' => 'Paquetería']
-                    ] as $opt)
-                        <button type="submit" name="reason" value="{{ $opt['val'] }}" 
-                                class="p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
-                            <span class="text-4xl group-hover:scale-110 transition-transform">{{ $opt['icon'] }}</span>
-                            <span class="text-sm uppercase tracking-wider">{{ $opt['label'] }}</span>
-                        </button>
-                    @endforeach
+                    <button type="button" @click="selectBreakReason('BATHROOM')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
+                        <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S12 3 12 3s-4.5 4.03-4.5 9 2.015 9 4.5 9z"></path></svg>
+                        <span class="text-sm uppercase tracking-wider">Baño</span>
+                    </button>
+
+                    <button type="button" @click="selectBreakReason('LUNCH')" 
+                            :class="hasTakenLunch ? 'opacity-30 cursor-not-allowed border-red-500/30 bg-red-500/10' : 'hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight'"
+                            class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
+                        <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h14a2 2 0 012 2v6z"></path></svg>
+                        <span class="text-sm uppercase tracking-wider">Comida</span>
+                        <span x-show="hasTakenLunch" class="absolute bottom-2 text-[10px] text-red-400 font-black uppercase tracking-widest">Ya Tomado</span>
+                    </button>
+
+                    <button type="button" @click="selectBreakReason('ERRAND')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
+                        <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <span class="text-sm uppercase tracking-wider">Encargo</span>
+                    </button>
+
+                    <button type="button" @click="selectBreakReason('PACKAGING')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main hover:border-aromas-highlight text-gray-300 font-bold flex flex-col items-center gap-3 transition-all duration-200 group">
+                        <svg class="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                        <span class="text-sm uppercase tracking-wider">Paquetería</span>
+                    </button>
                 </form>
                 
                 <button @click="showBreakModal = false" class="mt-6 w-full py-4 text-gray-500 font-bold hover:text-white transition-colors uppercase text-sm tracking-widest">
                     Cancelar
                 </button>
+            </div>
+        </div>
+
+        {{-- NUEVO MODAL: CONFIRMACIÓN DE COMIDA ESTILIZADO --}}
+        <div x-show="showLunchConfirmModal" style="display: none;" 
+             class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md"
+             x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-90">
+            
+            <div class="bg-gray-900 rounded-2xl border-2 border-aromas-highlight shadow-[0_0_50px_rgba(253,201,116,0.15)] p-8 w-full max-w-lg text-center" @click.away="showLunchConfirmModal = false">
+                <div class="w-20 h-20 mx-auto bg-aromas-highlight/10 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-10 h-10 text-aromas-highlight animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-black text-white mb-2 uppercase tracking-widest">¿Iniciar Comida?</h3>
+                <p class="text-gray-300 mb-2">Recuerda que solo tienes <strong>un break de comida</strong> por jornada.</p>
+                <p class="text-sm text-gray-500 mb-8 italic">Si deseas tomarlo ahora tienes 3 minutos para comenzar tu break ;3.</p>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button @click="showLunchConfirmModal = false" type="button" class="w-full py-4 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl shadow-lg uppercase text-xs tracking-wider transition-transform active:scale-95">
+                        Cancelar
+                    </button>
+                    <button @click="executeBreak('LUNCH')" type="button" class="w-full py-4 bg-aromas-highlight hover:bg-yellow-500 text-gray-900 font-black rounded-xl shadow-lg uppercase text-xs tracking-wider transition-transform active:scale-95">
+                        Sí, Iniciar
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -170,15 +213,16 @@
     {{-- AUDIO ALARMA --}}
     <audio id="bell-sound" src="{{ asset('audio/bell.mp3') }}" preload="auto"></audio>
 
-    {{-- SCRIPT ACTUALIZADO CON PREVENCIÓN DE FLICKER, AUDIO Y NOTIFICACIONES --}}
     <script>
         function salesDashboard() {
             return {
                 waitingCount: @json($clientsWaiting ?? 0),
                 
-                // Break Modal
+                // Break Modal y Confirmación de Comida
                 showBreakModal: false,
+                showLunchConfirmModal: false, // <-- Nuevo estado para el modal de comida
                 breakShiftId: null,
+                hasTakenLunch: false,
                 
                 // Extension Modal
                 showExtensionModal: false,
@@ -197,34 +241,64 @@
                 init() {
                     window.addEventListener('open-break-modal', event => {
                         this.breakShiftId = event.detail.id;
+                        this.hasTakenLunch = event.detail.hasTakenLunch;
                         this.showBreakModal = true;
                     });
 
-                    // Solicitar permisos para Notificaciones de Escritorio
                     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
                         Notification.requestPermission();
                     }
 
-                    // Por políticas de los navegadores, a veces se requiere una interacción del usuario 
-                    // para permitir reproducir audio o mostrar notificaciones.
                     document.body.addEventListener('click', () => {
                         if ("Notification" in window && Notification.permission !== "granted") {
                             Notification.requestPermission();
                         }
                     }, { once: true });
 
-                    // Polling cada 3 segundos
                     setInterval(() => { this.fetchUpdates(); }, 3000);
-
-                    // Refresco de Cronómetros cada segundo
                     setInterval(() => { this.updateTimers(); }, 1000);
                 },
 
+                // Lógica principal de intercepción de descansos
+                selectBreakReason(reason) {
+                    if (reason === 'LUNCH') {
+                        if (this.hasTakenLunch) {
+                            return; // No hace nada si ya tomó comida
+                        }
+                        
+                        // Ocultamos el modal principal de opciones de break
+                        this.showBreakModal = false;
+                        
+                        // Pequeño retraso para permitir que termine la animación de salida
+                        // y se vea fluida la entrada del nuevo modal
+                        setTimeout(() => {
+                            this.showLunchConfirmModal = true;
+                        }, 200);
+                        
+                        return;
+                    }
+
+                    // Si no es comida, ejecutamos la pausa directamente
+                    this.executeBreak(reason);
+                },
+
+                // Envío real del formulario
+                executeBreak(reason) {
+                    let input = document.getElementById('break-reason-input');
+                    let form = document.getElementById('break-form');
+                    
+                    if (input && form) {
+                        input.value = reason;
+                        form.submit();
+                    }
+                },
+
                 updateTimers() {
-                    const cards = document.querySelectorAll('.seller-card[data-serving="true"]');
                     const now = Date.now();
 
-                    cards.forEach(card => {
+                    // 1. CRONÓMETROS DE ATENCIÓN A CLIENTES
+                    const servingCards = document.querySelectorAll('.seller-card[data-serving="true"]');
+                    servingCards.forEach(card => {
                         let startTime = parseInt(card.dataset.startTime);
                         let shiftId = card.dataset.shiftId;
                         
@@ -252,10 +326,8 @@
                         if (elapsedSecs >= 900 && elapsedSecs < 1200) {
                             if (!this.warnedShifts.includes(shiftId)) {
                                 this.warnedShifts.push(shiftId);
-                                
                                 let sellerName = card.querySelector('h3').innerText;
                                 let clientName = card.querySelector('.text-2xl.font-black').innerText;
-                                
                                 this.triggerExtensionAlert(shiftId, sellerName, clientName);
                             }
                         }
@@ -265,6 +337,45 @@
                             if (!this.autoClosedShifts.includes(shiftId)) {
                                 this.autoClosedShifts.push(shiftId);
                                 this.forceAutoCloseService(shiftId);
+                            }
+                        }
+                    });
+
+                    // 2. CRONÓMETROS DE PAUSAS
+                    const breakCards = document.querySelectorAll('.seller-card[data-on-break="true"]');
+                    breakCards.forEach(card => {
+                        let breakStartTime = parseInt(card.dataset.breakStartTime);
+                        if (!breakStartTime) return;
+
+                        let elapsedSecs = Math.floor((now - breakStartTime) / 1000);
+                        let timerEl = card.querySelector('.break-timer');
+
+                        if (timerEl) {
+                            if (elapsedSecs < 0) {
+                                // MODO CUENTA REGRESIVA (Tiempo de Traslado)
+                                let absSecs = Math.abs(elapsedSecs);
+                                let mins = Math.floor(absSecs / 60);
+                                let secs = absSecs % 60;
+                                let timeString = `-${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                
+                                timerEl.innerText = timeString;
+                                timerEl.className = "break-timer text-2xl font-mono font-black text-green-400 tracking-wider animate-pulse";
+                            } else {
+                                // MODO CRONÓMETRO NORMAL DE PAUSA
+                                let mins = Math.floor(elapsedSecs / 60);
+                                let secs = elapsedSecs % 60;
+                                let timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                
+                                timerEl.innerText = timeString;
+                                
+                                // Cambio de color si la pausa se extiende mucho
+                                if (mins >= 30) {
+                                    timerEl.className = "break-timer text-2xl font-mono font-black text-red-500 tracking-wider animate-pulse";
+                                } else if (mins >= 25) {
+                                    timerEl.className = "break-timer text-2xl font-mono font-bold text-yellow-500 tracking-wider";
+                                } else {
+                                    timerEl.className = "break-timer text-2xl font-mono font-bold text-yellow-300 tracking-wider";
+                                }
                             }
                         }
                     });
@@ -335,8 +446,6 @@
                         const grid = document.getElementById('sellers-grid');
                         if(grid) {
                             grid.innerHTML = data.html;
-                            
-                            // Forzamos el cálculo de tiempo EXACTAMENTE al momento de inyectar el HTML
                             this.updateTimers(); 
                         }
 
@@ -353,18 +462,15 @@
                     this.showMegaAlert = true;
                     this.alertTimer = 5;
 
-                    // 1. Reproducir Alarma Sonora
                     let audio = document.getElementById('bell-sound');
                     if (audio) {
-                        // El catch previene errores en consola si el navegador bloquea el autoplay
-                        audio.play().catch(error => console.log("Audio bloqueado por el navegador, se requiere interacción previa:", error));
+                        audio.play().catch(error => console.log("Audio bloqueado por el navegador:", error));
                     }
 
-                    // 2. Enviar Notificación de Escritorio
                     if ("Notification" in window && Notification.permission === "granted") {
                         new Notification("¡Nuevo Cliente Asignado!", {
                             body: `Turno/Folio: ${data.folio}\nCliente: ${data.client}\nVendedor asignado: ${data.seller}`,
-                            icon: '/images/aromas_logo_recortado.png' // Usamos el logo que vi en tus archivos
+                            icon: '/images/aromas_logo_recortado.png'
                         });
                     }
                     
