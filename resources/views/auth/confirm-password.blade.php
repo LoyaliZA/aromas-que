@@ -1,27 +1,36 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600">
-        {{ __('This is a secure area of the application. Please confirm your password before continuing.') }}
+    <div class="flex flex-col items-center justify-center w-full mt-8">
+        
+        <div class="flex flex-row items-center justify-center gap-8 mb-10 w-full max-w-md">
+            <img src="{{ asset('images/aromas_logo_blanco.png') }}" alt="Logo Aromas" class="h-24 w-auto object-contain drop-shadow-lg" />
+            <div class="h-16 border-l border-aromas-tertiary"></div>
+            <img src="{{ asset('images/br_logo_dorado_transparente-norelleno.png') }}" alt="Logo T.E.R.A." class="h-24 w-auto object-contain drop-shadow-lg" /> 
+        </div>
+
+        <div class="w-full sm:max-w-md px-8 py-10 bg-aromas-secondary/80 backdrop-blur-md border border-aromas-tertiary shadow-2xl sm:rounded-2xl">
+            
+            <div class="mb-6 text-sm text-gray-300 leading-relaxed text-center">
+                Esta es un área segura de la aplicación. Por favor, confirma tu contraseña antes de continuar.
+            </div>
+
+            <form method="POST" action="{{ route('password.confirm') }}">
+                @csrf
+
+                <div>
+                    <label for="password" class="block font-semibold text-gray-300 tracking-wide">
+                        Contraseña
+                    </label>
+                    <input id="password" type="password" name="password" required autocomplete="current-password" 
+                           class="block mt-2 w-full bg-aromas-main border-aromas-tertiary text-white focus:border-aromas-highlight focus:ring-aromas-highlight shadow-inner rounded-lg" />
+                    <x-input-error :messages="$errors->get('password')" class="mt-2 text-aromas-error" />
+                </div>
+
+                <div class="mt-8">
+                    <button type="submit" class="w-full flex justify-center items-center px-4 py-3 bg-aromas-highlight border border-transparent rounded-xl font-bold text-aromas-main uppercase tracking-widest hover:bg-yellow-400 active:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-aromas-highlight focus:ring-offset-2 focus:ring-offset-aromas-secondary transition ease-in-out duration-150 shadow-lg text-sm">
+                        Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-
-    <form method="POST" action="{{ route('password.confirm') }}">
-        @csrf
-
-        <!-- Password -->
-        <div>
-            <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
-
-        <div class="flex justify-end mt-4">
-            <x-primary-button>
-                {{ __('Confirm') }}
-            </x-primary-button>
-        </div>
-    </form>
 </x-guest-layout>
