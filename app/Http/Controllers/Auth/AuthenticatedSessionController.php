@@ -43,12 +43,16 @@ class AuthenticatedSessionController extends Controller
         if ($role === 'SELLER') {
             return redirect()->intended(route('ventas.dashboard'));
         }
+        // NUEVO: Redirección para el rol Auxiliar
+        if ($role === 'AUXILIAR') {
+            return redirect()->intended(route('auxiliar.dashboard'));
+        }
 
         // 3. Fallback (Por defecto)
         // Si es Empleado normal, Cliente o no tiene rol, va al dashboard estándar
         return redirect()->intended(route('dashboard', absolute: false));
     }
-
+    
     /**
      * Destroy an authenticated session.
      */

@@ -32,7 +32,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'full_name' => 'required|string|max:100',
             'employee_code' => 'required|string|unique:employees,employee_code',
-            'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
+            'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER,AUXILIAR',
             'appears_in_sales_queue' => 'nullable|boolean',
             'can_manage_rezagados' => 'nullable|boolean', 
             'can_manage_shifts' => 'nullable|boolean', // <-- NUEVO CAMPO
@@ -91,7 +91,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'full_name' => 'required|string|max:100',
             'employee_code' => ['required', Rule::unique('employees')->ignore($employee->id)],
-            'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER',
+            'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER,AUXILIAR',
             'appears_in_sales_queue' => 'nullable|boolean',
             'can_manage_rezagados' => 'nullable|boolean', 
             'can_manage_shifts' => 'nullable|boolean', // <-- NUEVO CAMPO

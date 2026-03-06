@@ -17,7 +17,7 @@ class TvAd extends Model
         'title',
         'media_path',
         'media_type',       // ENUM: IMAGE, VIDEO
-        'duration_seconds', // Default: 15
+        'duration_seconds', 
         'is_active',
         'start_date',
         'end_date',
@@ -26,14 +26,14 @@ class TvAd extends Model
 
     /**
      * Casting de tipos.
-     * Convertimos fechas para poder compararlas con now() fácilmente.
+     * Ahora usamos datetime para incluir la hora exacta.
      */
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
-            'start_date' => 'date',
-            'end_date' => 'date',
+            'start_date' => 'datetime',
+            'end_date' => 'datetime',
             'duration_seconds' => 'integer',
             'sort_order' => 'integer',
         ];
@@ -45,50 +45,46 @@ class TvAd extends Model
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * Filtra los anuncios que DEBEN mostrarse hoy.
-     * Regla: Activo + (Fecha inicio ya pasó O es nula) + (Fecha fin no ha llegado O es nula).
-     */
     public function scopeCurrentlyActive(Builder $query): void
     {
-        $today = now()->startOfDay();
+        $now = now();
 
         $query->where('is_active', true)
-              ->where(function ($q) use ($today) {
+              ->where(function ($q) use ($now) {
                   $q->whereNull('start_date')
-                    ->orWhere('start_date', '<=', $today);
+                    ->orWhere('start_date', '<=', $now);
               })
-              ->where(function ($q) use ($today) {
+              ->where(function ($q) use ($now) {
                   $q->whereNull('end_date')
-                    ->orWhere('end_date', '>=', $today);
+                    ->orWhere('end_date', '>=', $now);
               })
               ->orderBy('sort_order', 'asc');
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Accesores (Formatos de Presentación)
+    | Accesores (Lógica de Presentación)
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * Retorna la URL pública completa del archivo.
-     * Uso en Blade: <img src="{{ $ad->media_url }}">
-     */
     public function getMediaUrlAttribute(): string
     {
-        // Si es una URL externa (http...) la regresamos tal cual, si no, buscamos en storage
         if (str_starts_with($this->media_path, 'http')) {
             return $this->media_path;
         }
         return Storage::url($this->media_path);
     }
 
-    /**
-     * Helper para saber si debemos renderizar <video> o <img>
-     */
     public function isVideo(): bool
     {
         return $this->media_type === 'VIDEO';
+    }
+
+    /**
+     * Evalúa si el anuncio ya superó su fecha/hora de finalización.
+     */
+    public function getIsExpiredAttribute(): bool
+    {
+        return $this->end_date && $this->end_date->isPast();
     }
 }

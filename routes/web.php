@@ -29,6 +29,9 @@ Route::get('/', function () {
         if ($role === 'CHECKER') return redirect()->route('recepcion.dashboard');
         if ($role === 'SELLER') return redirect()->route('ventas.dashboard');
         
+        // NUEVO: Redirección para Auxiliar desde la raíz
+        if ($role === 'AUXILIAR') return redirect()->route('auxiliar.dashboard');
+        
         return redirect()->route('dashboard');
     }
     
@@ -106,7 +109,7 @@ Route::prefix('recepcion')
         Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); 
         
         // --- RUTAS NUEVAS ---
-        Route::put('/receive/{id}', [DeliveryController::class, 'markAsReceived'])->name('receive'); // <-- NUEVA
+        Route::put('/receive/{id}', [DeliveryController::class, 'markAsReceived'])->name('receive');
         Route::get('/queue/list', [DeliveryController::class, 'getQueueList'])->name('queue.list');
         Route::put('/queue/{id}/abandon', [DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
     });
@@ -129,11 +132,29 @@ Route::prefix('ventas')
 
 /*
 |--------------------------------------------------------------------------
+| MÓDULO AUXILIAR (Rol: AUXILIAR)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('auxiliar')
+    ->name('auxiliar.')
+    ->middleware(['auth', 'role:AUXILIAR']) 
+    ->group(function () {
+        // Dashboard principal del auxiliar
+        Route::get('/dashboard', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('dashboard');
+        
+        // Rutas de acciones para anuncios (asegúrate de que los nombres coincidan con la vista)
+        Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
+        Route::put('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'update'])->name('tv_ads.update');
+        Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
+        Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
+        
+    });
+
+/*
+|--------------------------------------------------------------------------
 | VISTA PÚBLICA (TV)
 |--------------------------------------------------------------------------
 */
 Route::get('/tv', [TvController::class, 'index'])->name('tv.public');
-
-
 
 require __DIR__.'/auth.php';

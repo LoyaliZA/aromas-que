@@ -57,6 +57,7 @@
                             <option value="MANAGER">Gerente</option>
                             <option value="CHECKER">Checador (Recepción)</option>
                             <option value="ADMIN">Administrador</option>
+                            <option value="AUXILIAR">Auxiliar (Anuncios TV)</option>
                         </select>
                     </div>
 
