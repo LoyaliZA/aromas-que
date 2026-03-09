@@ -20,17 +20,21 @@ class SalesQueue extends Model
     protected $table = 'sales_queue';
 
     protected $fillable = [
+        'customer_id',            // <-- NUEVO: Relación con el cliente registrado
         'client_name',
+        'client_type',
+        'has_disability',       // <-- NUEVO: Indica si el cliente tiene alguna discapacidad
         'service_type',       // SALES o CASHIER
         'turn_number',        // Número de turno asignado
         'source',             // QR_MOBILE, MANUAL_KIOSK
         'status',             // WAITING, SERVING, COMPLETED, ABANDONED
+        'abandonment_reason_id',  // <-- NUEVO: Motivo de abandono si aplica
         'assigned_shift_id',  // El turno del vendedor que lo atiende
         'queued_at',
         'started_serving_at',
         'completed_at',
-        'last_extended_at',   // <-- NUEVO: Para el temporizador
-        'extension_count',    // <-- NUEVO: Contador de extensiones
+        'last_extended_at',
+        'extension_count',
     ];
 
     /**
@@ -42,7 +46,7 @@ class SalesQueue extends Model
             'queued_at' => 'datetime',
             'started_serving_at' => 'datetime',
             'completed_at' => 'datetime',
-            'last_extended_at' => 'datetime', // <-- NUEVO: Tratamiento de fecha
+            'last_extended_at' => 'datetime', 
         ];
     }
 
@@ -55,6 +59,22 @@ class SalesQueue extends Model
     public function assignedShift(): BelongsTo
     {
         return $this->belongsTo(DailyShift::class, 'assigned_shift_id');
+    }
+
+    /**
+     * Relación: Un turno en la fila pertenece a un cliente específico.
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Relación: Un turno puede tener asociado un motivo de abandono.
+     */
+    public function abandonmentReason(): BelongsTo
+    {
+        return $this->belongsTo(AbandonmentReason::class);
     }
 
     /*

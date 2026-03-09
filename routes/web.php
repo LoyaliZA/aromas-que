@@ -102,16 +102,22 @@ Route::prefix('gerencia')
 */
 Route::prefix('recepcion')
     ->name('recepcion.')
-    ->middleware(['auth' => 'auth', 'role:CHECKER']) 
+    ->middleware(['auth', 'role:CHECKER'])
     ->group(function () {
-        Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
-        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); 
-        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); 
+        // Dashboard principal
+        Route::get('/dashboard', [App\Http\Controllers\Recepcion\DeliveryController::class, 'index'])->name('dashboard');
         
-        // --- RUTAS NUEVAS ---
-        Route::put('/receive/{id}', [DeliveryController::class, 'markAsReceived'])->name('receive');
-        Route::get('/queue/list', [DeliveryController::class, 'getQueueList'])->name('queue.list');
-        Route::put('/queue/{id}/abandon', [DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
+        // Acciones de Resguardos (Paquetes)
+        Route::put('/confirm/{id}', [App\Http\Controllers\Recepcion\DeliveryController::class, 'confirm'])->name('confirm');
+        Route::put('/receive/{id}', [App\Http\Controllers\Recepcion\DeliveryController::class, 'markAsReceived'])->name('receive');
+        
+        // Acciones de Fila (Kiosco)
+        Route::post('/queue/add', [App\Http\Controllers\Recepcion\DeliveryController::class, 'addToQueue'])->name('queue.add');
+        Route::get('/queue/list', [App\Http\Controllers\Recepcion\DeliveryController::class, 'getQueueList'])->name('queue.list');
+        Route::put('/queue/{id}/abandon', [App\Http\Controllers\Recepcion\DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
+        
+        // Búsqueda en vivo de Clientes
+        Route::get('/customers/search', [App\Http\Controllers\Recepcion\DeliveryController::class, 'searchCustomers'])->name('customers.search');
     });
 
 /*

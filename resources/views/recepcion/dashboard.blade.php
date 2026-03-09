@@ -14,14 +14,10 @@
         </div>
 
         <div class="mb-10 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {{-- Botón 1: Ticket de Turno --}}
-            <button @click="openQueueModal()"
-                class="bg-aromas-highlight text-aromas-main rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01] hover:shadow-[0_0_15px_rgba(253,201,116,0.4)] border-2 border-transparent hover:border-white/20">
+            <button @click="openQueueModal()" class="bg-aromas-highlight text-aromas-main rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01] hover:shadow-[0_0_15px_rgba(253,201,116,0.4)] border-2 border-transparent hover:border-white/20">
                 <div class="flex items-center gap-4">
                     <div class="bg-aromas-main/10 p-3 rounded-lg text-aromas-main">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
-                        </svg>
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
                     </div>
                     <div class="text-left">
                         <h2 class="text-xl font-bold leading-none">Ticket de Turno</h2>
@@ -34,14 +30,10 @@
                 </div>
             </button>
 
-            {{-- Botón 2: Ver Fila (Reemplaza al antiguo botón QR) --}}
-            <button @click="openQueueListModal()"
-                class="bg-gray-800 border border-gray-700 hover:border-aromas-highlight text-white rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01]">
+            <button @click="openQueueListModal()" class="bg-gray-800 border border-gray-700 hover:border-aromas-highlight text-white rounded-xl p-4 shadow-lg flex items-center justify-between group transform transition-all hover:scale-[1.01]">
                 <div class="flex items-center gap-4">
                     <div class="bg-gray-900 p-3 rounded-lg text-gray-400 group-hover:text-aromas-highlight transition-colors border border-gray-700">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-                        </svg>
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
                     </div>
                     <div class="text-left">
                         <h2 class="text-xl font-bold leading-none text-white group-hover:text-aromas-highlight transition-colors">Ver Fila Actual</h2>
@@ -49,9 +41,7 @@
                     </div>
                 </div>
                 <div>
-                    <svg class="w-6 h-6 text-gray-600 group-hover:text-aromas-highlight group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
+                    <svg class="w-6 h-6 text-gray-600 group-hover:text-aromas-highlight group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 </div>
             </button>
         </div>
@@ -62,32 +52,18 @@
         {{-- ========================================================== --}}
         <div class="mb-4 flex items-center gap-3">
             <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400 shadow-inner">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                </svg>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
             </div>
             <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
         </div>
 
-        {{-- Barra de Búsqueda y Filtros --}}
         <div class="bg-aromas-secondary rounded-xl p-4 shadow-md border border-aromas-tertiary/20 mb-6 sticky top-2 z-30">
             <div class="flex flex-col md:flex-row gap-4">
                 <div class="flex-1 relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-aromas-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
+                        <svg class="h-5 w-5 text-aromas-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
-                    <input type="text" x-model.debounce.500ms="search"
-                        class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight transition-all"
-                        placeholder="Buscar folio, cliente o receptor...">
-
-                    <div x-show="isLoading" class="absolute inset-y-0 right-0 pr-3 flex items-center" style="display: none;">
-                        <svg class="animate-spin h-5 w-5 text-aromas-highlight" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </div>
+                    <input type="text" x-model.debounce.500ms="search" class="w-full bg-black/20 border border-aromas-tertiary/30 rounded-lg py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight transition-all" placeholder="Buscar folio, cliente o receptor...">
                 </div>
 
                 <div class="contents">
@@ -107,9 +83,7 @@
             <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="showTurn = false"></div>
             <div class="bg-aromas-secondary border-2 border-aromas-highlight rounded-2xl shadow-[0_0_30px_rgba(253,201,116,0.3)] p-8 max-w-sm w-full text-center relative z-10 animate-fade-in-down">
                 <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
-                    <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
+                    <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h3 class="text-xl font-bold text-white mb-2">Turno Asignado</h3>
                 <p class="text-aromas-tertiary text-sm mb-6">Indíquele al cliente su número:</p>
@@ -118,26 +92,19 @@
                     <div class="text-white font-bold text-lg">{{ session('client_name') }}</div>
                     <div class="text-gray-400 text-sm uppercase tracking-wider mt-1">Destino: <span class="{{ session('destination') == 'Caja' ? 'text-green-400' : 'text-yellow-400' }}">{{ session('destination') }}</span></div>
                 </div>
-                <button @click="showTurn = false" class="w-full bg-aromas-highlight text-aromas-main font-bold text-lg py-3 rounded-xl hover:bg-white transition-all shadow-lg">
-                    Cerrar y Continuar
-                </button>
+                <button @click="showTurn = false" class="w-full bg-aromas-highlight text-aromas-main font-bold text-lg py-3 rounded-xl hover:bg-white transition-all shadow-lg">Cerrar y Continuar</button>
             </div>
         </div>
         @elseif(session('success'))
-        <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)"
-            class="mb-6 bg-green-500/10 border-l-4 border-green-500 text-green-400 p-4 rounded shadow-lg flex items-center animate-fade-in-down">
+        <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 bg-green-500/10 border-l-4 border-green-500 text-green-400 p-4 rounded shadow-lg flex items-center animate-fade-in-down">
             <span class="font-bold">{{ session('success') }}</span>
         </div>
         @endif
 
-        {{-- CONTENEDOR CARDS (AJAX) Y PAGINACIÓN --}}
         <div id="results-container">
             @include('recepcion.partials.card-grid', ['pickups' => $pickups])
         </div>
-
-        <div class="mt-6">
-            {{ $pickups->links() }}
-        </div>
+        <div class="mt-6">{{ $pickups->links() }}</div>
 
 
         {{-- ========================================================== --}}
@@ -145,44 +112,29 @@
         {{-- ========================================================== --}}
 
         {{-- MODAL 1: CONFIRMAR ENTREGA --}}
-        <div x-show="showDeliveryModal" style="display: none;"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-            x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-            x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
-
+        <div x-show="showDeliveryModal" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="closeModal()"></div>
-
-            {{-- CONTENEDOR PRINCIPAL DEL MODAL (Ahora es max-w-5xl para ser muy amplio) --}}
             <div class="bg-aromas-secondary w-full max-w-5xl rounded-2xl shadow-2xl border border-aromas-tertiary/30 relative z-10 flex flex-col my-auto max-h-[95vh] overflow-y-auto">
-
-                {{-- CABECERA DEL MODAL --}}
+                {{-- Contenido de entrega (Se mantiene idéntico al anterior) --}}
                 <div class="bg-gray-900 p-6 border-b border-gray-700 flex justify-between items-center sticky top-0 z-20">
                     <div>
                         <h2 class="text-3xl font-black text-white tracking-wider uppercase">Confirmar Entrega</h2>
                         <p class="text-base text-gray-400 mt-1">Folio de Resguardo: <span class="font-bold text-aromas-highlight font-mono text-lg" x-text="pickup.ticket_folio"></span></p>
                     </div>
                     <button @click="closeModal()" class="text-gray-500 hover:text-white p-3 bg-gray-800 hover:bg-red-900/50 hover:text-red-400 rounded-full transition-colors">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
 
-                {{-- CUERPO DEL FORMULARIO --}}
                 <form id="deliveryForm" method="POST" enctype="multipart/form-data" :action="'/recepcion/confirm/' + pickup.id" class="p-8" @submit.prevent="submitDelivery">
                     @csrf @method('PUT')
                     <input type="hidden" name="signature" x-model="signatureData">
 
-                    {{-- PARTE SUPERIOR: DATOS Y EVIDENCIA (2 Columnas) --}}
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-
-                        {{-- COLUMNA IZQUIERDA: Receptor --}}
                         <div class="space-y-6">
                             <div class="space-y-4 bg-gray-900 border border-gray-700 p-6 rounded-2xl h-full">
                                 <h3 class="text-lg font-bold text-aromas-highlight uppercase tracking-wider mb-4 border-b border-gray-700 pb-2">Datos de Recepción</h3>
-
-                                <label class="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-colors"
-                                    :class="isThirdParty ? 'bg-aromas-highlight/10 border border-aromas-highlight/30' : 'bg-gray-800 border border-gray-700'">
+                                <label class="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-colors" :class="isThirdParty ? 'bg-aromas-highlight/10 border border-aromas-highlight/30' : 'bg-gray-800 border border-gray-700'">
                                     <div class="flex items-center gap-4">
                                         <input type="checkbox" name="is_third_party" value="1" x-model="isThirdParty" class="w-7 h-7 rounded border-gray-500 text-aromas-highlight focus:ring-aromas-highlight bg-gray-900 cursor-pointer">
                                         <div>
@@ -191,13 +143,10 @@
                                         </div>
                                     </div>
                                 </label>
-
                                 <div x-show="isThirdParty" x-transition class="pt-4">
                                     <label class="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Nombre completo de quien recibe</label>
-                                    <input type="text" name="receiver_name" x-model="receiverName" placeholder="Ej. Juan Pérez - INE"
-                                        class="w-full bg-gray-800 border border-gray-600 rounded-xl px-5 py-4 text-lg text-white focus:border-aromas-highlight focus:ring-aromas-highlight shadow-inner">
+                                    <input type="text" name="receiver_name" x-model="receiverName" placeholder="Ej. Juan Pérez - INE" class="w-full bg-gray-800 border border-gray-600 rounded-xl px-5 py-4 text-lg text-white focus:border-aromas-highlight focus:ring-aromas-highlight shadow-inner">
                                 </div>
-
                                 <div x-show="!isThirdParty" class="p-5 bg-blue-900/20 border border-blue-500/20 rounded-xl mt-4">
                                     <p class="text-sm text-blue-400 uppercase font-bold tracking-wider mb-1">Entregando a Titular Registrado:</p>
                                     <p class="text-2xl font-bold text-white" x-text="pickup.client_name"></p>
@@ -205,42 +154,25 @@
                             </div>
                         </div>
 
-                        {{-- COLUMNA DERECHA: Evidencia Fotográfica y Notas --}}
                         <div class="space-y-6">
                             <div class="bg-gray-900 border-2 border-dashed border-gray-600 hover:border-aromas-highlight/50 rounded-2xl p-6 transition-colors">
-                                <label class="block text-sm font-bold text-aromas-highlight uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    Evidencia Fotográfica *
-                                </label>
+                                <label class="block text-sm font-bold text-aromas-highlight uppercase tracking-wider mb-4 flex items-center gap-2">Evidencia Fotográfica *</label>
                                 <input type="file" name="evidence_file" id="evidence_file" accept="image/*" capture="environment" class="sr-only" @change="handleEvidenceChange">
-
                                 <div class="relative">
-                                    {{-- Sin Imagen --}}
-                                    <label for="evidence_file" x-show="!evidencePreview"
-                                        class="flex flex-col items-center justify-center gap-3 w-full h-32 bg-gray-800 rounded-xl border border-gray-700 cursor-pointer hover:bg-gray-700 transition-all group shadow-inner">
+                                    <label for="evidence_file" x-show="!evidencePreview" class="flex flex-col items-center justify-center gap-3 w-full h-32 bg-gray-800 rounded-xl border border-gray-700 cursor-pointer hover:bg-gray-700 transition-all group shadow-inner">
                                         <div class="p-3 bg-gray-900 rounded-full text-gray-400 group-hover:text-aromas-highlight group-hover:scale-110 transition-all">
-                                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            </svg>
+                                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                         </div>
                                         <span class="font-bold text-white text-lg">Tocar para tomar foto</span>
                                     </label>
-
-                                    {{-- Con Imagen (Vista Previa) --}}
                                     <div x-show="evidencePreview" x-cloak class="relative h-32 rounded-xl overflow-hidden border-2 border-aromas-highlight shadow-lg">
                                         <img :src="evidencePreview" class="w-full h-full object-cover">
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex flex-col justify-end">
-                                            <p class="text-xs text-white truncate" x-text="evidenceName"></p>
-                                            <button type="button" @click="removeEvidence()" class="absolute top-2 right-2 p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-xl">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
+                                        <button type="button" @click="removeEvidence()" class="absolute top-2 right-2 p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-xl">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-
                             <div>
                                 <label class="block text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Observaciones / Estado de entrega</label>
                                 <textarea name="notes" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-5 py-4 text-white focus:border-aromas-highlight focus:ring-aromas-highlight shadow-inner resize-none text-lg" placeholder="Añadir notas..."></textarea>
@@ -248,50 +180,34 @@
                         </div>
                     </div>
 
-                    {{-- PARTE INFERIOR: FIRMA GIGANTE --}}
                     <div class="bg-gray-800/80 border border-gray-700 rounded-3xl p-6 shadow-inner mb-8">
                         <div class="flex items-center justify-between mb-4">
                             <label class="text-xl font-bold text-aromas-highlight uppercase tracking-widest flex items-center gap-2">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                                </svg>
-                                Firma Digital del Cliente *
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> Firma Digital *
                             </label>
-                            <button type="button" @click="clearPad()" class="text-sm font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 px-5 py-2.5 rounded-xl transition-colors border border-red-500/30">
-                                Limpiar Firma
-                            </button>
+                            <button type="button" @click="clearPad()" class="text-sm font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 px-5 py-2.5 rounded-xl transition-colors border border-red-500/30">Limpiar</button>
                         </div>
-
-                        {{-- CANVAS GIGANTE (Altura aumentada a h-72 para mucho espacio) --}}
                         <div class="relative bg-white rounded-2xl overflow-hidden border-4 border-gray-400 focus-within:border-aromas-highlight transition-colors shadow-inner">
                             <canvas x-ref="signature_canvas" class="w-full h-72 touch-none cursor-crosshair"></canvas>
-                            <div x-show="isPadEmpty" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                                <span class="text-6xl font-bold text-gray-500 uppercase tracking-widest opacity-50">Firmar Aquí</span>
-                            </div>
+                            <div x-show="isPadEmpty" class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20"><span class="text-6xl font-bold text-gray-500 uppercase tracking-widest opacity-50">Firmar Aquí</span></div>
                         </div>
                     </div>
 
-                    {{-- BOTONES DE ACCIÓN GIGANTES --}}
                     <div class="pt-6 border-t border-gray-700 flex flex-col md:flex-row-reverse gap-6">
-                        <button type="submit" class="w-full md:w-auto px-10 py-6 rounded-2xl bg-aromas-highlight text-aromas-main font-black text-xl tracking-widest uppercase hover:bg-white transition-all shadow-[0_0_30px_rgba(253,201,116,0.25)] active:scale-95 flex items-center justify-center gap-3">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            CONFIRMAR ENTREGA
+                        <button type="submit" class="w-full md:w-auto px-10 py-6 rounded-2xl bg-aromas-highlight text-aromas-main font-black text-xl tracking-widest uppercase hover:bg-white transition-all shadow-[0_0_30px_rgba(253,201,116,0.25)] flex items-center justify-center gap-3">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> CONFIRMAR ENTREGA
                         </button>
-                        <button type="button" @click="closeModal()" class="w-full md:w-auto px-10 py-6 rounded-2xl border-2 border-gray-600 text-gray-300 font-bold text-xl hover:bg-gray-700 hover:text-white transition-colors uppercase tracking-widest">
-                            CANCELAR
-                        </button>
+                        <button type="button" @click="closeModal()" class="w-full md:w-auto px-10 py-6 rounded-2xl border-2 border-gray-600 text-gray-300 font-bold text-xl hover:bg-gray-700 hover:text-white transition-colors uppercase tracking-widest">CANCELAR</button>
                     </div>
                 </form>
             </div>
         </div>
 
-        {{-- MODAL 2: TICKET DE TURNO --}}
+        {{-- MODAL 2: TICKET DE TURNO (NUEVO DISEÑO CON REPRESENTANTE) --}}
         <div x-show="showQueueModal" style="display: none;" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-transition>
-            <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showQueueModal = false"></div>
+            <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="closeQueueModal()"></div>
 
-            <div class="bg-aromas-secondary w-full max-w-md rounded-xl shadow-2xl border border-aromas-highlight/30 flex flex-col relative z-10">
+            <div class="bg-aromas-secondary w-full max-w-md rounded-xl shadow-2xl border border-aromas-highlight/30 flex flex-col relative z-10 overflow-visible">
                 <div class="bg-aromas-highlight/10 p-4 border-b border-aromas-tertiary/20 rounded-t-xl flex justify-between items-center">
                     <h2 class="text-xl font-bold text-white flex items-center gap-2">
                         <svg class="w-6 h-6 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,22 +215,84 @@
                         </svg>
                         Nuevo Ticket
                     </h2>
-                    <button @click="showQueueModal = false" class="text-gray-400 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg></button>
+                    <button type="button" @click="closeQueueModal()" class="text-gray-400 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
                 </div>
 
                 <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6">
                     @csrf
+                    
+                    {{-- SECCIÓN: CLIENTE (Búsqueda o Seleccionado) --}}
                     <div>
-                        <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Nombre del Cliente</label>
-                        <input type="text" name="client_name" x-ref="queueInput" required
-                            class="w-full bg-aromas-main border-2 border-aromas-tertiary/30 rounded-lg px-4 py-3 text-lg text-white placeholder-gray-600 focus:border-aromas-highlight focus:ring-0 transition-colors"
-                            placeholder="Ej. María Pérez">
+                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-2">CLIENTE</label>
+                        
+                        {{-- Barra de búsqueda (Se oculta si ya se seleccionó un cliente de la BD) --}}
+                        <div class="relative" x-show="!selectedCustomerObj">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </div>
+                            <input type="text" name="client_name" x-model="clientSearchQuery" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" required autocomplete="off"
+                                class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight transition-all"
+                                placeholder="Número de cliente o nombre...">
+                            <input type="hidden" name="customer_id" x-model="selectedCustomerId">
+
+                            {{-- Dropdown Flotante --}}
+                            <div x-show="showClientDropdown && clientSearchResults.length > 0" class="absolute z-[100] w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto" style="display: none;">
+                                <template x-for="customer in clientSearchResults" :key="customer.id">
+                                    <div @click="selectCustomer(customer)" class="px-4 py-3 hover:bg-aromas-highlight/20 cursor-pointer border-b border-gray-700 last:border-0 flex justify-between items-center transition-colors">
+                                        <div>
+                                            <div class="text-white font-bold" x-text="customer.name"></div>
+                                            <div class="text-xs text-gray-400" x-text="customer.customer_number ? '# ' + customer.customer_number : 'Registrado'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- Tarjeta del Cliente Seleccionado (Estilo Imagen) --}}
+                        <div x-show="selectedCustomerObj" style="display: none;" class="bg-gray-800 border border-gray-600 rounded-xl p-4">
+                            <div class="flex items-center justify-between border-b border-gray-700 pb-3 mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="bg-gray-700 p-2 rounded-full text-gray-400">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-bold" x-text="selectedCustomerObj ? selectedCustomerObj.name : ''"></p>
+                                    </div>
+                                </div>
+                                <button type="button" @click="clearSelectedCustomer()" class="text-gray-400 hover:text-red-400 p-1">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+
+                            {{-- Switch de Representante --}}
+                            <label class="flex items-center justify-between cursor-pointer group">
+                                <span class="text-sm text-gray-300 font-medium group-hover:text-white transition-colors">¿Asiste alguien más a nombre del cliente?</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" name="is_third_party" value="1" x-model="isThirdPartyQueue" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                                </div>
+                            </label>
+
+                            {{-- Input Nombre del Representante --}}
+                            <div x-show="isThirdPartyQueue" x-transition class="mt-3">
+                                <input type="text" name="representative_name" x-model="representativeNameQueue" placeholder="Nombre de quien asiste..." :required="isThirdPartyQueue"
+                                    class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
+                            </div>
+                        </div>
                     </div>
+
+                    {{-- CHECKBOX DISCAPACIDAD --}}
+                    <label class="flex items-center gap-3 p-3 bg-gray-800/50 border border-gray-700 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
+                        <input type="checkbox" name="has_disability" value="1" x-model="hasDisabilityQueue" class="w-5 h-5 rounded border-gray-600 text-aromas-highlight focus:ring-aromas-highlight bg-gray-900">
+                        <span class="text-white font-medium text-sm">Presenta Discapacidad</span>
+                    </label>
+
+                    {{-- SECCIÓN: DESTINO --}}
                     <div>
-                        <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-3">Destino</label>
-                        <div class="grid grid-cols-2 gap-4">
+                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-3">DESTINO</label>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
                             <input type="hidden" name="service_type" x-model="queueType">
 
                             <button type="button" @click="queueType = 'SALES'"
@@ -336,15 +314,17 @@
                             </button>
                         </div>
                     </div>
+
+                    {{-- BOTONES INFERIORES --}}
                     <div class="flex gap-3 pt-2">
-                        <button type="button" @click="showQueueModal = false" class="flex-1 py-3 rounded-lg border border-aromas-tertiary/30 text-gray-400 font-bold hover:bg-white/5">CANCELAR</button>
+                        <button type="button" @click="closeQueueModal()" class="flex-1 py-3 rounded-lg border border-gray-600 text-gray-300 font-bold hover:bg-gray-800 transition-colors">CANCELAR</button>
                         <button type="submit" class="flex-1 py-3 rounded-lg bg-aromas-highlight text-aromas-main font-bold shadow-lg hover:bg-white transition-all transform hover:-translate-y-1">REGISTRAR</button>
                     </div>
                 </form>
             </div>
         </div>
 
-        {{-- MODAL 3: GESTIÓN DE LA FILA (VER Y ABANDONAR) --}}
+        {{-- MODAL 3: GESTIÓN DE LA FILA --}}
         <div x-show="showQueueListModal" style="display: none;" class="fixed inset-0 z-[70] flex items-center justify-center p-4" x-transition>
             <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showQueueListModal = false"></div>
 
@@ -352,25 +332,17 @@
                 <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 rounded-t-2xl">
                     <div>
                         <h2 class="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-3">
-                            <svg class="w-7 h-7 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                            </svg>
+                            <svg class="w-7 h-7 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                             Fila Actual
                         </h2>
                         <p class="text-sm text-gray-400 mt-1">Total esperando: <strong class="text-white" x-text="queueCount"></strong></p>
                     </div>
-                    <button @click="showQueueListModal = false" class="text-gray-400 hover:text-white p-2 rounded-lg bg-gray-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg></button>
+                    <button @click="showQueueListModal = false" class="text-gray-400 hover:text-white p-2 rounded-lg bg-gray-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                 </div>
 
                 <div class="p-6 overflow-y-auto flex-1 bg-black/20">
                     <div x-show="waitingClients.length === 0" class="text-center py-10 flex flex-col items-center">
-                        <div class="bg-gray-800 p-4 rounded-full mb-3">
-                            <svg class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                        </div>
+                        <div class="bg-gray-800 p-4 rounded-full mb-3"><svg class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
                         <p class="text-gray-400 font-bold text-lg">No hay clientes esperando actualmente.</p>
                     </div>
 
@@ -387,18 +359,43 @@
                                             <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
                                                 :class="client.service_type === 'SALES' ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'"
                                                 x-text="client.service_type === 'SALES' ? 'Ventas' : 'Caja'"></span>
+                                            
+                                            <span x-show="client.customer && client.customer.client_type === 'VIP'" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-aromas-highlight text-aromas-main">VIP</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <button @click="markAbandoned(client.id, client.client_name)" class="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 px-4 py-3 rounded-lg text-sm font-bold hover:bg-red-500 hover:text-white transition-colors">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zm11-2l-4-4m0 0l-4 4m4-4v12"></path>
-                                    </svg>
+                                <button @click="openAbandonModal(client)" class="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 px-4 py-3 rounded-lg text-sm font-bold hover:bg-red-500 hover:text-white transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zm11-2l-4-4m0 0l-4 4m4-4v12"></path></svg>
                                     <span class="hidden md:inline">Abandonó Fila</span>
                                 </button>
                             </div>
                         </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- MODAL 4: MOTIVO DE ABANDONO --}}
+        <div x-show="showAbandonModal" style="display: none;" class="fixed inset-0 z-[80] flex items-center justify-center p-4" x-transition>
+            <div class="fixed inset-0 bg-black/90 backdrop-blur-sm" @click="showAbandonModal = false"></div>
+
+            <div class="bg-gray-900 w-full max-w-sm rounded-2xl shadow-2xl border border-gray-700 flex flex-col relative z-10">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-white mb-2 text-center">Motivo de Abandono</h3>
+                    <p class="text-gray-400 text-sm text-center mb-6">¿Por qué se retiró <strong class="text-aromas-highlight" x-text="abandoningClient ? abandoningClient.client_name : ''"></strong>?</p>
+                    
+                    <select x-model="abandonReasonId" class="w-full bg-black/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 mb-6">
+                        <option value="" disabled selected>Selecciona un motivo...</option>
+                        <option value="1">Tiempo de espera muy largo</option>
+                        <option value="2">Solo venía a preguntar / ver</option>
+                        <option value="3">Emergencia personal / Prisa</option>
+                        <option value="4">Otro motivo</option>
+                    </select>
+
+                    <div class="flex gap-3">
+                        <button @click="showAbandonModal = false" class="flex-1 py-3 rounded-xl border border-gray-600 text-gray-400 font-bold hover:bg-gray-800">Cancelar</button>
+                        <button @click="confirmAbandon()" class="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 transition-colors shadow-lg">Confirmar</button>
                     </div>
                 </div>
             </div>
@@ -416,7 +413,8 @@
 
                 showDeliveryModal: false,
                 showQueueModal: false,
-                showQueueListModal: false, // <-- NUEVO ESTADO
+                showQueueListModal: false,
+                showAbandonModal: false, 
 
                 pickup: {},
                 isThirdParty: false,
@@ -426,18 +424,38 @@
                 isPadEmpty: true,
 
                 queueType: 'SALES',
-                waitingClients: [], // <-- ARREGLO PARA CLIENTES EN FILA
+                waitingClients: [],
                 evidencePreview: null,
-                evidenceName: '', // Nuevas variables para manejo de evidencia
+                evidenceName: '', 
+
+                // --- NUEVAS VARIABLES PARA BUSCADOR Y ABANDONO ---
+                clientSearchQuery: '',
+                clientSearchResults: [],
+                showClientDropdown: false,
+                selectedCustomerId: '',
+                selectedCustomerObj: null, // <-- NUEVO: Guarda el objeto completo
+                abandoningClient: null,
+                abandonReasonId: '',
+                
+                // --- NUEVAS VARIABLES PARA REPRESENTANTE Y DISCAPACIDAD ---
+                isThirdPartyQueue: false,
+                representativeNameQueue: '',
+                hasDisabilityQueue: false,
 
                 init() {
                     this.$watch('search', (value) => {
                         this.fetchData(value);
                     });
 
+                    // Limpiar el ID si el usuario borra o cambia el texto manualmente
+                    this.$watch('clientSearchQuery', (value) => {
+                        if(this.selectedCustomerId && (!this.selectedCustomerObj || this.selectedCustomerObj.name !== value)) {
+                            this.clearSelectedCustomer();
+                        }
+                    });
+
                     setInterval(() => {
-                        // Pausamos el refresco si CUALQUIER modal está abierto
-                        if (this.showDeliveryModal || this.showQueueModal || this.showQueueListModal || this.search.length > 0) return;
+                        if (this.showDeliveryModal || this.showQueueModal || this.showQueueListModal || this.showAbandonModal || this.search.length > 0) return;
                         this.fetchData('');
                     }, 5000);
 
@@ -453,11 +471,7 @@
 
                     let url = `{{ route('recepcion.dashboard') }}?search=${searchValue}&department=${dept}&status=${status}`;
 
-                    fetch(url, {
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
-                        })
+                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(r => r.json())
                         .then(data => {
                             document.getElementById('results-container').innerHTML = data.html;
@@ -467,15 +481,55 @@
                         .catch(err => console.error('Error polling:', err));
                 },
 
+                // --- FUNCIONES DE FILA Y BUSCADOR ---
                 openQueueModal() {
                     this.showQueueModal = true;
                     this.queueType = 'SALES';
-                    setTimeout(() => {
-                        if (this.$refs.queueInput) this.$refs.queueInput.focus();
-                    }, 100);
+                    this.clearSelectedCustomer();
+                    this.clientSearchQuery = '';
                 },
 
-                // --- NUEVAS FUNCIONES PARA GESTIÓN DE FILA ---
+                closeQueueModal() {
+                    this.showQueueModal = false;
+                    this.showClientDropdown = false;
+                },
+
+                searchCustomers() {
+                    if (this.clientSearchQuery.length < 2) {
+                        this.clientSearchResults = [];
+                        this.showClientDropdown = false;
+                        return;
+                    }
+                    
+                    fetch(`/recepcion/customers/search?q=${encodeURIComponent(this.clientSearchQuery)}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.clientSearchResults = data;
+                        this.showClientDropdown = data.length > 0;
+                    });
+                },
+
+                selectCustomer(customer) {
+                    this.selectedCustomerObj = customer;
+                    this.selectedCustomerId = customer.id;
+                    this.clientSearchQuery = customer.name;
+                    this.showClientDropdown = false;
+                    this.isThirdPartyQueue = false;
+                    this.representativeNameQueue = '';
+                    this.hasDisabilityQueue = false; // Se reinicia para que el checador lo evalúe físicamente
+                },
+                
+                clearSelectedCustomer() {
+                    this.selectedCustomerObj = null;
+                    this.selectedCustomerId = '';
+                    this.isThirdPartyQueue = false;
+                    this.representativeNameQueue = '';
+                    this.hasDisabilityQueue = false;
+                },
+                // ------------------------------------------------
+
                 openQueueListModal() {
                     this.fetchQueueList();
                     this.showQueueListModal = true;
@@ -483,10 +537,7 @@
 
                 fetchQueueList() {
                     fetch("{{ route('recepcion.queue.list') }}", {
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json'
-                            }
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
                         })
                         .then(r => r.json())
                         .then(data => {
@@ -497,29 +548,40 @@
                         });
                 },
 
-                markAbandoned(id, name) {
-                    if (!confirm(`¿Estás seguro de que el cliente ${name} ya se retiró de la fila?`)) return;
+                openAbandonModal(client) {
+                    this.abandoningClient = client;
+                    this.abandonReasonId = ''; 
+                    this.showAbandonModal = true;
+                },
 
-                    fetch(`/recepcion/queue/${id}/abandon`, {
+                confirmAbandon() {
+                    if (!this.abandonReasonId) {
+                        alert("Por favor selecciona un motivo de abandono.");
+                        return;
+                    }
+
+                    fetch(`/recepcion/queue/${this.abandoningClient.id}/abandon`, {
                             method: 'PUT',
                             headers: {
                                 'X-Requested-With': 'XMLHttpRequest',
+                                'Content-Type': 'application/json',
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                                 'Accept': 'application/json'
-                            }
+                            },
+                            body: JSON.stringify({ abandonment_reason_id: this.abandonReasonId })
                         })
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
-                                this.fetchQueueList(); // Refresca el modal interior
-                                this.fetchData(this.search); // Refresca los conteos del dashboard
+                                this.showAbandonModal = false;
+                                this.fetchQueueList(); 
+                                this.fetchData(this.search); 
                             } else {
                                 alert(data.message || 'Error al procesar la solicitud.');
                             }
                         });
                 },
 
-                // NUEVA FUNCIÓN: Confirmar Recepción en Almacén
                 confirmReceipt(id) {
                     fetch(`/recepcion/receive/${id}`, {
                             method: 'PUT',
@@ -532,13 +594,12 @@
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
-                                this.fetchData(this.search); // Refresca las tarjetas visualmente
+                                this.fetchData(this.search); 
                             } else {
                                 alert(data.message || 'Error al confirmar recepción.');
                             }
                         });
                 },
-                // ---------------------------------------------
 
                 openDeliveryModal(data) {
                     this.pickup = data;
@@ -557,14 +618,12 @@
 
                 closeModal() {
                     this.showDeliveryModal = false;
-                    // Limpiamos la evidencia al cerrar
                     this.evidencePreview = null;
                     this.evidenceName = '';
                     const fileInput = document.getElementById('evidence_file');
                     if (fileInput) fileInput.value = '';
                 },
 
-                // NUEVA: Manejar la foto
                 handleEvidenceChange(event) {
                     const file = event.target.files[0];
                     if (!file) {
@@ -580,7 +639,6 @@
                     reader.readAsDataURL(file);
                 },
 
-                // NUEVA: Borrar la foto
                 removeEvidence() {
                     this.evidencePreview = null;
                     this.evidenceName = '';
@@ -621,13 +679,11 @@
                 },
 
                 submitDelivery() {
-                    // 1. Validar Firma
                     if (!this.signaturePad || this.signaturePad.isEmpty()) {
                         alert('La firma es obligatoria.');
                         return;
                     }
 
-                    // 2. Validar Foto (¡Esto era lo que faltaba!)
                     if (!this.evidencePreview) {
                         alert('La foto de evidencia es obligatoria. Por favor toma una foto antes de continuar.');
                         return;

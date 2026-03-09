@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pickup;
 use App\Models\SalesQueue;
+use App\Models\Customer;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -17,10 +18,8 @@ class DeliveryController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Iniciamos consulta BASE con SEGURIDAD (Oculta los de +15 días)
         $query = Pickup::visibleForChecker();
 
-        // 2. Filtros
         if ($request->has('status') && $request->status !== 'ALL') {
             $query->where('status', $request->status);
         } else {
@@ -31,7 +30,6 @@ class DeliveryController extends Controller
             $query->where('department', $request->department);
         }
 
-        // 3. Buscador
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -42,16 +40,10 @@ class DeliveryController extends Controller
             });
         }
 
-        // Ordenamos
         $query->orderBy('created_at', 'desc');
-
-        // Paginación
         $pickups = $query->paginate(12)->withQueryString();
-
-        // Para el botón de Tickets: Cuántos hay en fila HOY
         $peopleInQueue = SalesQueue::waiting()->count();
 
-        // Si es AJAX (Polling o Filtros/Buscador), solo devolvemos el HTML del grid
         if ($request->ajax()) {
             $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
             return response()->json([
@@ -107,29 +99,67 @@ class DeliveryController extends Controller
     }
 
     /**
-     * AGREGAR A LA FILA DE VENTAS/CAJA (Kiosco Manual)
+     * BUSCAR CLIENTES PARA AUTOCOMPLETADO
+     */
+    public function searchCustomers(Request $request)
+    {
+        if ($request->ajax()) {
+            $search = $request->get('q');
+            $customers = Customer::where('name', 'LIKE', "%{$search}%")
+                                 ->orWhere('customer_number', 'LIKE', "%{$search}%")
+                                 ->orWhere('phone', 'LIKE', "%{$search}%")
+                                 ->limit(10)
+                                 ->get();
+                                 
+            return response()->json($customers);
+        }
+        return response()->json([], 403);
+    }
+
+    /**
+     * AGREGAR A LA FILA DE VENTAS/CAJA
      */
     public function addToQueue(Request $request)
     {
         $request->validate([
-            'client_name' => 'required|string|max:100',
             'service_type' => 'required|in:SALES,CASHIER',
+            'customer_id' => 'nullable|exists:customers,id',
+            'client_name' => 'required_without:customer_id|string|max:100|nullable',
+            'is_third_party' => 'nullable|boolean',
+            'representative_name' => 'required_if:is_third_party,1|string|max:100|nullable',
+            'has_disability' => 'nullable|boolean', 
         ]);
 
-        // 1. Definimos la letra inicial según el destino
-        $prefix = $request->service_type === 'SALES' ? 'V' : 'C';
+        $customer = null;
+        $clientName = $request->client_name;
+        $clientType = 'REGULAR'; 
 
-        // 2. Contamos cuántos turnos de ese TIPO se han dado HOY (para reiniciar a 001 cada día)
+        if ($request->customer_id) {
+            $customer = Customer::find($request->customer_id);
+            // Lógica de representante: Si viene alguien más, el nombre en la fila será el del representante
+            $clientName = $request->boolean('is_third_party') ? $request->representative_name : $customer->name;
+            $clientType = $customer->client_type; 
+        } else {
+            // Cliente nuevo sin registro previo
+            $customer = Customer::create([
+                'name' => $clientName,
+                'client_type' => 'REGULAR'
+            ]);
+        }
+
+        $prefix = $request->service_type === 'SALES' ? 'V' : 'C';
         $todayCount = SalesQueue::where('service_type', $request->service_type)
                                 ->whereDate('queued_at', today())
                                 ->count();
-
-        // 3. Formateamos el número (Ej: V-001, C-014)
+                                
         $turnNumber = sprintf('%s-%03d', $prefix, $todayCount + 1);
 
-        // Guardamos en Base de Datos
+        // TODO: En la siguiente migración añadiremos 'has_disability' a la base de datos de SalesQueue
         SalesQueue::create([
-            'client_name' => $request->client_name,
+            'customer_id' => $customer->id,
+            'client_name' => $clientName,
+            'client_type' => $clientType,
+            'has_disability' => $request->boolean('has_disability'),
             'turn_number' => $turnNumber, 
             'source' => 'MANUAL_KIOSK',
             'status' => 'WAITING',
@@ -142,17 +172,18 @@ class DeliveryController extends Controller
         return redirect()->route('recepcion.dashboard')
                          ->with('success', "Cliente agregado a la fila.")
                          ->with('new_turn', $turnNumber)
-                         ->with('client_name', $request->client_name)
+                         ->with('client_name', $clientName)
                          ->with('destination', $tipo);
     }
 
     /**
-     * NUEVO: OBTENER LISTA DE CLIENTES EN FILA (Para modal de recepcionista)
+     * OBTENER LISTA DE CLIENTES EN FILA
      */
     public function getQueueList(Request $request)
     {
         if ($request->ajax()) {
-            $waitingClients = SalesQueue::whereDate('queued_at', today())
+            $waitingClients = SalesQueue::with('customer') 
+                                        ->whereDate('queued_at', today())
                                         ->where('status', 'WAITING')
                                         ->orderBy('queued_at', 'asc')
                                         ->get();
@@ -165,17 +196,17 @@ class DeliveryController extends Controller
     }
 
     /**
-     * NUEVO: MARCAR COMO ABANDONADO
+     * MARCAR COMO ABANDONADO
      */
     public function markAsAbandoned(Request $request, $id)
     {
         $client = SalesQueue::findOrFail($id);
         
-        // Solo podemos marcar como abandonado si estaba esperando
         if ($client->status === 'WAITING') {
             $client->update([
                 'status' => 'ABANDONED',
-                'completed_at' => now(), // Guardamos la fecha de cierre
+                'completed_at' => now(),
+                'abandonment_reason_id' => $request->abandonment_reason_id, 
             ]);
 
             if ($request->ajax()) {
@@ -187,16 +218,15 @@ class DeliveryController extends Controller
     }
 
     /**
-     * NUEVO: MARCAR PAQUETE COMO RECIBIDO EN ALMACÉN
+     * MARCAR PAQUETE COMO RECIBIDO EN ALMACÉN
      */
     public function markAsReceived(Request $request, $id)
     {
         $pickup = Pickup::findOrFail($id);
         
-        // Verificamos que esté en custodia y no haya sido confirmado antes
         if ($pickup->status === 'IN_CUSTODY' && is_null($pickup->received_by_checker_at)) {
             $pickup->update([
-                'received_by_checker_at' => now(), // Guardamos fecha y hora exacta
+                'received_by_checker_at' => now(),
             ]);
 
             if ($request->ajax()) {
