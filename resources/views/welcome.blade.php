@@ -28,13 +28,15 @@
 </head>
 <body class="bg-aromas-main text-white h-screen w-screen overflow-hidden flex font-sans relative">
 
+    {{-- AUDIOS (Normal y VIP) --}}
     <audio id="chimeSound" src="/audio/timbre.mp3" preload="auto"></audio>
+    <audio id="vipChimeSound" src="/audio/bell_vip.mp3" preload="auto"></audio>
 
     <div id="alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
         <div class="bg-aromas-secondary border-4 border-aromas-highlight rounded-3xl p-16 shadow-[0_0_100px_rgba(253,201,116,0.4)] flex flex-col items-center justify-center text-center transform scale-90 transition-transform duration-300" id="alert-modal-content">
-            <h2 class="text-4xl font-bold text-aromas-highlight uppercase tracking-widest mb-4">NUEVO TURNO</h2>
+            <h2 id="modal-title" class="text-4xl font-bold text-aromas-highlight uppercase tracking-widest mb-4">NUEVO TURNO</h2>
             <div id="modal-turn-number" class="text-[10rem] font-black text-white leading-none mb-6">--</div>
-            <div id="modal-client-name" class="text-5xl font-bold text-gray-300 mb-10">--</div>
+            <div id="modal-client-name" class="text-6xl font-bold text-gray-200 mb-10">--</div>
             
             <div class="bg-aromas-main px-12 py-6 rounded-2xl border-2 border-aromas-tertiary/30 w-full">
                 <span id="modal-dest-label" class="block text-2xl uppercase text-aromas-tertiary font-bold tracking-widest mb-2">Pase a:</span>
@@ -49,7 +51,7 @@
         </div>
 
         <div id="media-container" class="z-10 w-full h-full flex items-center justify-center relative bg-black">
-            </div>
+        </div>
     </div>
 
     <div class="w-1/3 h-full bg-aromas-secondary flex flex-col shadow-2xl relative z-20">
@@ -93,6 +95,7 @@
             const waitingList = document.getElementById('waiting-list');
             const waitTimeEl = document.getElementById('wait-time');
             const chimeSound = document.getElementById('chimeSound');
+            const vipChimeSound = document.getElementById('vipChimeSound'); // Nuevo audio VIP
             
             let lastCalledId = null;
             let lastServingData = '';
@@ -102,7 +105,6 @@
             const alertModalContent = document.getElementById('alert-modal-content');
             let isAlertActive = false; 
 
-            // --- NUEVAS VARIABLES PARA GESTIÓN DE COLAS DE AUDIO/MODAL ---
             let announcementQueue = [];
             let isAnnouncing = false;
 
@@ -112,17 +114,18 @@
             let currentVideoElement = null;
 
             let spanishVoice = null;
-            window.speechSynthesis.onvoiceschanged = () => {
-                const voices = window.speechSynthesis.getVoices();
-                spanishVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('es'))
-                            || voices.find(v => v.name.includes('Natural') && v.lang.includes('es'))
-                            || voices.find(v => v.lang.includes('es-MX')) 
-                            || voices.find(v => v.lang.includes('es'));
-            };
 
-            // ==========================================
-            // LÓGICA DEL CARRUSEL DE PUBLICIDAD
-            // ==========================================
+            // CARGAR LA MEJOR VOZ FEMENINA
+            const loadVoices = () => {
+                const voices = window.speechSynthesis.getVoices();
+                spanishVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('es')) ||
+                               voices.find(v => v.name.includes('Natural') && v.lang.includes('es')) ||
+                               voices.find(v => v.lang.includes('es-MX')) ||
+                               voices.find(v => v.lang.includes('es'));
+            };
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+
             function playAd(index) {
                 clearTimeout(carrouselTimer);
                 mediaContainer.innerHTML = ''; 
@@ -175,34 +178,25 @@
             function nextAd() {
                 if (isAlertActive || tvAds.length === 0) return;
                 currentAdIndex++;
-                if (currentAdIndex >= tvAds.length) {
-                    currentAdIndex = 0; 
-                }
+                if (currentAdIndex >= tvAds.length) currentAdIndex = 0; 
                 playAd(currentAdIndex);
             }
 
             function pauseCarrousel() {
                 isAlertActive = true;
                 clearTimeout(carrouselTimer); 
-                if (currentVideoElement) {
-                    currentVideoElement.pause(); 
-                }
+                if (currentVideoElement) currentVideoElement.pause(); 
             }
 
             function resumeCarrousel() {
                 isAlertActive = false;
-                
                 if (tvAds.length === 0) {
                     playAd(0);
                     return;
                 }
-
-                if (currentAdIndex >= tvAds.length) {
-                    currentAdIndex = 0;
-                }
+                if (currentAdIndex >= tvAds.length) currentAdIndex = 0;
 
                 const currentAd = tvAds[currentAdIndex];
-                
                 if (currentAd && currentAd.type === 'VIDEO' && currentVideoElement) {
                     currentVideoElement.play().catch(e => console.error("Error al reanudar video", e)); 
                 } else if (currentAd && currentAd.type === 'IMAGE') {
@@ -212,9 +206,6 @@
                 }
             }
 
-            // ==========================================
-            // LÓGICA DE TURNOS Y DATOS (AJAX)
-            // ==========================================
             function fetchQueueData() {
                 fetch('/tv', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                 .then(response => response.json())
@@ -238,7 +229,6 @@
                         if (currentAdsStr !== lastAdsData) {
                             tvAds = data.ads;
                             lastAdsData = currentAdsStr;
-                            
                             if (!isAlertActive) {
                                 currentAdIndex = 0; 
                                 playAd(currentAdIndex);
@@ -254,31 +244,22 @@
                 waitTimeEl.innerText = estimatedMinutes > 0 ? estimatedMinutes : '< 1';
             }
 
-            // --- NUEVO SISTEMA DE COLAS DE ANUNCIOS ---
             function queueAnnouncement(ticket) {
                 announcementQueue.push(ticket);
                 processAnnouncementQueue();
             }
 
             function processAnnouncementQueue() {
-                // Si ya está anunciando o no hay nadie en fila, no hacemos nada
-                if (isAnnouncing || announcementQueue.length === 0) {
-                    return;
-                }
+                if (isAnnouncing || announcementQueue.length === 0) return;
 
                 isAnnouncing = true;
-                const ticketToAnnounce = announcementQueue.shift(); // Saca el primero de la fila
+                const ticketToAnnounce = announcementQueue.shift(); 
                 
-                // Llama al modal visual y le pasamos una función que se ejecutará al terminar
                 triggerActiveInterruption(ticketToAnnounce, () => {
                     isAnnouncing = false;
-                    
-                    // ¿Quedaron más turnos encolados mientras hablábamos?
                     if (announcementQueue.length > 0) {
-                        // Esperamos medio segundo para que la pantalla respire, y anunciamos el siguiente
                         setTimeout(processAnnouncementQueue, 500);
                     } else {
-                        // Si la fila está vacía, YA PODEMOS REANUDAR LA PUBLICIDAD
                         resumeCarrousel();
                     }
                 });
@@ -296,18 +277,22 @@
                 servingArray.forEach((ticket, index) => {
                     const isNewest = index === 0;
                     const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Vendedor');
-                    const ticketNumber = ticket.turn_number ? ticket.turn_number : 'S/N';
+                    
+                    // LÓGICA VIP EN LA LISTA LATERAL
+                    const isVIP = ticket.client_type === 'VIP';
+                    const ticketNumberDisplay = isVIP ? 'AVISO' : (ticket.turn_number ? ticket.turn_number : 'S/N');
+                    const textNumberSize = isVIP ? 'text-4xl mt-2 mb-4 text-yellow-500' : 'text-6xl mb-2 text-white';
                     
                     if (isNewest) {
                         html += `
-                            <div class="ticket-enter bg-aromas-secondary border-2 border-aromas-highlight rounded-xl p-4 flex flex-col justify-center items-center shadow-2xl pulse-ticket mb-4">
-                                <span class="text-sm font-bold uppercase tracking-widest text-aromas-highlight mb-1">Turno Actual</span>
-                                <div class="text-6xl font-black text-white tracking-tighter mb-2">${ticketNumber}</div>
-                                <div class="text-lg font-bold text-gray-300 w-full text-center mb-4">${ticket.client_name}</div>
+                            <div class="ticket-enter bg-aromas-secondary border-2 ${isVIP ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-aromas-highlight'} rounded-xl p-4 flex flex-col justify-center items-center shadow-2xl pulse-ticket mb-4">
+                                <span class="text-sm font-bold uppercase tracking-widest ${isVIP ? 'text-yellow-500' : 'text-aromas-highlight'} mb-1">${isVIP ? 'Atención' : 'Turno Actual'}</span>
+                                <div class="font-black tracking-tighter ${textNumberSize}">${ticketNumberDisplay}</div>
+                                <div class="text-lg font-bold text-gray-300 w-full text-center mb-4 truncate" title="${ticket.client_name}">${ticket.client_name}</div>
                                 
                                 <div class="w-full bg-aromas-main rounded-lg p-3 text-center border border-aromas-tertiary/30">
                                     <span class="block text-[10px] uppercase text-aromas-tertiary font-bold tracking-wider mb-1">${ticket.service_type === 'CASHIER' ? 'Pasar a:' : 'Vendedor asignado:'}</span>
-                                    <span class="block text-xl font-black ${ticket.service_type === 'CASHIER' ? 'text-green-500' : 'text-aromas-highlight'} uppercase tracking-wider truncate">
+                                    <span class="block text-xl font-black ${ticket.service_type === 'CASHIER' ? 'text-green-500' : (isVIP ? 'text-yellow-500' : 'text-aromas-highlight')} uppercase tracking-wider truncate">
                                         ${destName}
                                     </span>
                                 </div>
@@ -316,17 +301,17 @@
                         `;
                     } else {
                         if (index <= 5) { 
-                            const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : 'text-aromas-highlight';
+                            const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : (isVIP ? 'text-yellow-500' : 'text-aromas-highlight');
                             const labelText = ticket.service_type === 'CASHIER' ? 'Caja' : 'Vendedor';
                             html += `
                                 <div class="bg-aromas-main border border-aromas-tertiary/20 rounded-lg p-3 flex justify-between items-center mb-2">
-                                    <div>
-                                        <div class="text-lg font-bold text-white">${ticketNumber}</div>
-                                        <div class="text-[11px] text-gray-400 truncate w-24">${ticket.client_name}</div>
+                                    <div class="overflow-hidden pr-2">
+                                        <div class="text-lg font-bold ${isVIP ? 'text-yellow-500' : 'text-white'}">${ticketNumberDisplay}</div>
+                                        <div class="text-[11px] text-gray-400 truncate w-24" title="${ticket.client_name}">${ticket.client_name}</div>
                                     </div>
-                                    <div class="text-right flex flex-col items-end">
+                                    <div class="text-right flex flex-col items-end min-w-[80px]">
                                         <span class="text-[9px] text-aromas-tertiary uppercase font-bold">${labelText}:</span>
-                                        <div class="text-sm font-bold ${destColor} truncate w-28 uppercase">${destName}</div>
+                                        <div class="text-sm font-bold ${destColor} truncate w-full max-w-[100px] uppercase text-right" title="${destName}">${destName}</div>
                                     </div>
                                 </div>
                             `;
@@ -338,7 +323,6 @@
 
                 if (newestClient && newestClient.id !== lastCalledId) {
                     if (lastCalledId !== null) {
-                        // En lugar de llamar directo a trigger, lo mandamos a formar a la cola
                         queueAnnouncement(newestClient);
                     }
                     lastCalledId = newestClient.id; 
@@ -358,12 +342,12 @@
                     const ticketNumber = ticket.turn_number ? ticket.turn_number : '--';
 
                     html += `
-                        <div class="bg-aromas-secondary rounded-lg p-2 px-3 flex justify-between items-center border border-aromas-tertiary/20">
-                            <div class="flex items-center gap-3">
+                        <div class="bg-aromas-secondary rounded-lg p-2 px-3 flex justify-between items-center border border-aromas-tertiary/20 mb-2">
+                            <div class="flex items-center gap-3 overflow-hidden">
                                 <span class="font-black text-white">${ticketNumber}</span>
-                                <span class="text-xs text-gray-300 truncate w-24">${ticket.client_name}</span>
+                                <span class="text-xs text-gray-300 truncate w-24" title="${ticket.client_name}">${ticket.client_name}</span>
                             </div>
-                            <div class="text-[9px] font-bold px-2 py-1 rounded border ${badgeColor} uppercase tracking-wider">
+                            <div class="text-[9px] font-bold px-2 py-1 rounded border ${badgeColor} uppercase tracking-wider ml-2">
                                 ${destName}
                             </div>
                         </div>
@@ -373,43 +357,68 @@
                 waitingList.innerHTML = html;
             }
 
-            // --- REFACTORIZADO PARA ACEPTAR UN CALLBACK AL TERMINAR ---
             function triggerActiveInterruption(ticket, onCompleteCallback) {
                 const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Un vendedor');
-                const ticketNumber = ticket.turn_number ? ticket.turn_number : '--';
                 const destLabel = ticket.service_type === 'CASHIER' ? 'Pase a:' : 'Vendedor asignado:';
                 const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : 'text-aromas-highlight';
+                
+                const isVIP = ticket.client_type === 'VIP';
 
                 pauseCarrousel();
 
-                document.getElementById('modal-turn-number').innerText = ticketNumber;
-                document.getElementById('modal-client-name').innerText = ticket.client_name;
-                document.getElementById('modal-dest-label').innerText = destLabel;
-                
+                // LÓGICA VIP PARA EL MODAL CENTRAL
+                const titleEl = document.getElementById('modal-title');
+                const numberEl = document.getElementById('modal-turn-number');
+                const nameEl = document.getElementById('modal-client-name');
                 const destElement = document.getElementById('modal-dest-name');
-                destElement.innerText = destName;
-                destElement.className = `block text-6xl font-black uppercase ${destColor}`;
+                
+                if (isVIP) {
+                    titleEl.innerText = "AVISO DIRECTO";
+                    numberEl.style.display = 'none'; 
+                    nameEl.style.fontSize = '4.5rem'; 
+                    destElement.className = `block text-6xl font-black uppercase text-yellow-500`; 
+                } else {
+                    titleEl.innerText = "NUEVO TURNO";
+                    numberEl.style.display = 'block';
+                    numberEl.innerText = ticket.turn_number ? ticket.turn_number : '--';
+                    nameEl.style.fontSize = '3rem';
+                    destElement.className = `block text-6xl font-black uppercase ${destColor}`;
+                }
+
+                nameEl.innerText = ticket.client_name;
+                document.getElementById('modal-dest-label').innerText = destLabel;
+                destElement.innerText = destName; // <-- ESTA ES LA LÍNEA QUE FALTABA
 
                 alertModal.classList.remove('opacity-0', 'pointer-events-none');
                 alertModalContent.classList.remove('scale-90');
                 alertModalContent.classList.add('scale-100');
 
-                chimeSound.currentTime = 0; 
-                chimeSound.play().catch(e => console.log("Se requiere clic inicial para audio."));
-
-                // IMPORTANTE: Limpiamos por si el navegador se quedó atorado hablando algo de antes
+                // SONIDO DISCRETO
+                let audioPlayer = (isVIP && vipChimeSound) ? vipChimeSound : chimeSound;
+                
+                // Limpiar eventos previos y reproducir
+                audioPlayer.onended = null;
+                audioPlayer.currentTime = 0; 
+                
                 window.speechSynthesis.cancel(); 
 
-                let cleanNumber = ticketNumber;
-                if(ticketNumber.includes('-')) {
-                    let parts = ticketNumber.split('-');
-                    cleanNumber = parseInt(parts[1], 10); 
+                // LÓGICA VIP PARA EL TEXTO A VOZ (Sin mencionar el turno)
+                let script = "";
+                if (isVIP) {
+                    script = `Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con ' + destName}.`;
+                } else {
+                    let ticketNumber = ticket.turn_number ? ticket.turn_number : '0';
+                    let cleanNumber = ticketNumber;
+                    if(ticketNumber.includes('-')) {
+                        let parts = ticketNumber.split('-');
+                        cleanNumber = parseInt(parts[1], 10); 
+                    }
+                    script = `Turno número ${cleanNumber}. Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con el vendedor ' + destName}.`;
                 }
-                let script = `Turno número ${cleanNumber}. Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con el vendedor ' + destName}.`;
                 
                 const utterance = new SpeechSynthesisUtterance(script);
                 if (spanishVoice) utterance.voice = spanishVoice;
-                utterance.rate = 0.9; 
+                utterance.rate = 0.85; 
 
                 let isModalClosed = false;
                 let fallbackTimer = null;
@@ -417,35 +426,35 @@
                 const closeAlert = () => {
                     if (isModalClosed) return;
                     isModalClosed = true;
-                    clearTimeout(fallbackTimer); // Cancelamos el respaldo de seguridad porque cerró bien
+                    clearTimeout(fallbackTimer); 
                     
                     alertModal.classList.add('opacity-0', 'pointer-events-none');
                     alertModalContent.classList.remove('scale-100');
                     alertModalContent.classList.add('scale-90');
                     
-                    // En lugar de reanudar el carrusel a la fuerza, le avisamos a la Fila que ya terminamos
                     setTimeout(() => {
                         onCompleteCallback(); 
-                    }, 500); // 500ms para que termine la animación de opacidad
+                    }, 500); 
                 };
 
-                utterance.onend = () => {
-                    setTimeout(closeAlert, 1000);
-                };
-
-                utterance.onerror = () => {
-                    closeAlert();
-                };
-
-                setTimeout(() => {
+                const startSpeech = () => {
                     if ('speechSynthesis' in window) {
                         window.speechSynthesis.speak(utterance);
                     } else {
                         setTimeout(closeAlert, 6000);
                     }
-                }, 1500); 
+                };
 
-                // Respaldo de seguridad absoluto
+                audioPlayer.onended = startSpeech;
+
+                audioPlayer.play().catch(e => {
+                    console.log("Se requiere clic inicial para audio.");
+                    startSpeech();
+                });
+
+                utterance.onend = () => { setTimeout(closeAlert, 1000); };
+                utterance.onerror = () => { closeAlert(); };
+
                 fallbackTimer = setTimeout(closeAlert, 15000); 
             }
 

@@ -47,7 +47,7 @@ class SalesQueue extends Model
             'queued_at' => 'datetime',
             'started_serving_at' => 'datetime',
             'completed_at' => 'datetime',
-            'last_extended_at' => 'datetime', 
+            'last_extended_at' => 'datetime',
         ];
     }
 
@@ -87,7 +87,16 @@ class SalesQueue extends Model
     public function scopeWaiting(Builder $query): void
     {
         $query->where('status', 'WAITING')
-              ->orderBy('queued_at', 'asc'); // FIFO (First In, First Out)
+            // 1. VIPs van primero (1)
+            // 2. Discapacidad va después (2)
+            // 3. Regulares van al final (3)
+            ->orderByRaw("CASE 
+                                WHEN client_type = 'VIP' THEN 1 
+                                WHEN has_disability = 1 THEN 2 
+                                ELSE 3 
+                            END")
+            // Dentro de cada grupo de prioridad, se respeta quién llegó primero
+            ->orderBy('queued_at', 'asc');
     }
 
     public function scopeServing(Builder $query): void
