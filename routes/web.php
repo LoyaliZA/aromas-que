@@ -129,18 +129,21 @@ Route::prefix('recepcion')
 
 /*
 |--------------------------------------------------------------------------
-| MÓDULO VENTAS (Rol: SELLER)
+| MÓDULO VENTAS (Roles: SELLER, MANAGER, ADMIN)
 |--------------------------------------------------------------------------
 */
 Route::prefix('ventas')
     ->name('ventas.')
-    ->middleware(['auth', 'role:SELLER']) 
+    ->middleware(['auth', 'role:SELLER,MANAGER,ADMIN']) // <-- Agregamos los roles aquí
     ->group(function () {
         Route::get('/dashboard', [App\Http\Controllers\Ventas\QueueController::class, 'index'])->name('dashboard');
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
-        Route::post('/extend-service', [App\Http\Controllers\Ventas\QueueController::class, 'extendService'])->name('extend-service');
+        
+        // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---
+        Route::get('/retention/list', [App\Http\Controllers\Ventas\QueueController::class, 'getRetentionList'])->name('retention.list');
+        Route::post('/retention/reassign', [App\Http\Controllers\Ventas\QueueController::class, 'reassignRetention'])->name('retention.reassign');
     });
 
 /*

@@ -207,6 +207,7 @@ class DeliveryController extends Controller
                 'status' => 'ABANDONED',
                 'completed_at' => now(),
                 'abandonment_reason_id' => $request->abandonment_reason_id, 
+                'custom_abandonment_reason' => $request->custom_abandonment_reason, // <-- NUEVO
             ]);
 
             if ($request->ajax()) {

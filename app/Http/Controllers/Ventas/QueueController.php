@@ -9,6 +9,7 @@ use App\Models\DailyShift;
 use App\Models\SalesQueue;
 use App\Models\ShiftStatusLog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class QueueController extends Controller
 {
@@ -21,15 +22,14 @@ class QueueController extends Controller
 
     public function poll()
     {
-        // 1. Ejecutar Matchmaker
         $this->runMatchmaker();
 
-        // 2. Obtener datos actualizados
         $sellers = $this->getSellersList();
         $clientsWaiting = SalesQueue::waiting()->sales()->count();
 
-        // 3. DETECTAR ASIGNACIÓN RECIENTE (Para la Mega Notificación)
+        // Detectar asignación excluyendo las Retenciones usando el sufijo -R
         $recentAssignment = SalesQueue::where('status', 'SERVING')
+            ->where('turn_number', 'not like', '%-R') 
             ->where('started_serving_at', '>=', now()->subSeconds(4))
             ->with('assignedShift.employee')
             ->first();
@@ -38,8 +38,10 @@ class QueueController extends Controller
         if ($recentAssignment && $recentAssignment->assignedShift) {
             $alertData = [
                 'client' => $recentAssignment->client_name,
+                'client_type' => $recentAssignment->client_type,
+                'has_disability' => $recentAssignment->has_disability,
                 'seller' => $recentAssignment->assignedShift->employee->full_name,
-                'folio'  => $recentAssignment->id
+                'folio'  => $recentAssignment->turn_number // <-- CORRECCIÓN: Enviamos el Turno, no el ID
             ];
         }
 
@@ -65,22 +67,16 @@ class QueueController extends Controller
         if ($shift->current_status === 'ONLINE') {
             $reason = $request->reason ?? 'GENERAL';
             
-            // --- NUEVA LÓGICA DE COMIDA ---
             if ($reason === 'LUNCH') {
                 if ($shift->has_taken_lunch) {
                     return back()->with('error', 'El vendedor ya ha tomado su break de comida hoy.');
                 }
-                
-                // Marcamos que ya tomó su comida
                 $shift->has_taken_lunch = true;
-                
-                // Le damos 3 minutos de "gracia" desplazando el inicio del cronómetro hacia el futuro
                 $statusChangeAt = now()->addMinutes(3);
             } else {
                 $statusChangeAt = now();
             }
             
-            // Actualizamos el turno
             $shift->update([
                 'current_status' => 'BREAK', 
                 'break_reason' => $reason,
@@ -88,23 +84,20 @@ class QueueController extends Controller
                 'last_status_change_at' => $statusChangeAt
             ]);
 
-            // Creamos el registro histórico (Inicio de Pausa)
             ShiftStatusLog::create([
                 'daily_shift_id' => $shift->id,
                 'previous_status' => $previousStatus,
                 'new_status' => 'BREAK',
-                'changed_at' => now(), // El historial se guarda con la hora real en que se pulsó el botón
+                'changed_at' => now(), 
             ]);
 
         } elseif ($shift->current_status === 'BREAK') {
-            // Actualizamos el turno
             $shift->update([
                 'current_status' => 'ONLINE', 
                 'break_reason' => null, 
                 'last_status_change_at' => now()
             ]);
 
-            // Creamos el registro histórico (Fin de Pausa)
             ShiftStatusLog::create([
                 'daily_shift_id' => $shift->id,
                 'previous_status' => $previousStatus,
@@ -112,7 +105,6 @@ class QueueController extends Controller
                 'changed_at' => now(),
             ]);
         }
-
         return back();
     }
 
@@ -131,8 +123,7 @@ class QueueController extends Controller
                 $client->update(['status' => 'COMPLETED', 'completed_at' => now()]);
                 $shift->increment('customers_served_count');
                 $shift->update([
-                    'last_status_change_at' => now(),
-                    'last_action_at' => now()
+                    'last_action_at' => now() 
                 ]);
             }
         });
@@ -140,28 +131,61 @@ class QueueController extends Controller
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => true, 'message' => 'Venta finalizada automáticamente']);
         }
-
         return back()->with('success', 'Venta finalizada');
     }
 
-    public function extendService(Request $request)
+    public function getRetentionList(Request $request)
     {
-        $request->validate(['shift_id' => 'required|exists:daily_shifts,id']);
+        $recentCompleted = SalesQueue::with('assignedShift.employee')
+            ->where('status', 'COMPLETED')
+            ->where('service_type', 'SALES')
+            ->orderBy('completed_at', 'desc')
+            ->limit(10)
+            ->get();
 
-        $client = SalesQueue::where('assigned_shift_id', $request->shift_id)
-                            ->where('status', 'SERVING')
-                            ->first();
+        // CORRECCIÓN: Obtenemos SOLO a los vendedores en línea que NO están atendiendo a nadie
+        $availableShifts = DailyShift::with('employee')
+            ->where('work_date', today())
+            ->where('current_status', 'ONLINE')
+            ->get()
+            ->filter(function ($shift) {
+                return !SalesQueue::where('assigned_shift_id', $shift->id)
+                                  ->where('status', 'SERVING')
+                                  ->exists();
+            })->values();
 
-        if ($client) {
-            $client->update([
-                'last_extended_at' => now(),
-                'extension_count' => $client->extension_count + 1
-            ]);
-            
-            return response()->json(['success' => true]);
-        }
+        return response()->json([
+            'clients' => $recentCompleted,
+            'available_sellers' => $availableShifts
+        ]);
+    }
 
-        return response()->json(['error' => 'No hay cliente activo'], 404);
+    public function reassignRetention(Request $request)
+    {
+        $request->validate([
+            'queue_id' => 'required|exists:sales_queue,id',
+            'shift_id' => 'required|exists:daily_shifts,id'
+        ]);
+
+        $oldQueue = SalesQueue::find($request->queue_id);
+        
+        SalesQueue::create([
+            'customer_id' => $oldQueue->customer_id,
+            'client_name' => $oldQueue->client_name,
+            'client_type' => $oldQueue->client_type,
+            'has_disability' => $oldQueue->has_disability,
+            'service_type' => $oldQueue->service_type,
+            'turn_number' => $oldQueue->turn_number . '-R', 
+            'source' => 'MANUAL_KIOSK', // <-- CORRECCIÓN: Evitamos el error 1265 del Enum
+            'status' => 'SERVING',
+            'assigned_shift_id' => $request->shift_id,
+            'queued_at' => now(),
+            'started_serving_at' => now()
+        ]);
+
+        DailyShift::find($request->shift_id)->update(['last_action_at' => now()]);
+
+        return response()->json(['success' => true]);
     }
 
     private function getSellersList()
@@ -171,42 +195,54 @@ class QueueController extends Controller
 
     private function runMatchmaker()
     {
-        $waitingClients = SalesQueue::waiting()->sales()->count();
-        if ($waitingClients === 0) return;
+        try {
+            DB::transaction(function () {
+                $waitingClients = SalesQueue::waiting()->sales()->count();
+                if ($waitingClients === 0) return;
 
-        $availableShifts = DailyShift::where('work_date', today())
-            ->where('current_status', 'ONLINE')
-            ->where('flagged_as_idle', false)
-            ->get();
+                $availableShifts = DailyShift::where('work_date', today())
+                    ->where('current_status', 'ONLINE')
+                    ->get();
 
-        $freeShifts = $availableShifts->filter(function ($shift) {
-            return !SalesQueue::where('assigned_shift_id', $shift->id)
-                              ->where('status', 'SERVING')
-                              ->exists();
-        });
+                $freeShifts = $availableShifts->filter(function ($shift) {
+                    $isServing = SalesQueue::where('assigned_shift_id', $shift->id)
+                                      ->where('status', 'SERVING')
+                                      ->exists();
+                                      
+                    $cooldownPassed = true;
+                    if (!empty($shift->last_action_at)) {
+                        try {
+                            $cooldownPassed = \Carbon\Carbon::parse($shift->last_action_at)->diffInSeconds(now()) >= 10;
+                        } catch (\Exception $e) {
+                            $cooldownPassed = true;
+                        }
+                    }
 
-        if ($freeShifts->isEmpty()) return;
+                    return !$isServing && $cooldownPassed;
+                });
 
-        $totalSales = $availableShifts->sum('customers_served_count');
-        
-        if ($totalSales == 0) {
-            $freeShifts = $freeShifts->shuffle();
-        } else {
-            $freeShifts = $freeShifts->sortBy('last_status_change_at');
-        }
+                if ($freeShifts->isEmpty()) return;
 
-        foreach ($freeShifts as $shift) {
-            $nextClient = SalesQueue::waiting()->sales()->lockForUpdate()->first();
-            if ($nextClient) {
-                $nextClient->update([
-                    'status' => 'SERVING',
-                    'assigned_shift_id' => $shift->id,
-                    'started_serving_at' => now(),
-                    'last_extended_at' => null 
-                ]);
-            } else {
-                break;
-            }
+                $freeShifts = $freeShifts->sortBy(function ($shift) {
+                    return $shift->last_action_at ?? '2000-01-01 00:00:00';
+                });
+
+                foreach ($freeShifts as $shift) {
+                    $nextClient = SalesQueue::waiting()->sales()->lockForUpdate()->first();
+                    if ($nextClient) {
+                        $nextClient->update([
+                            'status' => 'SERVING',
+                            'assigned_shift_id' => $shift->id,
+                            'started_serving_at' => now(),
+                        ]);
+                        $shift->update(['flagged_as_idle' => false]);
+                    } else {
+                        break;
+                    }
+                }
+            });
+        } catch (\Exception $e) {
+            Log::error('Error crítico en el Matchmaker: ' . $e->getMessage());
         }
     }
 }

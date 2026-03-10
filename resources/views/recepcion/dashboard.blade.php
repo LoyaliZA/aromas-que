@@ -392,6 +392,9 @@
                         <option value="3">Emergencia personal / Prisa</option>
                         <option value="4">Otro motivo</option>
                     </select>
+                    <div x-show="abandonReasonId == '4'" x-transition class="mb-6">
+                        <input type="text" x-model="customAbandonReason" placeholder="Escribe el motivo específico..." class="w-full bg-black/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
+                    </div>
 
                     <div class="flex gap-3">
                         <button @click="showAbandonModal = false" class="flex-1 py-3 rounded-xl border border-gray-600 text-gray-400 font-bold hover:bg-gray-800">Cancelar</button>
@@ -436,6 +439,7 @@
                 selectedCustomerObj: null, // <-- NUEVO: Guarda el objeto completo
                 abandoningClient: null,
                 abandonReasonId: '',
+                customAbandonReason: '',
                 
                 // --- NUEVAS VARIABLES PARA REPRESENTANTE Y DISCAPACIDAD ---
                 isThirdPartyQueue: false,
@@ -550,13 +554,20 @@
 
                 openAbandonModal(client) {
                     this.abandoningClient = client;
-                    this.abandonReasonId = ''; 
+                    this.abandonReasonId = '';
+                    this.customAbandonReason = ''; 
                     this.showAbandonModal = true;
                 },
 
                 confirmAbandon() {
                     if (!this.abandonReasonId) {
                         alert("Por favor selecciona un motivo de abandono.");
+                        return;
+                    }
+
+                    // NUEVA VALIDACIÓN: Si es "Otro", obligar a escribir
+                    if (this.abandonReasonId == '4' && !this.customAbandonReason.trim()) {
+                        alert("Por favor escribe el motivo personalizado.");
                         return;
                     }
 
@@ -568,7 +579,10 @@
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                                 'Accept': 'application/json'
                             },
-                            body: JSON.stringify({ abandonment_reason_id: this.abandonReasonId })
+                            body: JSON.stringify({ 
+                                abandonment_reason_id: this.abandonReasonId,
+                                custom_abandonment_reason: this.abandonReasonId == '4' ? this.customAbandonReason : null // <-- ENVIAMOS EL TEXTO
+                            })
                         })
                         .then(r => r.json())
                         .then(data => {

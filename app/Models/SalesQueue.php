@@ -35,6 +35,7 @@ class SalesQueue extends Model
         'completed_at',
         'last_extended_at',
         'extension_count',
+        'custom_abandonment_reason', // <-- NUEVO: Texto libre para motivo de abandono personalizado
     ];
 
     /**
