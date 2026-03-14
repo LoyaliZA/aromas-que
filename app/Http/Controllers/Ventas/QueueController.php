@@ -88,7 +88,8 @@ class QueueController extends Controller
                 'daily_shift_id' => $shift->id,
                 'previous_status' => $previousStatus,
                 'new_status' => 'BREAK',
-                'changed_at' => now(),
+                'reason' => $reason, // <-- AHORA SÍ GUARDAMOS EL MOTIVO HISTÓRICO
+                'changed_at' => now(), 
             ]);
         } elseif ($shift->current_status === 'BREAK') {
             $shift->update([

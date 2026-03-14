@@ -20,6 +20,7 @@ class ShiftStatusLog extends Model
         'daily_shift_id',
         'previous_status',
         'new_status',
+        'reason',
         'changed_at',
     ];
 

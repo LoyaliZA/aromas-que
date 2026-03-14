@@ -25,18 +25,18 @@ Route::get('/', function () {
     // Si el usuario ya inició sesión, lo redirigimos a su panel según su rol
     if (Auth::check()) {
         $role = Auth::user()->role;
-        
+
         if ($role === 'ADMIN') return redirect()->route('admin.dashboard');
         if ($role === 'MANAGER') return redirect()->route('gerencia.dashboard');
         if ($role === 'CHECKER') return redirect()->route('recepcion.dashboard');
         if ($role === 'SELLER') return redirect()->route('ventas.dashboard');
-        
+
         // NUEVO: Redirección para Auxiliar desde la raíz
         if ($role === 'AUXILIAR') return redirect()->route('auxiliar.dashboard');
-        
+
         return redirect()->route('dashboard');
     }
-    
+
     // Si no está autenticado, lo forzamos a ir al login
     return redirect()->route('login');
 });
@@ -58,21 +58,23 @@ Route::middleware('auth')->group(function () {
 */
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['auth', 'role:ADMIN']) 
+    ->middleware(['auth', 'role:ADMIN'])
     ->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard/realtime', [AdminDashboardController::class, 'realTimeDashboard'])->name('dashboard.realtime');
         Route::resource('users', UserController::class);
-        
+
         // --- RUTAS DE CLIENTES Y CSV ---
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::post('/customers/import', [CustomerController::class, 'importCsv'])->name('customers.import');
         Route::put('/customers/{id}', [CustomerController::class, 'update'])->name('customers.update');
-        
+
         // --- RUTAS: REPORTES Y AUDITORÍA ---
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/real-time', [ReportController::class, 'realTimeData'])->name('reports.realtime'); // <-- NUEVA RUTA
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/audit', [ReportController::class, 'audit'])->name('reports.audit');
-        
+
         // --- PUBLICIDAD TV ---
         Route::get('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('tv_ads.index');
         Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
@@ -87,10 +89,10 @@ Route::prefix('admin')
 */
 Route::prefix('gerencia')
     ->name('gerencia.')
-    ->middleware(['auth', 'role:MANAGER']) 
+    ->middleware(['auth', 'role:MANAGER'])
     ->group(function () {
         Route::get('/dashboard', [PickupController::class, 'index'])->name('dashboard');
-        Route::get('/daily', [PickupController::class, 'daily'])->name('daily'); 
+        Route::get('/daily', [PickupController::class, 'daily'])->name('daily');
         Route::post('/store', [PickupController::class, 'store'])->name('store');
         Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
         Route::get('/history', [PickupController::class, 'history'])->name('history');
@@ -110,19 +112,19 @@ Route::prefix('gerencia')
 */
 Route::prefix('recepcion')
     ->name('recepcion.')
-    ->middleware(['auth', 'role:CHECKER']) 
+    ->middleware(['auth', 'role:CHECKER'])
     ->group(function () {
         Route::get('/dashboard', [DeliveryController::class, 'index'])->name('dashboard');
-        
+
         // Acciones de Resguardos
-        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm'); 
+        Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm');
         Route::put('/receive/{id}', [DeliveryController::class, 'markAsReceived'])->name('receive');
-        
+
         // Acciones de Fila (Kiosco)
-        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add'); 
+        Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add');
         Route::get('/queue/list', [DeliveryController::class, 'getQueueList'])->name('queue.list');
         Route::put('/queue/{id}/abandon', [DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
-        
+
         // --- BUSCADOR DE CLIENTES EN VIVO (Hacía falta) ---
         Route::get('/customers/search', [DeliveryController::class, 'searchCustomers'])->name('customers.search');
     });
@@ -140,7 +142,7 @@ Route::prefix('ventas')
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
-        
+
         // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---
         Route::get('/retention/list', [App\Http\Controllers\Ventas\QueueController::class, 'getRetentionList'])->name('retention.list');
         Route::post('/retention/reassign', [App\Http\Controllers\Ventas\QueueController::class, 'reassignRetention'])->name('retention.reassign');
@@ -153,11 +155,11 @@ Route::prefix('ventas')
 */
 Route::prefix('auxiliar')
     ->name('auxiliar.')
-    ->middleware(['auth', 'role:AUXILIAR']) 
+    ->middleware(['auth', 'role:AUXILIAR'])
     ->group(function () {
         // Dashboard principal del auxiliar
         Route::get('/dashboard', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('dashboard');
-        
+
         // Rutas de acciones para anuncios
         Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
         Route::put('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'update'])->name('tv_ads.update');
@@ -172,4 +174,4 @@ Route::prefix('auxiliar')
 */
 Route::get('/tv', [TvController::class, 'index'])->name('tv.public');
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

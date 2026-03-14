@@ -9,242 +9,305 @@ use Carbon\Carbon;
 use App\Models\SalesQueue;
 use App\Models\Employee;
 use App\Models\DailyShift;
-use App\Models\ShiftStatusLog;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
 {
+    // Diccionarios de traducción estáticos
+    private $reasonsDict = [
+        'LUNCH' => 'Comida',
+        'BATHROOM' => 'Baño',
+        'ERRAND' => 'Mandado',
+        'PACKAGING' => 'Empaque',
+        'GENERAL' => 'General / Otros'
+    ];
+
+    private $statusDict = [
+        'ONLINE' => 'DISPONIBLE',
+        'BREAK' => 'PAUSA',
+        'OFFLINE' => 'INACTIVO',
+        'SERVING' => 'ATENDIENDO'
+    ];
+
     public function index(Request $request)
     {
-        // 1. CONFIGURACIÓN DE FECHAS Y PESTAÑAS
         $period = $request->input('period', 'today');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
-        $activeTab = $request->input('tab', 'dashboard');
+        $activeTab = $request->input('tab', $request->has('period') ? 'general' : 'realtime'); 
         $selectedEmployeeId = $request->input('employee_id');
 
         if ($period === 'today') {
-            $start = Carbon::today()->startOfDay();
-            $end = Carbon::today()->endOfDay();
+            $start = Carbon::today()->startOfDay(); $end = Carbon::today()->endOfDay();
         } elseif ($period === 'week') {
-            $start = Carbon::now()->startOfWeek();
-            $end = Carbon::now()->endOfWeek();
+            $start = Carbon::now()->startOfWeek(); $end = Carbon::now()->endOfWeek();
         } elseif ($period === 'month') {
-            $start = Carbon::now()->startOfMonth();
-            $end = Carbon::now()->endOfMonth();
+            $start = Carbon::now()->startOfMonth(); $end = Carbon::now()->endOfMonth();
         } elseif ($period === 'custom' && $startDate && $endDate) {
-            $start = Carbon::parse($startDate)->startOfDay();
-            $end = Carbon::parse($endDate)->endOfDay();
+            $start = Carbon::parse($startDate)->startOfDay(); $end = Carbon::parse($endDate)->endOfDay();
         } else {
-            $start = Carbon::today()->startOfDay();
-            $end = Carbon::today()->endOfDay();
+            $start = Carbon::today()->startOfDay(); $end = Carbon::today()->endOfDay();
             $period = 'today';
         }
 
-        // Variable para saber si estamos consultando 1 solo día o varios
         $isSingleDay = $start->isSameDay($end);
 
-        // ==========================================
-        // SECCIÓN A: MÉTRICAS GENERALES (DASHBOARD)
-        // ==========================================
-        
-        $totalServed = SalesQueue::whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED')
-            ->count();
+        // --- MÉTRICAS GLOBALES ---
+        $totalServed = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->count();
+        $totalAbandoned = SalesQueue::whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->count();
+        $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])->whereNotNull('started_serving_at')->whereNotNull('completed_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
+        $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])->whereNotNull('queued_at')->whereNotNull('started_serving_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')->value('avg_time');
 
-        $totalAbandoned = SalesQueue::whereBetween('queued_at', [$start, $end])
-            ->whereIn('status', ['ABANDONED', 'CANCELED'])
-            ->count();
+        // --- DESEMPEÑO EMPLEADOS ---
+        $employeesList = Employee::sellers()->get();
+        $employeesMetrics = $employeesList->map(function ($employee) use ($start, $end) {
+            $sales = SalesQueue::whereHas('assignedShift', function($query) use ($employee) {
+                    $query->where('employee_id', $employee->id);
+                })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->get();
+            
+            $servedCount = $sales->count();
+            $avgEmpServiceSeconds = $servedCount > 0 ? ($sales->reduce(function ($carry, $sale) { return $carry + Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)); }, 0) / $servedCount) : 0;
 
-        $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])
-            ->whereNotNull('started_serving_at')
-            ->whereNotNull('completed_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
-            ->value('avg_time');
+            return [
+                'name' => $employee->full_name ?? 'Desconocido', 
+                'served' => $servedCount,
+                'formatted_avg_service' => $this->formatSeconds($avgEmpServiceSeconds),
+                'formatted_break_time' => $this->calculateEmployeeBreaks($employee->id, $start, $end)['total_formatted'],
+            ];
+        });
 
-        $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])
-            ->whereNotNull('queued_at')
-            ->whereNotNull('started_serving_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')
-            ->value('avg_time');
-
-        $employeesMetrics = Employee::sellers()
-            ->get()
-            ->map(function ($employee) use ($start, $end) {
-                $servedCount = SalesQueue::whereHas('assignedShift', function($query) use ($employee) {
-                        $query->where('employee_id', $employee->id);
-                    })
-                    ->whereBetween('completed_at', [$start, $end])
-                    ->where('status', 'COMPLETED')
-                    ->count();
-
-                $totalBreakSeconds = 0;
-                $shifts = DailyShift::where('employee_id', $employee->id)
-                    ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                    ->with(['statusLogs' => function($q) { $q->orderBy('changed_at', 'asc'); }])
-                    ->get();
-
-                foreach ($shifts as $shift) {
-                    $breakStart = null;
-                    foreach ($shift->statusLogs as $log) {
-                        if ($log->new_status === 'BREAK') {
-                            $breakStart = Carbon::parse($log->changed_at);
-                        } elseif ($breakStart && $log->previous_status === 'BREAK') {
-                            $totalBreakSeconds += $breakStart->diffInSeconds(Carbon::parse($log->changed_at));
-                            $breakStart = null;
-                        }
-                    }
-                }
-
-                return [
-                    'id' => $employee->id,
-                    'name' => $employee->full_name ?? 'Desconocido', 
-                    'served' => $servedCount,
-                    'formatted_break_time' => $this->formatSeconds($totalBreakSeconds),
-                ];
-            });
-
-        // 4. PREPARACIÓN DE DATOS PARA GRÁFICAS (JSON) CON GRANULARIDAD DINÁMICA
+        // --- GRÁFICA ---
         $chartTitle = $isSingleDay ? 'Flujo de Atención por Hora' : 'Flujo de Atención por Día';
         $chartData = ['labels' => [], 'data' => []];
-
         if ($isSingleDay) {
-            // SI ES UN DÍA: Agrupamos por hora (9am a 9pm)
-            $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED')
-                ->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')
-                ->groupBy('hour')
-                ->pluck('count', 'hour')
-                ->toArray();
-                
-            for ($i = 9; $i <= 21; $i++) { 
-                $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
-                $chartData['data'][] = $salesByHour[$i] ?? 0;
-            }
+            $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')->groupBy('hour')->pluck('count', 'hour')->toArray();
+            for ($i = 9; $i <= 21; $i++) { $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00'; $chartData['data'][] = $salesByHour[$i] ?? 0; }
         } else {
-            // SI SON VARIOS DÍAS: Agrupamos por fecha
-            $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED')
-                ->selectRaw('DATE(completed_at) as date, COUNT(*) as count')
-                ->groupBy('date')
-                ->pluck('count', 'date')
-                ->toArray();
-                
+            $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('DATE(completed_at) as date, COUNT(*) as count')->groupBy('date')->pluck('count', 'date')->toArray();
             $currentDate = $start->copy();
-            while ($currentDate->lte($end)) {
-                $dateStr = $currentDate->format('Y-m-d');
-                $chartData['labels'][] = $currentDate->format('d/m'); // Ej: 24/02
-                $chartData['data'][] = $salesByDate[$dateStr] ?? 0;
-                $currentDate->addDay();
-            }
+            while ($currentDate->lte($end)) { $dateStr = $currentDate->format('Y-m-d'); $chartData['labels'][] = $currentDate->format('d/m'); $chartData['data'][] = $salesByDate[$dateStr] ?? 0; $currentDate->addDay(); }
         }
 
-        // ==========================================
-        // SECCIÓN B: MÉTRICAS INDIVIDUALES (RENDIMIENTO)
-        // ==========================================
-        
-        $employeesList = Employee::sellers()->get(); 
-        $empKpis = ['served' => 0, 'formatted_avg_time' => '0s', 'extensions' => 0, 'abandoned' => 0];
-        $empPerformanceData = [];
-        $empBreaksData = [];
-        $empClientsPaginated = null;
+        // --- TABLAS DETALLADAS ---
+        $detailedClients = SalesQueue::with(['assignedShift.employee'])->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->paginate(15, ['*'], 'clients_page')->appends(request()->query());
+        $detailedClients->getCollection()->transform(function ($client) {
+            $wait = $client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0;
+            $serve = $client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0;
+            $client->formatted_wait = $this->formatSeconds($wait);
+            $client->formatted_serve = $this->formatSeconds($serve);
+            $client->is_reattended = str_ends_with($client->turn_number, '-R');
+            return $client;
+        });
 
+        $detailedAbandoned = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->paginate(15, ['*'], 'abandoned_page')->appends(request()->query());
+
+        // --- RENDIMIENTO INDIVIDUAL ---
+        $empData = null;
         if ($selectedEmployeeId && $activeTab === 'performance') {
             $empSalesQuery = SalesQueue::whereHas('assignedShift', function($q) use ($selectedEmployeeId) {
                 $q->where('employee_id', $selectedEmployeeId);
-            })->whereBetween('queued_at', [$start, $end]);
+            })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED');
 
-            $empKpis['served'] = (clone $empSalesQuery)->where('status', 'COMPLETED')->count();
-            $empKpis['abandoned'] = (clone $empSalesQuery)->whereIn('status', ['ABANDONED', 'CANCELED'])->count();
-            $empKpis['extensions'] = (clone $empSalesQuery)->sum('extension_count');
+            $empServed = (clone $empSalesQuery)->count();
+            $empAvgSeconds = (clone $empSalesQuery)->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
             
-            $empAvgSeconds = (clone $empSalesQuery)->where('status', 'COMPLETED')
-                ->whereNotNull('started_serving_at')
-                ->whereNotNull('completed_at')
-                ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
-                ->value('avg_time');
-            
-            $empKpis['formatted_avg_time'] = $this->formatSeconds($empAvgSeconds ?? 0);
+            $breakAnalysis = $this->calculateEmployeeBreaks($selectedEmployeeId, $start, $end);
 
-            $completedSales = (clone $empSalesQuery)->where('status', 'COMPLETED')
-                ->whereNotNull('queued_at')
-                ->whereNotNull('started_serving_at')
-                ->whereNotNull('completed_at')
-                ->orderBy('queued_at', 'asc')
-                ->get();
-
-            $empPerformanceData = $completedSales->map(function($sale) {
-                return [
-                    'queued_at' => Carbon::parse($sale->queued_at)->toIso8601String(),
-                    'wait_time' => round(Carbon::parse($sale->queued_at)->diffInSeconds(Carbon::parse($sale->started_serving_at)) / 60, 2),
-                    'service_time' => round(Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)) / 60, 2),
-                ];
+            $empClientsPaginated = (clone $empSalesQuery)->orderBy('completed_at', 'desc')->paginate(10, ['*'], 'emp_page')->appends(request()->query());
+            $empClientsPaginated->getCollection()->transform(function ($client) {
+                $client->formatted_wait = $this->formatSeconds(Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)));
+                $client->formatted_serve = $this->formatSeconds(Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)));
+                $client->is_reattended = str_ends_with($client->turn_number, '-R');
+                return $client;
             });
 
-            $empClientsPaginated = (clone $empSalesQuery)->where('status', 'COMPLETED')
-                ->orderBy('completed_at', 'desc')
-                ->paginate(10)
-                ->withQueryString()
-                ->through(function ($client) {
-                    $wait = $client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0;
-                    $serve = $client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0;
-                    $client->formatted_wait = $this->formatSeconds($wait);
-                    $client->formatted_serve = $this->formatSeconds($serve);
-                    return $client;
-                });
-
-            $empBreaksData = DailyShift::where('employee_id', $selectedEmployeeId)
-                ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                ->whereNotNull('break_reason')
-                ->selectRaw('break_reason, COUNT(*) as total')
-                ->groupBy('break_reason')
-                ->get();
+            $empData = [
+                'employee' => Employee::find($selectedEmployeeId),
+                'kpis' => [
+                    'served' => $empServed,
+                    'avg_time' => $this->formatSeconds($empAvgSeconds ?? 0),
+                    'total_break' => $breakAnalysis['total_formatted'],
+                ],
+                'daily_breaks' => $breakAnalysis['daily_breaks'], // <-- NUEVO AGRUPAMIENTO
+                'timeline' => $breakAnalysis['timeline'],
+                'clients' => $empClientsPaginated
+            ];
         }
 
         return view('admin.reports.index', [
-            'period' => $period,
-            'start_date' => $start->format('Y-m-d'),
-            'end_date' => $end->format('Y-m-d'),
-            'activeTab' => $activeTab,
-            'is_single_day' => $isSingleDay, // <-- Mandamos el dato a la vista
-            'chart_title' => $chartTitle,    // <-- Mandamos el título a la vista
-            
+            'period' => $period, 'start_date' => $start->format('Y-m-d'), 'end_date' => $end->format('Y-m-d'),
+            'activeTab' => $activeTab, 'is_single_day' => $isSingleDay, 'chart_title' => $chartTitle,
             'metrics' => [
-                'total_served' => $totalServed,
-                'total_abandoned' => $totalAbandoned,
+                'total_served' => $totalServed, 'total_abandoned' => $totalAbandoned,
                 'formatted_service_time' => $this->formatSeconds($avgServiceSeconds ?? 0),
                 'formatted_wait_time' => $this->formatSeconds($avgWaitSeconds ?? 0),
             ],
             'employees_metrics' => $employeesMetrics,
             'chart_data' => $chartData,
-
-            'employees' => $employeesList,
+            'detailedClients' => $detailedClients,
+            'detailedAbandoned' => $detailedAbandoned,
+            'employeesList' => $employeesList,
             'selectedEmployeeId' => $selectedEmployeeId,
-            'empKpis' => $empKpis,
-            'empPerformanceData' => $empPerformanceData,
-            'empBreaksData' => $empBreaksData,
-            'empClientsPaginated' => $empClientsPaginated,
+            'empData' => $empData
         ]);
     }
 
-    private function formatSeconds($totalSeconds)
+    public function export(Request $request)
     {
-        if (!$totalSeconds || $totalSeconds <= 0) return '0s';
+        $type = $request->input('type', 'clients'); 
+        $format = $request->input('format', 'csv'); 
+        $start = Carbon::parse($request->input('start_date') ?? today())->startOfDay();
+        $end = Carbon::parse($request->input('end_date') ?? today())->endOfDay();
+        $empId = $request->input('employee_id');
+
+        $headers = []; $rows = []; $employee = null; $stats = []; $timeline = []; $dailyBreaks = [];
+
+        if ($type === 'clients') {
+            $headers = ['Turno', 'Cliente', 'Tipo', 'Vendedor', 'Tiempo Espera', 'Tiempo Atención', 'Estado', 'Fecha'];
+            $data = SalesQueue::with(['assignedShift.employee'])->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->get();
+            foreach($data as $d) {
+                $wait = $this->formatSeconds(Carbon::parse($d->queued_at)->diffInSeconds(Carbon::parse($d->started_serving_at)));
+                $serve = $this->formatSeconds(Carbon::parse($d->started_serving_at)->diffInSeconds(Carbon::parse($d->completed_at)));
+                $rows[] = [$d->turn_number, $d->client_name, $d->client_type, $d->assignedShift->employee->full_name ?? 'N/A', $wait, $serve, str_ends_with($d->turn_number, '-R') ? 'RE-ATENDIDO' : 'NORMAL', Carbon::parse($d->completed_at)->format('d/m/Y H:i:s')];
+            }
+        } elseif ($type === 'abandoned') {
+            $headers = ['Turno', 'Cliente', 'Tipo', 'Fecha/Hora', 'Motivo de Abandono'];
+            $data = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->get();
+            foreach($data as $d) {
+                $motivo = $d->abandonment_reason_id ? $d->abandonmentReason->name : ($d->custom_abandonment_reason ?? 'Inactividad');
+                $rows[] = [$d->turn_number, $d->client_name, $d->client_type, Carbon::parse($d->queued_at)->format('d/m/Y H:i:s'), $motivo];
+            }
+        } elseif ($type === 'employee' && $empId) {
+            $employee = Employee::find($empId);
+            $headers = ['Turno', 'Cliente', 'Tipo Cliente', 'Tiempo Atención', 'Estado', 'Fecha/Hora'];
+            $data = SalesQueue::whereHas('assignedShift', function($q) use ($empId) { $q->where('employee_id', $empId); })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->get();
+            
+            $servedCount = $data->count();
+            $avgEmpServiceSeconds = $servedCount > 0 ? ($data->reduce(function ($carry, $sale) { return $carry + Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)); }, 0) / $servedCount) : 0;
+            $breakAnalysis = $this->calculateEmployeeBreaks($empId, $start, $end);
+            
+            $stats = ['served' => $servedCount, 'avg_time' => $this->formatSeconds($avgEmpServiceSeconds), 'break_time' => $breakAnalysis['total_formatted']];
+            $timeline = array_reverse($breakAnalysis['timeline']); 
+            $dailyBreaks = $breakAnalysis['daily_breaks']; // PASAMOS EL DESGLOSE AL PDF
+
+            foreach($data as $d) {
+                $serve = $this->formatSeconds(Carbon::parse($d->started_serving_at)->diffInSeconds(Carbon::parse($d->completed_at)));
+                $rows[] = [$d->turn_number, $d->client_name, $d->client_type, $serve, str_ends_with($d->turn_number, '-R') ? 'RE-ATENDIDO' : 'NORMAL', Carbon::parse($d->completed_at)->format('d/m/Y H:i:s')];
+            }
+        }
+
+        $fileName = 'Reporte_TERA_' . ucfirst($type) . '_' . now()->format('Ymd_His');
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('admin.reports.pdf', compact('type', 'start', 'end', 'headers', 'rows', 'employee', 'stats', 'timeline', 'dailyBreaks'));
+            return $pdf->download($fileName . '.pdf');
+        }
+
+        $callback = function() use ($headers, $rows) {
+            $file = fopen('php://output', 'w');
+            fputs($file, $bom =(chr(0xEF) . chr(0xBB) . chr(0xBF))); 
+            fputcsv($file, $headers);
+            foreach ($rows as $row) { fputcsv($file, $row); }
+            fclose($file);
+        };
+        return response()->stream($callback, 200, ["Content-type" => "text/csv", "Content-Disposition" => "attachment; filename=$fileName.csv"]);
+    }
+
+    // --- CÁLCULO DE PAUSAS (TRADUCIDO Y AGRUPADO POR DÍA) ---
+    private function calculateEmployeeBreaks($employeeId, $start, $end)
+    {
+        $shifts = DailyShift::where('employee_id', $employeeId)
+            ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+            ->with(['statusLogs' => function($q) { $q->orderBy('changed_at', 'asc'); }])
+            ->get();
         
-        $hours = floor($totalSeconds / 3600);
-        $minutes = floor(($totalSeconds % 3600) / 60);
-        $seconds = round($totalSeconds % 60);
+        $totalSeconds = 0;
+        $dailySeconds = []; // Aquí agruparemos por Y-m-d
+        $timeline = [];
 
+        foreach ($shifts as $shift) {
+            $breakStart = null;
+            $currentReason = null;
+            
+            foreach ($shift->statusLogs as $log) {
+                // Traducción del estado
+                $transStatus = $this->statusDict[$log->new_status] ?? $log->new_status;
+
+                if ($log->new_status === 'BREAK' || $log->previous_status === 'BREAK') {
+                    $statusLabel = $transStatus;
+                    if ($log->new_status === 'BREAK') {
+                        $reasonTrans = $this->reasonsDict[$log->reason] ?? ($log->reason ?? 'General'); 
+                        $statusLabel .= ' (' . $reasonTrans . ')';
+                    }
+
+                    $timeline[] = [
+                        'status' => $statusLabel,
+                        'time' => Carbon::parse($log->changed_at)->format('H:i:s'),
+                        'date' => Carbon::parse($log->changed_at)->format('d/m/Y'),
+                        'color' => $log->new_status === 'BREAK' ? 'text-yellow-500' : 'text-green-400'
+                    ];
+                }
+
+                if ($log->new_status === 'BREAK') {
+                    $breakStart = Carbon::parse($log->changed_at);
+                    $currentReason = $log->reason ?? 'GENERAL'; 
+                } elseif ($breakStart && $log->previous_status === 'BREAK') {
+                    $duration = $breakStart->diffInSeconds(Carbon::parse($log->changed_at));
+                    $totalSeconds += $duration;
+                    
+                    // Agrupamos por Día
+                    $dateStr = $breakStart->format('Y-m-d');
+                    if (!isset($dailySeconds[$dateStr])) {
+                        $dailySeconds[$dateStr] = ['LUNCH' => 0, 'BATHROOM' => 0, 'ERRAND' => 0, 'PACKAGING' => 0, 'GENERAL' => 0];
+                    }
+                    $dailySeconds[$dateStr][$currentReason] += $duration;
+                    $breakStart = null;
+                }
+            }
+        }
+
+        // Formateamos las matrices de días para enviarlas limpias a Blade
+        $formattedDailyBreaks = [];
+        foreach ($dailySeconds as $date => $reasonsArray) {
+            $formattedDailyBreaks[$date] = [];
+            foreach ($reasonsArray as $reason => $secs) {
+                // Usamos la traducción para los nombres en la tabla
+                $reasonName = $this->reasonsDict[$reason] ?? $reason;
+                $formattedDailyBreaks[$date][$reasonName] = $this->formatSeconds($secs);
+            }
+        }
+
+        return [
+            'total_formatted' => $this->formatSeconds($totalSeconds),
+            'daily_breaks' => $formattedDailyBreaks,
+            'timeline' => $timeline 
+        ];
+    }
+
+    public function realTimeData() {
+        $sellers = DailyShift::with(['employee', 'servedCustomers' => function($q) { $q->where('status', 'SERVING'); }])->whereDate('work_date', today())->get()->map(function ($shift) {
+            $currentClient = $shift->servedCustomers->first();
+            $state = 'OFFLINE'; $stateStartedAt = null; $clientName = null; $breakReason = null;
+            if ($currentClient && $currentClient->started_serving_at) { $state = 'SERVING'; $stateStartedAt = Carbon::parse($currentClient->started_serving_at)->timestamp * 1000; $clientName = $currentClient->client_name; } 
+            elseif ($shift->current_status === 'BREAK' && $shift->last_status_change_at) { 
+                $state = 'BREAK'; 
+                $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000; 
+                // Traducimos también el motivo en Tiempo Real
+                $breakReason = $this->reasonsDict[$shift->break_reason] ?? ($shift->break_reason ?? 'General'); 
+            } 
+            elseif ($shift->current_status === 'ONLINE' && $shift->last_status_change_at) { $state = 'ONLINE'; $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000; }
+            return ['id' => $shift->employee->id, 'name' => $shift->employee->full_name ?? 'Vendedor', 'state' => $state, 'state_started_at' => $stateStartedAt, 'client_name' => $clientName, 'break_reason' => $breakReason, 'sales_today' => $shift->customers_served_count];
+        });
+        return response()->json(['sellers' => $sellers]);
+    }
+
+    private function formatSeconds($totalSeconds) {
+        if (!$totalSeconds || $totalSeconds <= 0) return '00:00';
+        $hours = floor($totalSeconds / 3600); $minutes = floor(($totalSeconds % 3600) / 60); $seconds = round($totalSeconds % 60);
         $result = '';
-        if ($hours > 0) {
-            $result .= $hours . 'h ';
-        }
-        if ($minutes > 0 || $hours > 0) {
-            $result .= $minutes . 'm ';
-        }
-        if ($seconds > 0 || ($hours == 0 && $minutes == 0)) {
-            $result .= $seconds . 's';
-        }
-
+        if ($hours > 0) $result .= $hours . 'h ';
+        if ($minutes > 0 || $hours > 0) $result .= $minutes . 'm ';
+        if ($seconds > 0 || ($hours == 0 && $minutes == 0)) $result .= $seconds . 's';
         return trim($result);
     }
 }
