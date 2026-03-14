@@ -79,23 +79,32 @@
         </div>
     </div>
 
+    {{-- 1. PREPARAMOS LOS DATOS EN PHP PURO --}}
+    @php
+        $tvAdsData = [];
+        if (isset($ads)) {
+            $tvAdsData = $ads->map(function($ad) {
+                return [
+                    'type' => $ad->media_type,
+                    'url' => $ad->media_url,
+                    'duration' => $ad->duration_seconds * 1000,
+                    'volume' => ($ad->volume ?? 100) / 100
+                ];
+            })->values();
+        }
+    @endphp
+
     <script>
-        let tvAds = @json(isset($ads) ? $ads->map(function($ad) {
-            return [
-                'type' => $ad->media_type,
-                'url' => $ad->media_url,
-                'duration' => $ad->duration_seconds * 1000
-            ];
-        })->values() : []);
-        
-        let lastAdsData = JSON.stringify(tvAds); 
+        // 2. RECIBIMOS LA VARIABLE LIMPIA EN JAVASCRIPT
+        let tvAds = @json($tvAdsData);
+        let lastAdsData = JSON.stringify(tvAds.map(a => a.url)); 
 
         document.addEventListener('DOMContentLoaded', function() {
             const servingList = document.getElementById('serving-list');
             const waitingList = document.getElementById('waiting-list');
             const waitTimeEl = document.getElementById('wait-time');
             const chimeSound = document.getElementById('chimeSound');
-            const vipChimeSound = document.getElementById('vipChimeSound'); // Nuevo audio VIP
+            const vipChimeSound = document.getElementById('vipChimeSound');
             
             let lastCalledId = null;
             let lastServingData = '';
@@ -115,7 +124,6 @@
 
             let spanishVoice = null;
 
-            // CARGAR LA MEJOR VOZ FEMENINA
             const loadVoices = () => {
                 const voices = window.speechSynthesis.getVoices();
                 spanishVoice = voices.find(v => v.name.includes('Google') && v.lang.includes('es')) ||
@@ -157,8 +165,9 @@
                     const video = document.createElement('video');
                     video.src = ad.url;
                     video.className = 'w-full h-full object-contain fade-transition opacity-0';
+                    
+                    video.volume = ad.volume !== undefined ? ad.volume : 1.0;
                     video.muted = false; 
-                    video.volume = 1.0;
                     video.playsInline = true;
                     
                     mediaContainer.appendChild(video);
@@ -168,6 +177,8 @@
 
                     video.play().catch(e => {
                         console.error("Autoplay bloqueado. Haz clic en la pantalla.", e);
+                        video.muted = true; 
+                        video.play();
                         carrouselTimer = setTimeout(nextAd, 5000); 
                     });
 
@@ -225,10 +236,23 @@
                     }
 
                     if (data.ads) {
-                        const currentAdsStr = JSON.stringify(data.ads);
-                        if (currentAdsStr !== lastAdsData) {
-                            tvAds = data.ads;
-                            lastAdsData = currentAdsStr;
+                        tvAds = data.ads; 
+
+                        const activeVideo = document.querySelector('video'); 
+                        if (activeVideo) {
+                            const currentAdData = tvAds.find(a => activeVideo.src.includes(a.url));
+                            if (currentAdData && currentAdData.volume !== undefined) {
+                                if (activeVideo.volume !== currentAdData.volume) {
+                                    activeVideo.volume = currentAdData.volume;
+                                }
+                            }
+                        }
+
+                        const currentPlaylistStr = JSON.stringify(tvAds.map(a => a.url));
+                        
+                        if (currentPlaylistStr !== lastAdsData) {
+                            lastAdsData = currentPlaylistStr; 
+                            
                             if (!isAlertActive) {
                                 currentAdIndex = 0; 
                                 playAd(currentAdIndex);
@@ -278,7 +302,6 @@
                     const isNewest = index === 0;
                     const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Vendedor');
                     
-                    // LÓGICA VIP EN LA LISTA LATERAL
                     const isVIP = ticket.client_type === 'VIP';
                     const ticketNumberDisplay = isVIP ? 'AVISO' : (ticket.turn_number ? ticket.turn_number : 'S/N');
                     const textNumberSize = isVIP ? 'text-4xl mt-2 mb-4 text-yellow-500' : 'text-6xl mb-2 text-white';
@@ -366,7 +389,6 @@
 
                 pauseCarrousel();
 
-                // LÓGICA VIP PARA EL MODAL CENTRAL
                 const titleEl = document.getElementById('modal-title');
                 const numberEl = document.getElementById('modal-turn-number');
                 const nameEl = document.getElementById('modal-client-name');
@@ -376,7 +398,7 @@
                     titleEl.innerText = "AVISO DIRECTO";
                     numberEl.style.display = 'none'; 
                     nameEl.style.fontSize = '4.5rem'; 
-                    destElement.className = `block text-6xl font-black uppercase text-yellow-500`; 
+                    destElement.className = "block text-6xl font-black uppercase text-yellow-500"; 
                 } else {
                     titleEl.innerText = "NUEVO TURNO";
                     numberEl.style.display = 'block';
@@ -387,22 +409,19 @@
 
                 nameEl.innerText = ticket.client_name;
                 document.getElementById('modal-dest-label').innerText = destLabel;
-                destElement.innerText = destName; // <-- ESTA ES LA LÍNEA QUE FALTABA
+                destElement.innerText = destName; 
 
                 alertModal.classList.remove('opacity-0', 'pointer-events-none');
                 alertModalContent.classList.remove('scale-90');
                 alertModalContent.classList.add('scale-100');
 
-                // SONIDO DISCRETO
                 let audioPlayer = (isVIP && vipChimeSound) ? vipChimeSound : chimeSound;
                 
-                // Limpiar eventos previos y reproducir
                 audioPlayer.onended = null;
                 audioPlayer.currentTime = 0; 
                 
                 window.speechSynthesis.cancel(); 
 
-                // LÓGICA VIP PARA EL TEXTO A VOZ (Sin mencionar el turno)
                 let script = "";
                 if (isVIP) {
                     script = `Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con ' + destName}.`;

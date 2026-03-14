@@ -17,11 +17,13 @@ class TvAd extends Model
         'title',
         'media_path',
         'media_type',       // ENUM: IMAGE, VIDEO
-        'duration_seconds', 
+        'duration_seconds',
         'is_active',
         'start_date',
         'end_date',
         'sort_order',
+        'order_index',
+        'volume',
     ];
 
     /**
@@ -50,15 +52,15 @@ class TvAd extends Model
         $now = now();
 
         $query->where('is_active', true)
-              ->where(function ($q) use ($now) {
-                  $q->whereNull('start_date')
+            ->where(function ($q) use ($now) {
+                $q->whereNull('start_date')
                     ->orWhere('start_date', '<=', $now);
-              })
-              ->where(function ($q) use ($now) {
-                  $q->whereNull('end_date')
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNull('end_date')
                     ->orWhere('end_date', '>=', $now);
-              })
-              ->orderBy('sort_order', 'asc');
+            })
+            ->orderBy('order_index', 'asc'); // <--- CORREGIDO
     }
 
     /*

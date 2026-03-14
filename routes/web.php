@@ -80,6 +80,8 @@ Route::prefix('admin')
         Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
         Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
         Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
+        Route::post('/tv-ads/reorder', [App\Http\Controllers\Admin\TvAdController::class, 'reorder'])->name('tv_ads.reorder');
+        Route::post('/tv-ads/{tvAd}/volume', [App\Http\Controllers\Admin\TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
     });
 
 /*
@@ -165,6 +167,8 @@ Route::prefix('auxiliar')
         Route::put('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'update'])->name('tv_ads.update');
         Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
         Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
+        Route::post('/tv-ads/reorder', [App\Http\Controllers\Admin\TvAdController::class, 'reorder'])->name('tv_ads.reorder');
+        Route::post('/tv-ads/{tvAd}/volume', [App\Http\Controllers\Admin\TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
     });
 
 /*

@@ -22,17 +22,17 @@ class TvAdController extends Controller
 
         if ($request->filled('date')) {
             $date = $request->date;
-            $query->where(function($q) use ($date) {
+            $query->where(function ($q) use ($date) {
                 // Si la fecha cae entre el inicio y fin, o si no tiene límites
                 $q->whereDate('start_date', '<=', $date)
-                  ->whereDate('end_date', '>=', $date)
-                  ->orWhere(function($subQ) {
-                      $subQ->whereNull('start_date')->whereNull('end_date');
-                  });
+                    ->whereDate('end_date', '>=', $date)
+                    ->orWhere(function ($subQ) {
+                        $subQ->whereNull('start_date')->whereNull('end_date');
+                    });
             });
         }
 
-        $ads = $query->orderBy('created_at', 'desc')->get();
+        $ads = $query->orderBy('order_index', 'asc')->get();
 
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
@@ -48,7 +48,7 @@ class TvAdController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:100',
-            'media_file' => 'required|file|mimes:jpeg,png,jpg,mp4|max:51200', 
+            'media_file' => 'required|file|mimes:jpeg,png,jpg,mp4|max:51200',
             'duration_seconds' => 'nullable|numeric|min:1', // Permitimos nullable y numeric para cálculo JS
             'start_date' => 'nullable|date_format:Y-m-d\TH:i', // Formato de input datetime-local HTML5
             'end_date' => 'nullable|date_format:Y-m-d\TH:i|after_or_equal:start_date',
@@ -62,9 +62,11 @@ class TvAdController extends Controller
             $path = $file->store('tv_ads', 'public');
 
             // Si es imagen y no envían duración, por defecto 15s. Si es video, guardamos lo calculado por JS.
-            $duration = $mediaType === 'VIDEO' 
-                ? round((float) $request->duration_seconds ?? 0) 
+            $duration = $mediaType === 'VIDEO'
+                ? round((float) $request->duration_seconds ?? 0)
                 : ($request->duration_seconds ?? 15);
+
+            $maxOrder = TvAd::max('order_index') ?? 0;
 
             TvAd::create([
                 'title' => $request->title,
@@ -74,10 +76,11 @@ class TvAdController extends Controller
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'is_active' => true,
+                'order_index' => $maxOrder + 1,
+                'volume' => 100, // Valor por defecto
             ]);
 
             return redirect()->back()->with('success', 'Anuncio subido y configurado correctamente.');
-            
         } catch (\Exception $e) {
             return back()->withInput()->withErrors(['error' => 'Error al procesar el archivo: ' . $e->getMessage()]);
         }
@@ -118,5 +121,21 @@ class TvAdController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Anuncio actualizado correctamente.');
+    }
+    public function reorder(Request $request)
+    {
+        $request->validate(['order' => 'required|array']);
+
+        foreach ($request->order as $index => $id) {
+            TvAd::where('id', $id)->update(['order_index' => $index]);
+        }
+        return response()->json(['success' => true]);
+    }
+
+    public function updateVolume(Request $request, TvAd $tvAd)
+    {
+        $request->validate(['volume' => 'required|integer|min:0|max:100']);
+        $tvAd->update(['volume' => $request->volume]);
+        return response()->json(['success' => true]);
     }
 }

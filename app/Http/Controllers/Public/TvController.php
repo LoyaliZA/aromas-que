@@ -32,11 +32,13 @@ class TvController extends Controller
             // NUEVO: Enviamos también los anuncios activos en formato JSON para Javascript
             $ads = [];
             if (class_exists(TvAd::class)) {
-                $ads = TvAd::currentlyActive()->get()->map(function ($ad) {
+                // En TvController.php
+                $ads = TvAd::currentlyActive()->orderBy('order_index', 'asc')->get()->map(function ($ad) {
                     return [
                         'type' => $ad->media_type,
                         'url' => $ad->media_url,
-                        'duration' => $ad->duration_seconds * 1000 // A milisegundos
+                        'duration' => $ad->duration_seconds * 1000,
+                        'volume' => ($ad->volume ?? 100) / 100 // Convertimos de 100 a 1.0 para HTML5 Video
                     ];
                 });
             }
