@@ -200,14 +200,21 @@ class DeliveryController extends Controller
      */
     public function markAsAbandoned(Request $request, $id)
     {
+        // 1. Forzamos la extracción y validación estricta del payload JSON
+        $validated = $request->validate([
+            'abandonment_reason_id' => 'required|integer',
+            'custom_abandonment_reason' => 'nullable|string'
+        ]);
+
         $client = SalesQueue::findOrFail($id);
         
         if ($client->status === 'WAITING') {
+            // 2. Inyectamos los datos validados directamente, garantizando su captura
             $client->update([
                 'status' => 'ABANDONED',
                 'completed_at' => now(),
-                'abandonment_reason_id' => $request->abandonment_reason_id, 
-                'custom_abandonment_reason' => $request->custom_abandonment_reason, // <-- NUEVO
+                'abandonment_reason_id' => $validated['abandonment_reason_id'], 
+                'custom_abandonment_reason' => $validated['custom_abandonment_reason'] ?? null,
             ]);
 
             if ($request->ajax()) {

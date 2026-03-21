@@ -14,12 +14,12 @@
                 @csrf
 
                 <div>
-                    <label for="email" class="block font-semibold text-gray-300 tracking-wide">
-                        Correo Electrónico
+                    <label for="login" class="block font-semibold text-gray-300 tracking-wide">
+                        Nombre o Correo Electrónico
                     </label>
-                    <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus autocomplete="username" 
+                    <input id="login" type="text" name="login" value="{{ old('login') }}" required autofocus autocomplete="username" 
                            class="block mt-2 w-full bg-aromas-main border-aromas-tertiary text-white focus:border-aromas-highlight focus:ring-aromas-highlight shadow-inner rounded-lg" />
-                    <x-input-error :messages="$errors->get('email')" class="mt-2 text-aromas-error" />
+                    <x-input-error :messages="$errors->get('login')" class="mt-2 text-aromas-error" />
                 </div>
 
                 <div class="mt-6">

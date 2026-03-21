@@ -174,7 +174,7 @@ class ReportController extends Controller
             $headers = ['Turno', 'Cliente', 'Tipo', 'Fecha/Hora', 'Motivo de Abandono'];
             $data = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->get();
             foreach($data as $d) {
-                $motivo = $d->abandonment_reason_id ? $d->abandonmentReason->name : ($d->custom_abandonment_reason ?? 'Inactividad');
+                $motivo = !empty($d->custom_abandonment_reason) ? $d->custom_abandonment_reason : ($d->abandonment_reason_id ? $d->abandonmentReason->reason : 'Inactividad');
                 $rows[] = [$d->turn_number, $d->client_name, $d->client_type, Carbon::parse($d->queued_at)->format('d/m/Y H:i:s'), $motivo];
             }
         } elseif ($type === 'employee' && $empId) {

@@ -16,7 +16,15 @@ export default defineConfig({
         host: '0.0.0.0', // Esto permite que escuche en Tailscale Y en Local
         port: 5173,
         strictPort: true,
-        cors: true, 
+        cors: true,
+        watch: {
+            ignored: [
+                '**/vendor/**',
+                '**/node_modules/**',
+                '**/public/**',
+                '**/.git/**'
+            ],
+        },
         hmr: {
             host: '192.168.1.66',
             // Al quitarla, el navegador usará la IP que esté en la barra de direcciones

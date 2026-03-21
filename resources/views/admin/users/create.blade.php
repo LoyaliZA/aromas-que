@@ -99,21 +99,26 @@
                 </div>
             </div>
 
-            <div class="mb-6">
+            <div class="mb-6" x-data="{ hasAccess: {{ old('has_access') ? 'true' : 'false' }} }">
                 <h3 class="text-lg font-semibold text-aromas-highlight mb-4 flex items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
                     </svg>
-                    Credenciales de Acceso (Opcional)
+                    Credenciales de Acceso
                 </h3>
-                <p class="text-sm text-gray-500 mb-4">Solo llena esto si el empleado necesita entrar al sistema.</p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <label class="inline-flex items-center cursor-pointer mb-6">
+                    <input type="checkbox" name="has_access" value="1" x-model="hasAccess" class="sr-only peer">
+                    <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                    <span class="ms-3 text-sm font-medium text-gray-300">Otorgar acceso al sistema para este colaborador</span>
+                </label>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="hasAccess" x-cloak>
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico (Opcional)</label>
                         <input type="email" name="email" value="{{ old('email') }}"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
-                            placeholder="correo@aromas.com">
+                            placeholder="Puede quedar vacío si ingresará con su nombre">
                     </div>
 
                     <div>

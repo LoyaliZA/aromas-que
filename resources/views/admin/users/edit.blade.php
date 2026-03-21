@@ -101,7 +101,7 @@
                 </div>
             </div>
 
-            <div class="mb-6">
+            <div class="mb-6" x-data="{ hasAccess: {{ old('has_access', $employee->user ? true : false) ? 'true' : 'false' }} }">
                 <h3 class="text-lg font-semibold text-aromas-highlight mb-4 flex items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
@@ -109,19 +109,25 @@
                     Credenciales de Acceso
                 </h3>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <label class="inline-flex items-center cursor-pointer mb-6">
+                    <input type="checkbox" name="has_access" value="1" x-model="hasAccess" class="sr-only peer">
+                    <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                    <span class="ms-3 text-sm font-medium text-gray-300">Permitir acceso al sistema</span>
+                </label>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="hasAccess" x-cloak>
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Correo Electrónico (Opcional)</label>
                         <input type="email" name="email" value="{{ old('email', $employee->user->email ?? '') }}"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
-                            placeholder="Dejar vacío para quitar acceso">
+                            placeholder="Puede quedar vacío si ingresará con su nombre">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Nueva Contraseña</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Contraseña</label>
                         <input type="password" name="password"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white placeholder-gray-500 focus:ring-aromas-highlight focus:border-aromas-highlight p-3"
-                            placeholder="Llenar solo si se desea cambiar">
+                            placeholder="{{ $employee->user ? 'Dejar vacío para mantener la actual' : '********' }}">
                     </div>
                 </div>
             </div>
