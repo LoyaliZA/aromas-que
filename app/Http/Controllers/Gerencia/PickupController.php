@@ -8,21 +8,36 @@ use App\Models\Pickup;
 use App\Models\PickupEdit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Models\Employee;
+use App\Models\SalesQueue;
 
 class PickupController extends Controller
 {
+    
     /**
-     * DASHBOARD: Solo Métricas y KPIs (Solo lectura).
+     * DASHBOARD: Panel de Control Global de Gerencia
      */
     public function index()
     {
-        $pendingCount = Pickup::inCustody()->count();
-        $deliveredTodayCount = Pickup::where('status', 'DELIVERED')
-                                     ->whereDate('updated_at', today())
-                                     ->count();
-        $totalTodayCount = Pickup::whereDate('created_at', today())->count();
+        $today = today();
 
-        return view('gerencia.dashboard', compact('pendingCount', 'deliveredTodayCount', 'totalTodayCount'));
+        // 1. Métricas de Atención en Piso
+        $queueMetrics = [
+            'waiting' => SalesQueue::whereDate('queued_at', $today)->where('status', 'WAITING')->count(),
+            'serving' => SalesQueue::whereDate('queued_at', $today)->where('status', 'SERVING')->count(),
+            'completed' => SalesQueue::whereDate('queued_at', $today)->where('status', 'COMPLETED')->count(),
+            'abandoned' => SalesQueue::whereDate('queued_at', $today)->whereIn('status', ['ABANDONED', 'CANCELED'])->count(),
+        ];
+
+        // 2. Control de Personal Activo (Vendedores)
+        $sellers = Employee::sellers()
+            ->with(['user', 'todayShift'])
+            ->get();
+
+        // 3. Lista de Clientes en Espera (Ordenados por prioridad y llegada)
+        $waitingClients = SalesQueue::today()->waiting()->get();
+
+        return view('gerencia.dashboard', compact('queueMetrics', 'sellers', 'waitingClients'));
     }
 
     /**
@@ -33,23 +48,23 @@ class PickupController extends Controller
     {
         // 1. Iniciamos consulta BASE
         // Regla: Mostrar lo de HOY -O- lo EN CUSTODIA (pero menor a 15 días)
-        $query = Pickup::query()->where(function($q) {
+        $query = Pickup::query()->where(function ($q) {
             $q->whereDate('created_at', today())
-              ->orWhere(function($subQ) {
-                  $subQ->where('status', 'IN_CUSTODY')
-                       ->where('created_at', '>=', now()->subDays(15)->startOfDay());
-              });
+                ->orWhere(function ($subQ) {
+                    $subQ->where('status', 'IN_CUSTODY')
+                        ->where('created_at', '>=', now()->subDays(15)->startOfDay());
+                });
         });
 
         // 2. Aplicamos Filtros (Buscador, Estatus, Depto)
         $query->search($request->search)
-              ->byStatus($request->status)
-              ->byDepartment($request->department);
+            ->byStatus($request->status)
+            ->byDepartment($request->department);
 
         // 3. Obtenemos resultados ordenados
         $todaysPickups = $query->orderByRaw("FIELD(status, 'IN_CUSTODY', 'DELIVERED')")
-                               ->orderBy('created_at', 'desc')
-                               ->get();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         if ($request->ajax()) {
             return view('gerencia.partials.daily-table', compact('todaysPickups'))->render();
@@ -66,13 +81,13 @@ class PickupController extends Controller
         $query = Pickup::query();
 
         $query->search($request->search)
-              ->byStatus($request->status)
-              ->byDepartment($request->department)
-              ->byDate($request->date_start, $request->date_end);
+            ->byStatus($request->status)
+            ->byDepartment($request->department)
+            ->byDate($request->date_start, $request->date_end);
 
         $pickups = $query->orderBy('created_at', 'desc')
-                         ->paginate(15)
-                         ->withQueryString();
+            ->paginate(15)
+            ->withQueryString();
 
         if ($request->ajax()) {
             return view('gerencia.partials.history-table', compact('pickups'))->render();
@@ -114,7 +129,7 @@ class PickupController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
-        DB::transaction(function() use ($pickup, $request) {
+        DB::transaction(function () use ($pickup, $request) {
             // Actualizamos el paquete a entregado
             $pickup->update([
                 'status' => 'DELIVERED',
@@ -144,25 +159,25 @@ class PickupController extends Controller
         $validated = $request->validate([
             'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio',
             'ticket_date'  => 'required|date',
-            'client_ref_id'=> 'required|string|max:50',
+            'client_ref_id' => 'required|string|max:50',
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
             'notes'        => 'nullable|string|max:500',
-            'is_third_party'=> 'nullable|boolean',
+            'is_third_party' => 'nullable|boolean',
             'receiver_name' => 'nullable|string|max:150',
         ]);
 
         $validated['is_third_party'] = $request->has('is_third_party');
-        
+
         if (!$validated['is_third_party']) {
-            $validated['receiver_name'] = null; 
+            $validated['receiver_name'] = null;
         }
 
         Pickup::create($validated);
 
         return redirect()->route('gerencia.daily')
-                         ->with('success', 'Paquete registrado correctamente.');
+            ->with('success', 'Paquete registrado correctamente.');
     }
 
     /**
@@ -173,25 +188,25 @@ class PickupController extends Controller
         $pickup = Pickup::findOrFail($id);
 
         if (!$pickup->created_at->isToday()) {
-             return redirect()->route('gerencia.daily')->with('error', 'Los registros de días anteriores son de solo lectura.');
+            return redirect()->route('gerencia.daily')->with('error', 'Los registros de días anteriores son de solo lectura.');
         }
 
         $validated = $request->validate([
-            'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio,'.$id,
+            'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio,' . $id,
             'client_name'  => 'required|string|max:150',
             'department'   => 'required|in:AROMAS,BELLAROMA',
             'pieces'       => 'required|integer|min:1',
             'notes'        => 'nullable|string|max:500',
-            'is_third_party'=> 'nullable|boolean',
+            'is_third_party' => 'nullable|boolean',
             'receiver_name' => 'nullable|string|max:150',
         ]);
 
         $validated['is_third_party'] = $request->has('is_third_party');
-        
+
         $pickup->fill($validated);
-        
+
         if ($pickup->isDirty()) {
-             $changes = [];
+            $changes = [];
             foreach ($pickup->getDirty() as $field => $newValue) {
                 $changes[$field] = [
                     'old' => $pickup->getOriginal($field),
@@ -199,7 +214,7 @@ class PickupController extends Controller
                 ];
             }
 
-            DB::transaction(function() use ($pickup, $changes) {
+            DB::transaction(function () use ($pickup, $changes) {
                 $pickup->save();
                 PickupEdit::create([
                     'pickup_id' => $pickup->id,
