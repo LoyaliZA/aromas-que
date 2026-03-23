@@ -411,21 +411,26 @@
                     this.showMegaAlert = true;
                     this.alertTimer = 5;
 
+                    
                     // Función separada para el Texto a Voz (TTS) con tu mensaje personalizado
                     const hablarMensaje = () => {
                         if ('speechSynthesis' in window) {
+                            // 1. Limpiar cualquier voz trabada anterior
+                            window.speechSynthesis.cancel();
+
                             let mensaje = data.seller + " ¡tienes un nuevo cliente asignado!. " + data.client;
 
-                            let utterance = new SpeechSynthesisUtterance(mensaje);
+                            // 2. Usar variable global para evitar que Chrome corte el audio
+                            window.currentUtterance = new SpeechSynthesisUtterance(mensaje);
                             
                             if (this.spanishVoice) {
-                                utterance.voice = this.spanishVoice;
+                                window.currentUtterance.voice = this.spanishVoice;
                             } else {
-                                utterance.lang = 'es-MX'; // Fallback
+                                window.currentUtterance.lang = 'es-MX'; // Fallback
                             }
                             
-                            utterance.rate = 0.9; // Velocidad cómoda
-                            window.speechSynthesis.speak(utterance);
+                            window.currentUtterance.rate = 0.9; // Velocidad cómoda
+                            window.speechSynthesis.speak(window.currentUtterance);
                         }
                     };
 
