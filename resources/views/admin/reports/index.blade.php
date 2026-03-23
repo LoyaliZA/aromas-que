@@ -68,10 +68,16 @@
                                 </div>
                                 <div class="space-y-4">
                                     <div x-show="seller.state !== 'OFFLINE'" class="bg-black/30 rounded-lg p-3 border border-aromas-tertiary/10 flex justify-between">
-                                        <span class="text-xs text-gray-500 uppercase font-bold" x-text="seller.state === 'ONLINE' ? 'Tiempo Esperando' : 'Tiempo Transcurrido'"></span>
+                                        {{-- Cambiamos la etiqueta de tiempo para ser más precisos --}}
+                                        <span class="text-xs text-gray-500 uppercase font-bold" x-text="seller.state === 'ONLINE' ? 'Libre desde hace:' : 'Tiempo Transcurrido'"></span>
                                         <span class="text-xl font-mono font-black" :class="{'text-blue-400': seller.state === 'SERVING', 'text-green-400': seller.state === 'ONLINE', 'text-yellow-400': seller.state === 'BREAK'}" x-text="formatTimer(seller.state_started_at)"></span>
                                     </div>
-                                    <div class="text-right pt-2"><span class="text-[10px] text-gray-500 uppercase">Ventas hoy: <strong class="text-white" x-text="seller.sales_today"></strong></span></div>
+                                    
+                                    {{-- Agregamos la hora de llegada y ventas en la misma línea --}}
+                                    <div class="flex justify-between items-center pt-2 border-t border-aromas-tertiary/10">
+                                        <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Activado a las: <strong class="text-gray-300" x-text="seller.shift_started_at"></strong></span>
+                                        <span class="text-[10px] text-gray-500 uppercase tracking-wider">Ventas hoy: <strong class="text-white" x-text="seller.sales_today"></strong></span>
+                                    </div>
                                 </div>
                             </div>
                         </template>

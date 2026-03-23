@@ -285,19 +285,66 @@ class ReportController extends Controller
     }
 
     public function realTimeData() {
-        $sellers = DailyShift::with(['employee', 'servedCustomers' => function($q) { $q->where('status', 'SERVING'); }])->whereDate('work_date', today())->get()->map(function ($shift) {
+        $sellers = DailyShift::with([
+            'employee', 
+            'servedCustomers' => function($q) { 
+                $q->where('status', 'SERVING'); 
+            }
+        ])
+        ->whereDate('work_date', today())
+        ->get()
+        ->map(function ($shift) {
             $currentClient = $shift->servedCustomers->first();
-            $state = 'OFFLINE'; $stateStartedAt = null; $clientName = null; $breakReason = null;
-            if ($currentClient && $currentClient->started_serving_at) { $state = 'SERVING'; $stateStartedAt = Carbon::parse($currentClient->started_serving_at)->timestamp * 1000; $clientName = $currentClient->client_name; } 
+            $state = 'OFFLINE'; 
+            $stateStartedAt = null; 
+            $clientName = null; 
+            $breakReason = null;
+            
+            if ($currentClient && $currentClient->started_serving_at) { 
+                $state = 'SERVING'; 
+                $stateStartedAt = Carbon::parse($currentClient->started_serving_at)->timestamp * 1000; 
+                $clientName = $currentClient->client_name; 
+            } 
             elseif ($shift->current_status === 'BREAK' && $shift->last_status_change_at) { 
                 $state = 'BREAK'; 
                 $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000; 
-                // Traducimos también el motivo en Tiempo Real
                 $breakReason = $this->reasonsDict[$shift->break_reason] ?? ($shift->break_reason ?? 'General'); 
             } 
-            elseif ($shift->current_status === 'ONLINE' && $shift->last_status_change_at) { $state = 'ONLINE'; $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000; }
-            return ['id' => $shift->employee->id, 'name' => $shift->employee->full_name ?? 'Vendedor', 'state' => $state, 'state_started_at' => $stateStartedAt, 'client_name' => $clientName, 'break_reason' => $breakReason, 'sales_today' => $shift->customers_served_count];
+            elseif ($shift->current_status === 'ONLINE' && $shift->last_status_change_at) { 
+                $state = 'ONLINE'; 
+                
+                // Buscar a qué hora terminó su última venta de hoy
+                $lastSale = \App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
+                    ->where('status', 'COMPLETED')
+                    ->latest('completed_at')
+                    ->first();
+                    
+                $statusChangeTime = Carbon::parse($shift->last_status_change_at);
+                
+                // Si la última venta terminó después de su último cambio de estado (ej. regresó de comer)
+                if ($lastSale && $lastSale->completed_at) {
+                    $lastSaleTime = Carbon::parse($lastSale->completed_at);
+                    $stateStartedAt = $lastSaleTime->greaterThan($statusChangeTime) 
+                        ? $lastSaleTime->timestamp * 1000 
+                        : $statusChangeTime->timestamp * 1000;
+                } else {
+                    $stateStartedAt = $statusChangeTime->timestamp * 1000;
+                }
+            }
+            
+            return [
+                'id' => $shift->employee->id, 
+                'name' => $shift->employee->full_name ?? 'Vendedor', 
+                'state' => $state, 
+                'state_started_at' => $stateStartedAt, 
+                'client_name' => $clientName, 
+                'break_reason' => $breakReason, 
+                'sales_today' => $shift->customers_served_count,
+                // Agregamos la hora de creación del turno (hora de llegada)
+                'shift_started_at' => $shift->created_at ? Carbon::parse($shift->created_at)->format('h:i A') : '--:--'
+            ];
         });
+        
         return response()->json(['sellers' => $sellers]);
     }
 
