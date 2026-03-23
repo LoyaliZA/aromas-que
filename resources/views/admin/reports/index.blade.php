@@ -270,46 +270,38 @@
                     </div>
 
                     @if($empData)
-                    {{-- KPIs Empleado --}}
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center">
-                            <p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Clientes Atendidos</p>
-                            <p class="text-4xl font-black text-green-400">{{ $empData['kpis']['served'] }}</p>
+                    {{-- KPIs Empleado (Actualizado a 4 columnas) --}}
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center"><p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Clientes Atendidos</p><p class="text-4xl font-black text-green-400">{{ $empData['kpis']['served'] }}</p></div>
+                            <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center"><p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Promedio Atención</p><p class="text-4xl font-black text-blue-400">{{ $empData['kpis']['avg_time'] }}</p></div>
+                            <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center"><p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Tiempo Libre (Total)</p><p class="text-4xl font-black text-aromas-highlight">{{ $empData['kpis']['total_available'] }}</p></div>
+                            <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center"><p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Tiempo en Pausa</p><p class="text-4xl font-black text-yellow-500">{{ $empData['kpis']['total_break'] }}</p></div>
                         </div>
-                        <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center">
-                            <p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Promedio Atención</p>
-                            <p class="text-4xl font-black text-blue-400">{{ $empData['kpis']['avg_time'] }}</p>
-                        </div>
-                        <div class="bg-gray-900 p-5 rounded-xl border border-gray-700 text-center">
-                            <p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-2">Tiempo en Pausa (Total)</p>
-                            <p class="text-4xl font-black text-yellow-500">{{ $empData['kpis']['total_break'] }}</p>
-                        </div>
-                    </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        {{-- Desglose de Pausas por Día --}}
-                        <div class="bg-gray-900 rounded-xl border border-gray-700 p-5 flex flex-col h-[260px]">
-                            <div class="border-b border-gray-800 pb-2 mb-3">
-                                <h3 class="text-sm font-bold text-gray-300 uppercase tracking-widest">Desglose de Pausas (Por Día)</h3>
-                            </div>
-                            <div class="overflow-y-auto flex-1 custom-scrollbar space-y-4">
-                                @forelse($empData['daily_breaks'] as $date => $breaks)
-                                <div>
-                                    <h4 class="text-xs font-black text-aromas-highlight mb-2 bg-gray-800/50 p-1.5 rounded uppercase tracking-widest">{{ \Carbon\Carbon::parse($date)->format('d / m / Y') }}</h4>
-                                    <div class="space-y-1">
-                                        @foreach($breaks as $reasonName => $time)
-                                        <div class="flex justify-between items-center px-2 py-1 border-b border-gray-800/50 last:border-0">
-                                            <span class="text-[11px] text-gray-400 font-bold uppercase">{{ $reasonName }}</span>
-                                            <span class="text-[11px] text-yellow-500 font-mono">{{ $time }}</span>
-                                        </div>
-                                        @endforeach
-                                    </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            {{-- Desglose de Pausas por Día --}}
+                            <div class="bg-gray-900 rounded-xl border border-gray-700 p-5 flex flex-col h-[260px]">
+                                <div class="border-b border-gray-800 pb-2 mb-3">
+                                    <h3 class="text-sm font-bold text-gray-300 uppercase tracking-widest">Desglose de Tiempos (Por Día)</h3>
                                 </div>
-                                @empty
-                                <p class="text-sm text-gray-500 italic text-center py-4">No registró pausas en este periodo.</p>
-                                @endforelse
+                                <div class="overflow-y-auto flex-1 custom-scrollbar space-y-4">
+                                    @forelse($empData['daily_breaks'] as $date => $breaks)
+                                        <div>
+                                            <h4 class="text-xs font-black text-white mb-2 bg-gray-800/80 border border-gray-700 p-1.5 rounded uppercase tracking-widest">{{ \Carbon\Carbon::parse($date)->format('d / m / Y') }}</h4>
+                                            <div class="space-y-1">
+                                                @foreach($breaks as $reasonName => $time)
+                                                    <div class="flex justify-between items-center px-2 py-1 border-b border-gray-800/50 last:border-0">
+                                                        <span class="text-[11px] text-gray-400 font-bold uppercase">{{ $reasonName }}</span>
+                                                        <span class="text-[11px] font-mono {{ $reasonName === 'Tiempo Disponible' ? 'text-aromas-highlight' : 'text-yellow-500' }}">{{ $time }}</span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-gray-500 italic text-center py-4">No hay registro en este periodo.</p>
+                                    @endforelse
+                                </div>
                             </div>
-                        </div>
 
                         {{-- Bitácora/Timeline CON SCROLL FIJO --}}
                         <div class="lg:col-span-2 bg-gray-900 rounded-xl border border-gray-700 h-[260px] flex flex-col overflow-hidden relative">

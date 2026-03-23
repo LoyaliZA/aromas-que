@@ -95,7 +95,24 @@ class DashboardController extends Controller
                 } 
                 elseif ($shift->current_status === 'ONLINE' && $shift->last_status_change_at) { 
                     $state = 'ONLINE'; 
-                    $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000; 
+                    
+                    // Buscar a qué hora terminó su última venta de hoy
+                    $lastSale = \App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
+                        ->where('status', 'COMPLETED')
+                        ->latest('completed_at')
+                        ->first();
+                        
+                    $statusChangeTime = Carbon::parse($shift->last_status_change_at);
+                    
+                    // Validar si su última venta fue DESPUÉS de su último cambio de estado (ej. regresó del baño)
+                    if ($lastSale && $lastSale->completed_at) {
+                        $lastSaleTime = Carbon::parse($lastSale->completed_at);
+                        $stateStartedAt = $lastSaleTime->greaterThan($statusChangeTime) 
+                            ? $lastSaleTime->timestamp * 1000 
+                            : $statusChangeTime->timestamp * 1000;
+                    } else {
+                        $stateStartedAt = $statusChangeTime->timestamp * 1000;
+                    }
                 }
 
                 return [

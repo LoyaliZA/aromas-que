@@ -127,8 +127,9 @@ class ReportController extends Controller
                     'served' => $empServed,
                     'avg_time' => $this->formatSeconds($empAvgSeconds ?? 0),
                     'total_break' => $breakAnalysis['total_formatted'],
+                    'total_available' => $breakAnalysis['total_available_formatted'], // <--- AGREGA ESTA LÍNEA
                 ],
-                'daily_breaks' => $breakAnalysis['daily_breaks'], // <-- NUEVO AGRUPAMIENTO
+                'daily_breaks' => $breakAnalysis['daily_breaks'],
                 'timeline' => $breakAnalysis['timeline'],
                 'clients' => $empClientsPaginated
             ];
@@ -213,7 +214,7 @@ class ReportController extends Controller
         return response()->stream($callback, 200, ["Content-type" => "text/csv", "Content-Disposition" => "attachment; filename=$fileName.csv"]);
     }
 
-    // --- CÁLCULO DE PAUSAS (TRADUCIDO Y AGRUPADO POR DÍA) ---
+    // --- CÁLCULO DE PAUSAS Y TIEMPO DISPONIBLE (TRADUCIDO Y AGRUPADO POR DÍA) ---
     private function calculateEmployeeBreaks($employeeId, $start, $end)
     {
         $shifts = DailyShift::where('employee_id', $employeeId)
@@ -221,18 +222,26 @@ class ReportController extends Controller
             ->with(['statusLogs' => function($q) { $q->orderBy('changed_at', 'asc'); }])
             ->get();
         
-        $totalSeconds = 0;
-        $dailySeconds = []; // Aquí agruparemos por Y-m-d
+        $totalBreakSeconds = 0;
+        $totalAvailableSeconds = 0;
+        $dailySeconds = []; 
         $timeline = [];
 
         foreach ($shifts as $shift) {
             $breakStart = null;
+            $onlineStart = null;
             $currentReason = null;
             
+            // Aseguramos que el día exista en el arreglo
+            $dateStr = Carbon::parse($shift->work_date)->format('Y-m-d');
+            if (!isset($dailySeconds[$dateStr])) {
+                $dailySeconds[$dateStr] = ['LUNCH' => 0, 'BATHROOM' => 0, 'ERRAND' => 0, 'PACKAGING' => 0, 'GENERAL' => 0, 'AVAILABLE' => 0];
+            }
+
             foreach ($shift->statusLogs as $log) {
-                // Traducción del estado
                 $transStatus = $this->statusDict[$log->new_status] ?? $log->new_status;
 
+                // --- 1. Lógica para el Timeline Visual ---
                 if ($log->new_status === 'BREAK' || $log->previous_status === 'BREAK') {
                     $statusLabel = $transStatus;
                     if ($log->new_status === 'BREAK') {
@@ -248,37 +257,86 @@ class ReportController extends Controller
                     ];
                 }
 
+                // --- 2. Lógica Matemática para Acumular Segundos ---
+                $logTime = Carbon::parse($log->changed_at);
+
                 if ($log->new_status === 'BREAK') {
-                    $breakStart = Carbon::parse($log->changed_at);
+                    $breakStart = $logTime;
                     $currentReason = $log->reason ?? 'GENERAL'; 
-                } elseif ($breakStart && $log->previous_status === 'BREAK') {
-                    $duration = $breakStart->diffInSeconds(Carbon::parse($log->changed_at));
-                    $totalSeconds += $duration;
-                    
-                    // Agrupamos por Día
-                    $dateStr = $breakStart->format('Y-m-d');
-                    if (!isset($dailySeconds[$dateStr])) {
-                        $dailySeconds[$dateStr] = ['LUNCH' => 0, 'BATHROOM' => 0, 'ERRAND' => 0, 'PACKAGING' => 0, 'GENERAL' => 0];
+                    // Si estaba online, sumamos ese bloque al tiempo disponible
+                    if ($onlineStart) {
+                        $dailySeconds[$dateStr]['AVAILABLE'] += $onlineStart->diffInSeconds($logTime);
+                        $onlineStart = null;
                     }
-                    $dailySeconds[$dateStr][$currentReason] += $duration;
-                    $breakStart = null;
+                } elseif ($log->new_status === 'ONLINE') {
+                    $onlineStart = $logTime;
+                    // Si estaba en break, sumamos el bloque al break
+                    if ($breakStart && $log->previous_status === 'BREAK') {
+                        $duration = $breakStart->diffInSeconds($logTime);
+                        $totalBreakSeconds += $duration;
+                        $dailySeconds[$dateStr][$currentReason] += $duration;
+                        $breakStart = null;
+                    }
+                } elseif ($log->new_status === 'OFFLINE') {
+                    if ($onlineStart) {
+                        $dailySeconds[$dateStr]['AVAILABLE'] += $onlineStart->diffInSeconds($logTime);
+                        $onlineStart = null;
+                    }
+                    if ($breakStart && $log->previous_status === 'BREAK') {
+                        $duration = $breakStart->diffInSeconds($logTime);
+                        $totalBreakSeconds += $duration;
+                        $dailySeconds[$dateStr][$currentReason] += $duration;
+                        $breakStart = null;
+                    }
                 }
             }
+
+            // Si el turno sigue abierto (hoy), contar hasta el minuto actual
+            if ($shift->work_date == today()->format('Y-m-d')) {
+                if ($onlineStart && $shift->current_status === 'ONLINE') {
+                    $dailySeconds[$dateStr]['AVAILABLE'] += $onlineStart->diffInSeconds(now());
+                }
+                if ($breakStart && $shift->current_status === 'BREAK') {
+                    $duration = $breakStart->diffInSeconds(now());
+                    $totalBreakSeconds += $duration;
+                    $dailySeconds[$dateStr][$currentReason] += $duration;
+                }
+            }
+
+            // --- 3. Restar el tiempo "Atendiendo" del tiempo Disponible ---
+            $servingSeconds = \App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
+                ->where('status', 'COMPLETED')
+                ->whereNotNull('started_serving_at')
+                ->whereNotNull('completed_at')
+                ->get()
+                ->reduce(function ($carry, $sale) { 
+                    return $carry + Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)); 
+                }, 0);
+
+            $dailySeconds[$dateStr]['AVAILABLE'] -= $servingSeconds;
+            if ($dailySeconds[$dateStr]['AVAILABLE'] < 0) $dailySeconds[$dateStr]['AVAILABLE'] = 0;
+
+            $totalAvailableSeconds += $dailySeconds[$dateStr]['AVAILABLE'];
         }
 
-        // Formateamos las matrices de días para enviarlas limpias a Blade
+        // Formateamos las matrices para enviarlas a Blade
         $formattedDailyBreaks = [];
         foreach ($dailySeconds as $date => $reasonsArray) {
             $formattedDailyBreaks[$date] = [];
             foreach ($reasonsArray as $reason => $secs) {
-                // Usamos la traducción para los nombres en la tabla
-                $reasonName = $this->reasonsDict[$reason] ?? $reason;
-                $formattedDailyBreaks[$date][$reasonName] = $this->formatSeconds($secs);
+                if ($reason === 'AVAILABLE') {
+                    // Colocamos "Tiempo Disponible" al inicio del arreglo visual
+                    $formattedDailyBreaks[$date] = ['Tiempo Disponible' => $this->formatSeconds($secs)] + $formattedDailyBreaks[$date];
+                } else {
+                    $reasonName = $this->reasonsDict[$reason] ?? $reason;
+                    $formattedDailyBreaks[$date][$reasonName] = $this->formatSeconds($secs);
+                }
             }
         }
 
         return [
-            'total_formatted' => $this->formatSeconds($totalSeconds),
+            'total_formatted' => $this->formatSeconds($totalBreakSeconds),
+            'total_available_formatted' => $this->formatSeconds($totalAvailableSeconds), // <-- Nuevo KPI Global
             'daily_breaks' => $formattedDailyBreaks,
             'timeline' => $timeline 
         ];
