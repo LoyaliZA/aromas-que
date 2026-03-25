@@ -120,18 +120,57 @@ class QueueController extends Controller
                 ->first();
 
             if ($client) {
+                // 1. Detenemos el cronómetro del cliente (La venta ya contó para sus métricas)
                 $client->update(['status' => 'COMPLETED', 'completed_at' => now()]);
                 $shift->increment('customers_served_count');
+                
+                // 2. Pasamos al vendedor a estado RATING (La cola lo ignorará temporalmente)
                 $shift->update([
+                    'current_status' => 'RATING',
                     'last_action_at' => now()
                 ]);
             }
         });
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['success' => true, 'message' => 'Venta finalizada automáticamente']);
+            return response()->json(['success' => true, 'message' => 'Venta finalizada, pasando a calificación.']);
         }
         return back()->with('success', 'Venta finalizada');
+    }
+
+    public function submitRating(Request $request)
+    {
+        $request->validate([
+            'shift_id' => 'required|exists:daily_shifts,id',
+            'queue_id' => 'required|exists:sales_queue,id',
+            'stars' => 'nullable|integer|min:0|max:5',
+            'tags' => 'nullable|array',
+            'comments' => 'nullable|string'
+        ]);
+
+        DB::transaction(function () use ($request) {
+            // Solo guardamos si realmente mandó estrellas (si omitió, el valor es 0)
+            if ($request->has('stars') && $request->stars > 0) {
+                \App\Models\SaleRating::create([
+                    'sales_queue_id' => $request->queue_id,
+                    'rater_type' => 'SELLER',
+                    'stars' => $request->stars,
+                    'tags' => $request->tags ?? [], // Laravel lo convertirá a JSON por el cast en el modelo
+                    'comments' => $request->comments
+                ]);
+            }
+
+            // Liberamos al vendedor para que reciba a su siguiente cliente
+            $shift = DailyShift::find($request->shift_id);
+            if ($shift && $shift->current_status === 'RATING') {
+                $shift->update([
+                    'current_status' => 'ONLINE',
+                    'last_action_at' => now()
+                ]);
+            }
+        });
+
+        return response()->json(['success' => true]);
     }
 
     public function getRetentionList(Request $request)

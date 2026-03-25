@@ -4,6 +4,7 @@ $shift = $seller->todayShift;
 $status = $shift->current_status ?? 'OFFLINE';
 $isOnline = $status === 'ONLINE';
 $isOnBreak = $status === 'BREAK';
+$isRating = $status === 'RATING';
 
 $currentClient = null;
 if ($shift) {
@@ -22,7 +23,9 @@ $cardClasses = 'bg-gray-900 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.
 $cardClasses = 'bg-aromas-secondary border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.3)] transform scale-[1.02] z-10 ring-2 ring-blue-500/20';
 }
 } elseif ($isOnBreak) {
-$cardClasses = 'bg-gray-800 border-yellow-500/50 opacity-90';
+    $cardClasses = 'bg-gray-800 border-yellow-500/50 opacity-90';
+} elseif ($isRating) {
+    $cardClasses = 'bg-gray-900 border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)] transform scale-[1.02] z-10 ring-2 ring-purple-500/20';
 } elseif ($isOnline) {
 $cardClasses = 'bg-aromas-secondary border-aromas-highlight/50 shadow-[0_0_15px_rgba(253,201,116,0.15)]';
 }
@@ -78,8 +81,8 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
 
         {{-- Info Vendedor --}}
         <h3 class="text-lg font-bold text-white mb-0 leading-tight truncate">{{ $seller->full_name }}</h3>
-        <p class="text-[10px] uppercase tracking-widest font-bold {{ $isServing ? ($currentClient->client_type === 'VIP' ? 'text-yellow-400' : 'text-blue-400') : ($isOnline ? 'text-aromas-tertiary' : 'text-gray-600') }} mb-4">
-            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift->break_reason }}) @elseif($isOnline) Disponible @else Inactivo @endif
+        <p class="text-[10px] uppercase tracking-widest font-bold {{ $isServing ? ($currentClient->client_type === 'VIP' ? 'text-yellow-400' : 'text-blue-400') : ($isOnline ? 'text-aromas-tertiary' : ($isRating ? 'text-purple-400' : 'text-gray-600')) }} mb-4">
+            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift->break_reason }}) @elseif($isRating) Calificando @elseif($isOnline) Disponible @else Inactivo @endif
         </p>
 
         {{-- ZONA CENTRAL ORIGINAL --}}
@@ -132,31 +135,39 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
         {{-- Botones (Originales) --}}
         <div class="mt-4 pt-4 border-t border-white/5">
             @if($isServing)
-            <form action="{{ route('ventas.finish-service') }}" method="POST">
-                @csrf
-                <input type="hidden" name="shift_id" value="{{ $shift->id }}">
-                <button type="submit" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg transition-transform active:scale-95">
+                {{-- NUEVO: Botón AJAX para terminar venta sin recargar la página --}}
+                <button type="button" @click="$dispatch('finish-service', { shift_id: {{ $shift->id }}, queue_id: {{ $currentClient->id }} })" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg transition-transform active:scale-95">
                     Terminar Venta
                 </button>
-            </form>
-            @elseif($isOnline || $isOnBreak)
-            @if($isOnBreak)
-            <form action="{{ route('ventas.toggle-break') }}" method="POST">
-                @csrf
-                <input type="hidden" name="shift_id" value="{{ $shift->id }}">
-                <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
-                    Regresar a Activo
+                
+            @elseif($isRating)
+                {{-- NUEVO: Botón AJAX para abrir el modal de calificación --}}
+                @php 
+                    $lastClient = App\Models\SalesQueue::where('assigned_shift_id', $shift->id)->where('status', 'COMPLETED')->latest('completed_at')->first(); 
+                @endphp
+                <button type="button" @click="$dispatch('open-rating-modal', { shift_id: {{ $shift->id }}, queue_id: {{ $lastClient->id ?? 0 }} })" class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg animate-pulse">
+                    Calificar al Cliente
                 </button>
-            </form>
+                
+            @elseif($isOnline || $isOnBreak)
+                {{-- TUS BOTONES ORIGINALES DE PAUSA (Intactos) --}}
+                @if($isOnBreak)
+                    <form action="{{ route('ventas.toggle-break') }}" method="POST">
+                        @csrf
+                        <input type="hidden" name="shift_id" value="{{ $shift->id }}">
+                        <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
+                            Regresar a Activo
+                        </button>
+                    </form>
+                @else
+                    <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, hasTakenLunch: {{ $shift->has_taken_lunch ? 'true' : 'false' }} })"
+                        class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
+                        Pausar Turno
+                    </button>
+                @endif
+                
             @else
-            {{-- Botón Break: Envía el id del turno y si ya tomó su comida hoy --}}
-            <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, hasTakenLunch: {{ $shift->has_taken_lunch ? 'true' : 'false' }} })"
-                class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
-                Pausar Turno
-            </button>
-            @endif
-            @else
-            <span class="text-xs text-gray-600 italic">Esperando activación...</span>
+                <span class="text-xs text-gray-600 italic">Esperando activación...</span>
             @endif
         </div>
     </div>

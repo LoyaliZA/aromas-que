@@ -58,58 +58,99 @@ class ReportController extends Controller
         $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])->whereNotNull('started_serving_at')->whereNotNull('completed_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
         $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])->whereNotNull('queued_at')->whereNotNull('started_serving_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')->value('avg_time');
 
-        // --- DESEMPEÑO EMPLEADOS ---
+        // --- DESEMPEÑO EMPLEADOS (CON CALIFICACIONES) ---
         $employeesList = Employee::sellers()->get();
         $employeesMetrics = $employeesList->map(function ($employee) use ($start, $end) {
-            $sales = SalesQueue::whereHas('assignedShift', function($query) use ($employee) {
+            $sales = SalesQueue::with('ratings')
+                ->whereHas('assignedShift', function($query) use ($employee) {
                     $query->where('employee_id', $employee->id);
                 })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->get();
             
             $servedCount = $sales->count();
             $avgEmpServiceSeconds = $servedCount > 0 ? ($sales->reduce(function ($carry, $sale) { return $carry + Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at)); }, 0) / $servedCount) : 0;
 
+            // Extraer calificaciones promedio del cliente
+            $clientRatings = $sales->flatMap->ratings->where('rater_type', 'CLIENT');
+            $avgStars = $clientRatings->count() > 0 ? round($clientRatings->avg('stars'), 1) : 0;
+
             return [
                 'name' => $employee->full_name ?? 'Desconocido', 
                 'served' => $servedCount,
                 'formatted_avg_service' => $this->formatSeconds($avgEmpServiceSeconds),
                 'formatted_break_time' => $this->calculateEmployeeBreaks($employee->id, $start, $end)['total_formatted'],
+                'avg_stars' => $avgStars // <--- NUEVO KPI
             ];
         });
 
-        // --- GRÁFICA ---
+        // --- GRÁFICA (Ajustada hasta las 19:00 / 7:00 PM) ---
         $chartTitle = $isSingleDay ? 'Flujo de Atención por Hora' : 'Flujo de Atención por Día';
         $chartData = ['labels' => [], 'data' => []];
         if ($isSingleDay) {
             $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')->groupBy('hour')->pluck('count', 'hour')->toArray();
-            for ($i = 9; $i <= 21; $i++) { $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00'; $chartData['data'][] = $salesByHour[$i] ?? 0; }
+            // Límite ajustado de 9 a 19 (7 PM)
+            for ($i = 9; $i <= 19; $i++) { 
+                $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00'; 
+                $chartData['data'][] = $salesByHour[$i] ?? 0; 
+            }
         } else {
             $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('DATE(completed_at) as date, COUNT(*) as count')->groupBy('date')->pluck('count', 'date')->toArray();
             $currentDate = $start->copy();
-            while ($currentDate->lte($end)) { $dateStr = $currentDate->format('Y-m-d'); $chartData['labels'][] = $currentDate->format('d/m'); $chartData['data'][] = $salesByDate[$dateStr] ?? 0; $currentDate->addDay(); }
+            while ($currentDate->lte($end)) { 
+                $chartData['labels'][] = $currentDate->format('d/m'); 
+                $chartData['data'][] = $salesByDate[$currentDate->format('Y-m-d')] ?? 0; 
+                $currentDate->addDay(); 
+            }
         }
 
-        // --- TABLAS DETALLADAS ---
-        $detailedClients = SalesQueue::with(['assignedShift.employee'])->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->paginate(15, ['*'], 'clients_page')->appends(request()->query());
+        // --- TABLAS DETALLADAS EXISTENTES ---
+        $detailedClients = SalesQueue::with(['assignedShift.employee', 'ratings'])->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->paginate(15, ['*'], 'clients_page')->appends(request()->query());
         $detailedClients->getCollection()->transform(function ($client) {
-            $wait = $client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0;
-            $serve = $client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0;
-            $client->formatted_wait = $this->formatSeconds($wait);
-            $client->formatted_serve = $this->formatSeconds($serve);
-            $client->is_reattended = str_ends_with($client->turn_number, '-R');
+            $client->formatted_wait = $this->formatSeconds($client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0);
+            $client->formatted_serve = $this->formatSeconds($client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0);
             return $client;
         });
 
         $detailedAbandoned = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->paginate(15, ['*'], 'abandoned_page')->appends(request()->query());
 
+        // --- NUEVAS PESTAÑAS: CALIFICACIONES MASIVAS ---
+        $clientRatings = null;
+        $sellerRatings = null;
+        
+        // Obtenemos si el usuario quiere ordenar por mejor o peor
+        $sortOrder = $request->input('sort', 'desc'); 
+
+        if ($activeTab === 'client_ratings') {
+            $clientRatings = \App\Models\SaleRating::with(['salesQueue.assignedShift.employee'])
+                ->where('rater_type', 'CLIENT')
+                ->whereBetween('created_at', [$start, $end])
+                ->orderBy('stars', $sortOrder) // Ordenar de mejor a peor o viceversa
+                ->orderBy('created_at', 'desc')
+                ->paginate(15, ['*'], 'cr_page')->appends(request()->query());
+        }
+
+        if ($activeTab === 'seller_ratings') {
+            $sellerRatings = \App\Models\SaleRating::with(['salesQueue.assignedShift.employee'])
+                ->where('rater_type', 'SELLER')
+                ->whereBetween('created_at', [$start, $end])
+                ->orderBy('stars', $sortOrder)
+                ->orderBy('created_at', 'desc')
+                ->paginate(15, ['*'], 'sr_page')->appends(request()->query());
+        }
+
         // --- RENDIMIENTO INDIVIDUAL ---
         $empData = null;
         if ($selectedEmployeeId && $activeTab === 'performance') {
-            $empSalesQuery = SalesQueue::whereHas('assignedShift', function($q) use ($selectedEmployeeId) {
+            $empSalesQuery = SalesQueue::with('ratings')->whereHas('assignedShift', function($q) use ($selectedEmployeeId) {
                 $q->where('employee_id', $selectedEmployeeId);
             })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED');
 
             $empServed = (clone $empSalesQuery)->count();
             $empAvgSeconds = (clone $empSalesQuery)->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
+            
+            // Calculamos el promedio de estrellas que le dieron al vendedor
+            $empAvgStars = \App\Models\SaleRating::where('rater_type', 'CLIENT')
+                ->whereIn('sales_queue_id', (clone $empSalesQuery)->select('id'))
+                ->avg('stars');
             
             $breakAnalysis = $this->calculateEmployeeBreaks($selectedEmployeeId, $start, $end);
 
@@ -127,7 +168,8 @@ class ReportController extends Controller
                     'served' => $empServed,
                     'avg_time' => $this->formatSeconds($empAvgSeconds ?? 0),
                     'total_break' => $breakAnalysis['total_formatted'],
-                    'total_available' => $breakAnalysis['total_available_formatted'], // <--- AGREGA ESTA LÍNEA
+                    'total_available' => $breakAnalysis['total_available_formatted'],
+                    'avg_stars' => $empAvgStars ? round($empAvgStars, 1) : 0 // <--- NUEVO KPI INDIVIDUAL
                 ],
                 'daily_breaks' => $breakAnalysis['daily_breaks'],
                 'timeline' => $breakAnalysis['timeline'],
@@ -149,7 +191,10 @@ class ReportController extends Controller
             'detailedAbandoned' => $detailedAbandoned,
             'employeesList' => $employeesList,
             'selectedEmployeeId' => $selectedEmployeeId,
-            'empData' => $empData
+            'empData' => $empData,
+            // --- ¡AQUÍ ESTÁ LA MAGIA QUE FALTABA! ---
+            'clientRatings' => $clientRatings,
+            'sellerRatings' => $sellerRatings
         ]);
     }
 

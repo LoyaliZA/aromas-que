@@ -157,6 +157,41 @@
         </div>
         @endif
 
+        {{-- MODAL DE CALIFICACIÓN TIPO UBER --}}
+        <div x-show="showRatingModal" style="display: none;" class="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" x-transition>
+            <div class="bg-gray-900 rounded-2xl border border-purple-500 p-8 w-full max-w-lg shadow-[0_0_50px_rgba(168,85,247,0.15)]">
+                <h3 class="text-2xl font-black text-white text-center mb-1">Califica tu Venta</h3>
+                <p class="text-gray-400 text-sm text-center mb-6">¿Cómo fue tu experiencia con el cliente?</p>
+                
+                {{-- Estrellas Dinámicas --}}
+                <div class="flex justify-center gap-2 mb-6">
+                    <template x-for="star in 5">
+                        <button @click="ratingStars = star" class="focus:outline-none transition-transform hover:scale-110">
+                            <svg class="w-12 h-12 transition-colors" :class="ratingStars >= star ? 'text-yellow-400' : 'text-gray-700'" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                        </button>
+                    </template>
+                </div>
+
+                {{-- Etiquetas Rápidas (Aparecen al seleccionar estrellas) --}}
+                <div x-show="ratingStars > 0" class="flex flex-wrap justify-center gap-2 mb-6" x-transition>
+                    <template x-for="tag in availableTags()" :key="tag">
+                        <button @click="toggleTag(tag)" 
+                                :class="ratingTags.includes(tag) ? 'bg-purple-600 text-white border-purple-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-purple-500'"
+                                class="px-3 py-1.5 border rounded-full text-xs font-bold transition-colors uppercase tracking-wider" x-text="tag"></button>
+                    </template>
+                </div>
+
+                <textarea x-model="ratingComment" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white focus:border-purple-500 text-sm mb-6" rows="3" placeholder="Comentarios adicionales (Opcional)..."></textarea>
+
+                <div class="flex gap-4">
+                    <button @click="skipRating()" class="w-1/3 py-3 text-gray-500 hover:text-white font-bold transition-colors bg-gray-800 rounded-xl hover:bg-gray-700">Omitir</button>
+                    <button @click="submitRating()" class="w-2/3 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl text-white font-black shadow-lg transition-transform active:scale-95 disabled:opacity-50" :disabled="ratingStars === 0">Enviar Calificación</button>
+                </div>
+            </div>
+        </div>
+
         {{-- MEGA NOTIFICACIÓN (ACTUALIZADA PARA VIP DORADO) --}}
         <div x-show="showMegaAlert" style="display: none;"
             class="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-xl"
@@ -215,6 +250,13 @@
                 retentionList: [],
                 availableSellers: [], // <-- NUEVA VARIABLE
 
+                showRatingModal: false,
+                ratingShiftId: null,
+                ratingQueueId: null,
+                ratingStars: 0,
+                ratingTags: [],
+                ratingComment: '',
+
                 showMegaAlert: false,
                 alertData: {
                     seller: '',
@@ -228,6 +270,15 @@
                 spanishVoice: null, // <-- NUEVA VARIABLE AQUÍ
 
                 init() {
+
+                window.addEventListener('finish-service', event => {
+                        this.processFinishService(event.detail.shift_id, event.detail.queue_id);
+                    });
+                    window.addEventListener('open-rating-modal', event => {
+                        this.openRatingModal(event.detail.shift_id, event.detail.queue_id);
+                    });
+
+                    
                     // CARGAR LA MEJOR VOZ FEMENINA (TU CÓDIGO)
                     const loadVoices = () => {
                         const voices = window.speechSynthesis.getVoices();
@@ -480,6 +531,67 @@
 
                 closeAlert() {
                     this.showMegaAlert = false;
+                },
+
+                processFinishService(shiftId, queueId) {
+                    // Terminamos el servicio por AJAX para no recargar la página
+                    fetch("{{ route('ventas.finish-service') }}", {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ shift_id: shiftId })
+                    }).then(r => r.json()).then(data => {
+                        if(data.success) {
+                            this.fetchUpdates(); // Refresca el Grid para mostrar estado morado
+                            this.openRatingModal(shiftId, queueId);
+                        }
+                    });
+                },
+
+                openRatingModal(shiftId, queueId) {
+                    this.ratingShiftId = shiftId;
+                    this.ratingQueueId = queueId;
+                    this.ratingStars = 0;
+                    this.ratingTags = [];
+                    this.ratingComment = '';
+                    this.showRatingModal = true;
+                },
+
+                availableTags() {
+                    // Lógica tipo Uber: Tags cambian según si la calificación es buena o mala
+                    if (this.ratingStars >= 4) return ['Decisión Rápida', 'Amable', 'Directo al Grano', 'Excelente Actitud'];
+                    if (this.ratingStars === 3) return ['Indeciso', 'Poca Interacción', 'Lento'];
+                    if (this.ratingStars > 0) return ['Mucho en el Celular', 'Grosero', 'No sabía qué quería', 'Muy Lento'];
+                    return [];
+                },
+
+                toggleTag(tag) {
+                    if (this.ratingTags.includes(tag)) {
+                        this.ratingTags = this.ratingTags.filter(t => t !== tag);
+                    } else {
+                        this.ratingTags.push(tag);
+                    }
+                },
+
+                skipRating() {
+                    this.ratingStars = 0; // 0 cuenta como "Omitir" en el backend
+                    this.submitRating();
+                },
+
+                submitRating() {
+                    fetch("{{ route('ventas.submit-rating') }}", {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            shift_id: this.ratingShiftId,
+                            queue_id: this.ratingQueueId,
+                            stars: this.ratingStars,
+                            tags: this.ratingTags,
+                            comments: this.ratingComment
+                        })
+                    }).then(r => r.json()).then(() => {
+                        this.showRatingModal = false;
+                        this.fetchUpdates(); // Refresca el Grid para volver a estado Disponible (verde)
+                    });
                 }
             }
         }

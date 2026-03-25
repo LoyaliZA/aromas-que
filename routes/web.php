@@ -105,6 +105,11 @@ Route::prefix('gerencia')
 
         Route::get('/staff', [App\Http\Controllers\Gerencia\StaffController::class, 'index'])->name('staff.index');
         Route::post('/staff/toggle', [App\Http\Controllers\Gerencia\StaffController::class, 'toggleShift'])->name('staff.toggle');
+
+        // --- RUTAS: CALIFICACIÓN CLIENTES (TABLET) ---
+        Route::get('/calificacion-cliente', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'index'])->name('calificacion.index');
+        Route::get('/calificacion-cliente/recent', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'getRecentSales'])->name('calificacion.recent');
+        Route::post('/calificacion-cliente/store', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'store'])->name('calificacion.store');
     });
 
 /*
@@ -144,10 +149,12 @@ Route::prefix('ventas')
         Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
+        Route::post('/submit-rating', [App\Http\Controllers\Ventas\QueueController::class, 'submitRating'])->name('submit-rating');
 
         // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---
         Route::get('/retention/list', [App\Http\Controllers\Ventas\QueueController::class, 'getRetentionList'])->name('retention.list');
         Route::post('/retention/reassign', [App\Http\Controllers\Ventas\QueueController::class, 'reassignRetention'])->name('retention.reassign');
+        
     });
 
 /*

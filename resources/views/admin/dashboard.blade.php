@@ -70,7 +70,7 @@
                                     </div>
                                     <div x-show="seller.state === 'BREAK'"><p class="text-[10px] text-gray-500 uppercase font-bold">Motivo</p><p class="text-sm font-bold text-yellow-400 truncate" x-text="seller.break_reason"></p></div>
                                     <div x-show="seller.state !== 'OFFLINE'" class="flex justify-between items-center mt-2 pt-2 border-t border-gray-700">
-                                        <span class="text-[10px] text-gray-500 uppercase font-bold" x-text="seller.state === 'ONLINE' ? 'Libre desde hace:' : 'Tiempo Transcurrido'"></span>
+                                        <span class="text-[10px] text-gray-500 uppercase font-bold" x-text="seller.state === 'ONLINE' ? 'Disponible hace:' : 'Tiempo Transcurrido'"></span>
                                         <span class="text-lg font-mono font-black" :class="{'text-blue-400': seller.state === 'SERVING', 'text-green-400': seller.state === 'ONLINE', 'text-yellow-400': seller.state === 'BREAK'}" x-text="formatTimer(seller.state_started_at)"></span>
                                     </div>
                                 </div>

@@ -118,4 +118,12 @@ class SalesQueue extends Model
     {
         $query->where('service_type', 'CASHIER');
     }
+
+    /**
+     * Relación: Un turno en la fila puede tener múltiples calificaciones (Cliente y Vendedor).
+     */
+    public function ratings()
+    {
+        return $this->hasMany(SaleRating::class, 'sales_queue_id');
+    }
 }
