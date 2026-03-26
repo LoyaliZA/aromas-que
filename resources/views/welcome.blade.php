@@ -106,7 +106,9 @@
             const chimeSound = document.getElementById('chimeSound');
             const vipChimeSound = document.getElementById('vipChimeSound');
             
-            let lastCalledId = null;
+            // --- NUEVA LÓGICA ANTI-SALTOS DE TV ---
+            let announcedIds = new Set();
+            let isFirstLoad = true;
             let lastServingData = '';
             let lastWaitingData = '';
             
@@ -225,6 +227,26 @@
                     const currentWaitingStr = JSON.stringify(data.waiting);
 
                     if (currentServingStr !== lastServingData) {
+                        
+                        // --- LÓGICA DE REVISIÓN COMPLETA (EVITA SALTOS) ---
+                        let newToAnnounce = [];
+                        data.serving.forEach(ticket => {
+                            if (!announcedIds.has(ticket.id)) {
+                                announcedIds.add(ticket.id);
+                                newToAnnounce.push(ticket);
+                            }
+                        });
+
+                        if (isFirstLoad) {
+                            // En la primera carga, no anunciamos a los que ya están en pantalla
+                            isFirstLoad = false; 
+                        } else {
+                            // Invertimos para anunciar al más viejo primero (respetar el orden)
+                            newToAnnounce.reverse().forEach(ticket => {
+                                queueAnnouncement(ticket);
+                            });
+                        }
+
                         renderServing(data.serving);
                         lastServingData = currentServingStr;
                     }
@@ -296,7 +318,6 @@
                 }
 
                 let html = '';
-                let newestClient = servingArray[0]; 
 
                 servingArray.forEach((ticket, index) => {
                     const isNewest = index === 0;
@@ -343,13 +364,6 @@
                 });
 
                 servingList.innerHTML = html;
-
-                if (newestClient && newestClient.id !== lastCalledId) {
-                    if (lastCalledId !== null) {
-                        queueAnnouncement(newestClient);
-                    }
-                    lastCalledId = newestClient.id; 
-                }
             }
 
             function renderWaiting(waitingArray) {
@@ -478,7 +492,8 @@
             }
 
             fetchQueueData(); 
-            setInterval(fetchQueueData, 3000); 
+            // --- ACTUALIZACIÓN DE TIEMPO DE SONDEO (MÁS RÁPIDO) ---
+            setInterval(fetchQueueData, 1500); 
 
             playAd(currentAdIndex);
         });

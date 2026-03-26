@@ -225,13 +225,17 @@ class QueueController extends Controller
 
         $oldQueue = SalesQueue::find($request->queue_id);
 
+        // LIMPIEZA Y PROTECCIÓN DEL TURNO: Aseguramos que no se duplique el -R y no exceda la BD
+        $baseTurn = str_replace('-R', '', $oldQueue->turn_number);
+        $newTurnNumber = !empty($baseTurn) ? substr($baseTurn, 0, 7) . '-R' : 'RET-R';
+
         SalesQueue::create([
             'customer_id' => $oldQueue->customer_id,
             'client_name' => $oldQueue->client_name,
             'client_type' => $oldQueue->client_type,
             'has_disability' => $oldQueue->has_disability,
             'service_type' => $oldQueue->service_type,
-            'turn_number' => $oldQueue->turn_number . '-R',
+            'turn_number' => $newTurnNumber, // <--- Aplicamos el turno corregido
             'source' => 'MANUAL_KIOSK',
             'status' => 'SERVING',
             'assigned_shift_id' => $request->shift_id,
