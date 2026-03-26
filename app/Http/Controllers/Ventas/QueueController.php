@@ -30,7 +30,7 @@ class QueueController extends Controller
         // Detectar asignación excluyendo las Retenciones usando el sufijo -R
         $recentAssignment = SalesQueue::where('status', 'SERVING')
             ->where('turn_number', 'not like', '%-R')
-            ->where('started_serving_at', '>=', now()->subSeconds(4))
+            ->where('started_serving_at', '>=', now()->subSeconds(2))
             ->with('assignedShift.employee')
             ->first();
 
@@ -72,7 +72,7 @@ class QueueController extends Controller
                     return back()->with('error', 'El vendedor ya ha tomado su break de comida hoy.');
                 }
                 $shift->has_taken_lunch = true;
-                $statusChangeAt = now()->addMinutes(3);
+                $statusChangeAt = now()->addMinutes(5);
             } else {
                 $statusChangeAt = now();
             }
@@ -95,7 +95,8 @@ class QueueController extends Controller
             $shift->update([
                 'current_status' => 'ONLINE',
                 'break_reason' => null,
-                'last_status_change_at' => now()
+                'last_status_change_at' => now(),
+                'last_action_at' => now() // <-- AÑADIDO PARA OTORGAR LOS 10 SEGUNDOS DE GRACIA AL VOLVER A PISO
             ]);
 
             ShiftStatusLog::create([

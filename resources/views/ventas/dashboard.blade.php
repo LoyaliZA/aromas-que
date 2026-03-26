@@ -223,10 +223,9 @@
                     </div>
                 </div>
 
-                <button @click="closeAlert()" :disabled="alertTimer > 0" class="mt-12 px-12 py-5 rounded-2xl font-black text-xl transition-all duration-300 tracking-wider bg-white shadow-xl transform hover:-translate-y-1"
+                <button @click="closeAlert()" class="mt-12 px-12 py-5 rounded-2xl font-black text-xl transition-all duration-300 tracking-wider bg-white shadow-xl transform hover:-translate-y-1"
                     :class="alertData.client_type === 'VIP' ? 'text-yellow-900 hover:bg-yellow-50 shadow-white/20' : 'text-blue-900 hover:bg-blue-50 shadow-white/10'">
-                    <span x-show="alertTimer > 0">ESPERE (<span x-text="alertTimer"></span>)</span>
-                    <span x-show="alertTimer <= 0">ENTERADO</span>
+                    <span>ENTERADO</span>
                 </button>
             </div>
         </div>
@@ -266,6 +265,7 @@
                     has_disability: false
                 },
                 alertTimer: 5,
+                lastAlertedFolio: null, // <-- NUEVA VARIABLE: Guarda el folio que ya sonó
                 isLoading: false,
                 spanishVoice: null, // <-- NUEVA VARIABLE AQUÍ
 
@@ -430,6 +430,27 @@
                             }
                         }
                     });
+
+                    // --- NUEVA LÓGICA: CRONÓMETRO DE DELAY (10s) AL ESTAR DISPONIBLE ---
+                    const onlineCards = document.querySelectorAll('.seller-card[data-online="true"]');
+                    onlineCards.forEach(card => {
+                        let lastActionAt = parseInt(card.dataset.lastActionAt);
+                        if (!lastActionAt) return;
+                        
+                        let elapsedSecs = Math.floor((now - lastActionAt) / 1000);
+                        let delayContainer = card.querySelector('.delay-container');
+                        let onlineDots = card.querySelector('.online-dots');
+                        let delayTimerEl = card.querySelector('.delay-timer');
+
+                        if (elapsedSecs < 10) {
+                            if (delayContainer) delayContainer.style.display = 'block';
+                            if (onlineDots) onlineDots.style.display = 'none';
+                            if (delayTimerEl) delayTimerEl.innerText = (10 - elapsedSecs) + "s";
+                        } else {
+                            if (delayContainer) delayContainer.style.display = 'none';
+                            if (onlineDots) onlineDots.style.display = 'block';
+                        }
+                    });
                 },
 
                 fetchUpdates() {
@@ -450,7 +471,10 @@
                                 grid.innerHTML = data.html;
                                 this.updateTimers();
                             }
-                            if (data.alert) this.triggerMegaAlert(data.alert);
+                            // Mostrar alerta SOLO si es un turno nuevo que no ha sonado
+                            if (data.alert && data.alert.folio !== this.lastAlertedFolio) {
+                                this.triggerMegaAlert(data.alert);
+                            }
                         })
                         .finally(() => {
                             setTimeout(() => this.isLoading = false, 500);

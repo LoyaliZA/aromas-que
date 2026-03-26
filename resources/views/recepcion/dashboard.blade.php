@@ -220,24 +220,31 @@
                     </button>
                 </div>
 
-                <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6">
+                <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6" @submit="return validateQueueForm($event)">
                     @csrf
                     
+                    {{-- SWITCH DE CLIENTE NUEVO --}}
+                    <label class="flex items-center justify-between cursor-pointer group bg-gray-800/50 border border-gray-700 p-3 rounded-lg hover:bg-gray-800 transition-colors">
+                        <span class="text-sm text-gray-300 font-bold">Es cliente nuevo (Sin registro previo)</span>
+                        <div class="relative inline-flex items-center">
+                            <input type="checkbox" name="is_new_customer" value="1" x-model="isNewCustomerQueue" @change="if(isNewCustomerQueue) clearSelectedCustomer()" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                        </div>
+                    </label>
+
                     {{-- SECCIÓN: CLIENTE (Búsqueda o Seleccionado) --}}
-                    <div>
-                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-2">CLIENTE</label>
+                    <div x-show="!isNewCustomerQueue">
+                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-2">BUSCAR CLIENTE REGISTRADO</label>
                         
-                        {{-- Barra de búsqueda (Se oculta si ya se seleccionó un cliente de la BD) --}}
                         <div class="relative" x-show="!selectedCustomerObj">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                             </div>
-                            <input type="text" name="client_name" x-model="clientSearchQuery" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" required autocomplete="off"
+                            <input type="text" x-model="clientSearchQuery" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" autocomplete="off"
                                 class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight transition-all"
-                                placeholder="Número de cliente o nombre...">
+                                placeholder="Ingresar número de cliente o nombre...">
                             <input type="hidden" name="customer_id" x-model="selectedCustomerId">
 
-                            {{-- Dropdown Flotante --}}
                             <div x-show="showClientDropdown && clientSearchResults.length > 0" class="absolute z-[100] w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto" style="display: none;">
                                 <template x-for="customer in clientSearchResults" :key="customer.id">
                                     <div @click="selectCustomer(customer)" class="px-4 py-3 hover:bg-aromas-highlight/20 cursor-pointer border-b border-gray-700 last:border-0 flex justify-between items-center transition-colors">
@@ -250,7 +257,6 @@
                             </div>
                         </div>
 
-                        {{-- Tarjeta del Cliente Seleccionado (Estilo Imagen) --}}
                         <div x-show="selectedCustomerObj" style="display: none;" class="bg-gray-800 border border-gray-600 rounded-xl p-4">
                             <div class="flex items-center justify-between border-b border-gray-700 pb-3 mb-3">
                                 <div class="flex items-center gap-3">
@@ -266,7 +272,6 @@
                                 </button>
                             </div>
 
-                            {{-- Switch de Representante --}}
                             <label class="flex items-center justify-between cursor-pointer group">
                                 <span class="text-sm text-gray-300 font-medium group-hover:text-white transition-colors">¿Asiste alguien más a nombre del cliente?</span>
                                 <div class="relative inline-flex items-center">
@@ -275,12 +280,18 @@
                                 </div>
                             </label>
 
-                            {{-- Input Nombre del Representante --}}
                             <div x-show="isThirdPartyQueue" x-transition class="mt-3">
-                                <input type="text" name="representative_name" x-model="representativeNameQueue" placeholder="Nombre de quien asiste..." :required="isThirdPartyQueue"
+                                <input type="text" name="representative_name" x-model="representativeNameQueue" placeholder="Nombre de quien asiste..."
                                     class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
                             </div>
                         </div>
+                    </div>
+
+                    {{-- INPUT MANUAL (SOLO SI ES NUEVO) --}}
+                    <div x-show="isNewCustomerQueue" style="display: none;" x-transition>
+                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-2">NOMBRE DEL CLIENTE NUEVO</label>
+                        <input type="text" name="new_client_name" x-model="newClientName" placeholder="Escribe el nombre completo..."
+                            class="w-full bg-gray-900 border border-aromas-highlight/50 rounded-lg py-3 px-4 text-white focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight transition-all">
                     </div>
 
                     {{-- CHECKBOX DISCAPACIDAD --}}
@@ -308,7 +319,7 @@
                                 :class="queueType === 'CASHIER' ? 'bg-green-500 text-white ring-2 ring-green-500 ring-offset-2 ring-offset-gray-900' : 'bg-black/20 text-gray-400 hover:bg-white/5'"
                                 class="p-3 rounded-xl border border-transparent flex flex-col items-center justify-center transition-all h-24">
                                 <svg class="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08-.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
                                 <span class="font-bold text-sm">SOLO CAJA</span>
                             </button>
@@ -445,6 +456,27 @@
                 isThirdPartyQueue: false,
                 representativeNameQueue: '',
                 hasDisabilityQueue: false,
+                isNewCustomerQueue: false,
+                newClientName: '',
+
+                validateQueueForm(e) {
+                    if (!this.isNewCustomerQueue && !this.selectedCustomerId) {
+                        e.preventDefault();
+                        alert('⚠️ Acción no permitida: Debe buscar y seleccionar un cliente de la lista. \n\nSi es un cliente nuevo, active el interruptor superior.');
+                        return false;
+                    }
+                    if (this.isNewCustomerQueue && this.newClientName.trim() === '') {
+                        e.preventDefault();
+                        alert('⚠️ Por favor ingrese el nombre del cliente nuevo.');
+                        return false;
+                    }
+                    if (this.isThirdPartyQueue && this.representativeNameQueue.trim() === '') {
+                        e.preventDefault();
+                        alert('⚠️ Por favor ingrese el nombre de quien asiste a nombre del cliente.');
+                        return false;
+                    }
+                    return true;
+                },
 
                 init() {
                     this.$watch('search', (value) => {

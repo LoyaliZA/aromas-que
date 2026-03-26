@@ -52,7 +52,12 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     @if($isOnBreak)
     data-on-break="true"
     data-break-start-time="{{ $breakStartTime }}"
+    @endif
+    @if($isOnline)
+    data-online="true"
+    data-last-action-at="{{ $shift->last_action_at ? $shift->last_action_at->timestamp * 1000 : 0 }}"
     @endif>
+
 
     {{-- Indicador de Estado (Punto titilante) --}}
     <div class="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -126,7 +131,15 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 </div>
             </div>
             @elseif($isOnline)
-            <div class="space-y-1">
+            {{-- Contenedor del cronómetro de Delay (Oculto por defecto) --}}
+            <div class="space-y-1 delay-container" style="display: none;">
+                <span class="text-[10px] text-aromas-highlight uppercase block mb-1 tracking-wider">Asignación en</span>
+                <div class="bg-black/30 border border-aromas-highlight/20 rounded py-1 px-3 inline-block">
+                    <span class="delay-timer text-lg font-mono font-bold text-aromas-highlight tracking-wider">--</span>
+                </div>
+            </div>
+            {{-- Puntitos normales --}}
+            <div class="space-y-1 online-dots">
                 <div class="text-xs text-gray-500 uppercase tracking-widest font-bold opacity-50">. . .</div>
             </div>
             @endif

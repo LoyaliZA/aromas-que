@@ -32,11 +32,11 @@ class DeliveryController extends Controller
 
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('ticket_folio', 'like', "%{$search}%")
-                  ->orWhere('client_name', 'like', "%{$search}%")
-                  ->orWhere('client_ref_id', 'like', "%{$search}%")
-                  ->orWhere('receiver_name', 'like', "%{$search}%");
+                    ->orWhere('client_name', 'like', "%{$search}%")
+                    ->orWhere('client_ref_id', 'like', "%{$search}%")
+                    ->orWhere('receiver_name', 'like', "%{$search}%");
             });
         }
 
@@ -99,68 +99,87 @@ class DeliveryController extends Controller
     }
 
     /**
-     * BUSCAR CLIENTES PARA AUTOCOMPLETADO
+     * BUSCAR CLIENTES PARA AUTOCOMPLETADO (Optimizado para +5000 registros)
      */
     public function searchCustomers(Request $request)
     {
         if ($request->ajax()) {
-            $search = $request->get('q');
-            $customers = Customer::where('name', 'LIKE', "%{$search}%")
-                                 ->orWhere('customer_number', 'LIKE', "%{$search}%")
-                                 ->orWhere('phone', 'LIKE', "%{$search}%")
-                                 ->limit(10)
-                                 ->get();
+            $search = trim($request->get('q'));
+            
+            // Si está completamente vacío, no buscar
+            if (empty($search)) {
+                return response()->json([]);
+            }
+
+            // OPTIMIZACIÓN INTELIGENTE: 
+            // Si es texto, requerimos 2 caracteres para no saturar.
+            // Si es un número (ej. "4"), permitimos la búsqueda con 1 solo dígito.
+            if (!is_numeric($search) && strlen($search) < 2) {
+                return response()->json([]);
+            }
+
+            $query = Customer::select('id', 'name', 'customer_number', 'client_type');
+
+            // Búsqueda rápida por número de cliente o coincidencia de nombre
+            if (is_numeric($search) || preg_match('/^[A-Za-z0-9]+$/', $search)) {
+                $query->where('customer_number', 'LIKE', "{$search}%")
+                      ->orWhere('name', 'LIKE', "%{$search}%");
+            } else {
+                $query->where('name', 'LIKE', "%{$search}%");
+            }
                                  
-            return response()->json($customers);
+            return response()->json($query->limit(15)->get());
         }
-        return response()->json([], 403);
+        return response()->json(['error' => 'No autorizado'], 403);
     }
 
     /**
-     * AGREGAR A LA FILA DE VENTAS/CAJA
+     * AGREGAR A LA FILA DE VENTAS/CAJA (Blindado contra creación de basura)
      */
     public function addToQueue(Request $request)
     {
         $request->validate([
             'service_type' => 'required|in:SALES,CASHIER',
-            'customer_id' => 'nullable|exists:customers,id',
-            'client_name' => 'required_without:customer_id|string|max:100|nullable',
+            'is_new_customer' => 'nullable|boolean',
+            'customer_id' => 'required_without:is_new_customer|exists:customers,id|nullable',
+            'new_client_name' => 'required_if:is_new_customer,1|string|max:100|nullable',
             'is_third_party' => 'nullable|boolean',
             'representative_name' => 'required_if:is_third_party,1|string|max:100|nullable',
-            'has_disability' => 'nullable|boolean', 
+            'has_disability' => 'nullable|boolean',
         ]);
 
-        $customer = null;
-        $clientName = $request->client_name;
-        $clientType = 'REGULAR'; 
+        $customerId = null;
+        $clientName = null;
+        $clientType = 'REGULAR';
 
-        if ($request->customer_id) {
-            $customer = Customer::find($request->customer_id);
-            // Lógica de representante: Si viene alguien más, el nombre en la fila será el del representante
+        // 1. Validamos de dónde viene el cliente
+        if (!$request->boolean('is_new_customer')) {
+            // A) Es un cliente registrado seleccionado de la base de datos
+            $customer = Customer::findOrFail($request->customer_id);
+            $customerId = $customer->id;
             $clientName = $request->boolean('is_third_party') ? $request->representative_name : $customer->name;
-            $clientType = $customer->client_type; 
+            $clientType = $customer->client_type;
         } else {
-            // Cliente nuevo sin registro previo
-            $customer = Customer::create([
-                'name' => $clientName,
-                'client_type' => 'REGULAR'
-            ]);
+            // B) Es un cliente NUEVO (NO lo guardamos en la tabla customers, solo tomamos su nombre para el ticket)
+            $clientName = strtoupper($request->new_client_name);
+            $clientType = 'REGULAR';
         }
 
+        // 2. Generar Folio
         $prefix = $request->service_type === 'SALES' ? 'V' : 'C';
         $todayCount = SalesQueue::where('service_type', $request->service_type)
-                                ->whereDate('queued_at', today())
-                                ->count();
-                                
+            ->whereDate('queued_at', today())
+            ->count();
+
         $turnNumber = sprintf('%s-%03d', $prefix, $todayCount + 1);
 
-        // TODO: En la siguiente migración añadiremos 'has_disability' a la base de datos de SalesQueue
+        // 3. Crear el ticket en la fila
         SalesQueue::create([
-            'customer_id' => $customer->id,
+            'customer_id' => $customerId, // Si es nuevo, esto se guardará como NULL automáticamente
             'client_name' => $clientName,
             'client_type' => $clientType,
             'has_disability' => $request->boolean('has_disability'),
-            'turn_number' => $turnNumber, 
+            'turn_number' => $turnNumber,
             'source' => 'MANUAL_KIOSK',
             'status' => 'WAITING',
             'service_type' => $request->service_type,
@@ -170,10 +189,10 @@ class DeliveryController extends Controller
         $tipo = $request->service_type === 'SALES' ? 'Ventas' : 'Caja';
 
         return redirect()->route('recepcion.dashboard')
-                         ->with('success', "Cliente agregado a la fila.")
-                         ->with('new_turn', $turnNumber)
-                         ->with('client_name', $clientName)
-                         ->with('destination', $tipo);
+            ->with('success', "Cliente agregado a la fila.")
+            ->with('new_turn', $turnNumber)
+            ->with('client_name', $clientName)
+            ->with('destination', $tipo);
     }
 
     /**
@@ -182,11 +201,11 @@ class DeliveryController extends Controller
     public function getQueueList(Request $request)
     {
         if ($request->ajax()) {
-            $waitingClients = SalesQueue::with('customer') 
-                                        ->whereDate('queued_at', today())
-                                        ->where('status', 'WAITING')
-                                        ->orderBy('queued_at', 'asc')
-                                        ->get();
+            $waitingClients = SalesQueue::with('customer')
+                ->whereDate('queued_at', today())
+                ->where('status', 'WAITING')
+                ->orderBy('queued_at', 'asc')
+                ->get();
 
             return response()->json([
                 'clients' => $waitingClients
@@ -207,13 +226,13 @@ class DeliveryController extends Controller
         ]);
 
         $client = SalesQueue::findOrFail($id);
-        
+
         if ($client->status === 'WAITING') {
             // 2. Inyectamos los datos validados directamente, garantizando su captura
             $client->update([
                 'status' => 'ABANDONED',
                 'completed_at' => now(),
-                'abandonment_reason_id' => $validated['abandonment_reason_id'], 
+                'abandonment_reason_id' => $validated['abandonment_reason_id'],
                 'custom_abandonment_reason' => $validated['custom_abandonment_reason'] ?? null,
             ]);
 
@@ -231,7 +250,7 @@ class DeliveryController extends Controller
     public function markAsReceived(Request $request, $id)
     {
         $pickup = Pickup::findOrFail($id);
-        
+
         if ($pickup->status === 'IN_CUSTODY' && is_null($pickup->received_by_checker_at)) {
             $pickup->update([
                 'received_by_checker_at' => now(),
