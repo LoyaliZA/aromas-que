@@ -95,7 +95,7 @@
             <div class="grid grid-cols-2 gap-4 shrink-0">
                 <div class="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-md flex items-center justify-between">
                     <div>
-                        <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Promedio Global</p>
+                        <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Promedio de Calidad de Atención</p>
                         <p class="text-2xl font-black text-yellow-400">{{ $averageSystemRating ? round($averageSystemRating, 1) : '0.0' }} ⭐</p>
                     </div>
                     <div class="p-3 bg-yellow-500/10 rounded-full text-yellow-500">
