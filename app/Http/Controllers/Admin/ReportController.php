@@ -112,32 +112,54 @@ class ReportController extends Controller
 
         $detailedAbandoned = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->paginate(15, ['*'], 'abandoned_page')->appends(request()->query());
 
-        // --- NUEVAS PESTAÑAS: CALIFICACIONES MASIVAS ---
-        $clientRatings = null;
-        $sellerRatings = null;
-        
-        // Obtenemos si el usuario quiere ordenar por mejor o peor
-        $sortOrder = $request->input('sort', 'desc'); 
+        // --- NUEVAS PESTAÑAS: DIRECTORIOS HISTÓRICOS (CRM) ---
+        $customersDirectory = null;
+        $sellersDirectory = null;
 
         if ($activeTab === 'client_ratings') {
-            $clientRatings = \App\Models\SaleRating::with(['salesQueue.assignedShift.employee'])
-                ->where('rater_type', 'CLIENT')
-                ->whereBetween('created_at', [$start, $end])
-                ->orderBy('stars', $sortOrder) // Ordenar de mejor a peor o viceversa
-                ->orderBy('created_at', 'desc')
-                ->paginate(15, ['*'], 'cr_page')->appends(request()->query());
+            // Buscador específico para el directorio de clientes
+            $clientSearch = $request->input('client_search');
+            $q = \App\Models\Customer::query();
+            
+            if ($clientSearch) {
+                $q->where('name', 'like', "%{$clientSearch}%")
+                  ->orWhere('customer_number', 'like', "%{$clientSearch}%");
+            }
+            
+            // Paginamos a los clientes (porque son más de 5000)
+            $customersDirectory = $q->paginate(15, ['*'], 'cd_page')->appends(request()->query());
+            
+            // Para cada cliente paginado, traemos TODO su historial de calificaciones (Dadas por VENDEDORES)
+            $customersDirectory->getCollection()->transform(function($customer) {
+                $ratings = \App\Models\SaleRating::with('salesQueue.assignedShift.employee')
+                    ->where('rater_type', 'SELLER')
+                    ->whereHas('salesQueue', function($query) use ($customer) {
+                        $query->where('customer_id', $customer->id);
+                    })->orderBy('created_at', 'desc')->get();
+                
+                $customer->all_time_stars = $ratings->count() > 0 ? round($ratings->avg('stars'), 1) : null;
+                $customer->comments_history = $ratings;
+                return $customer;
+            });
         }
 
         if ($activeTab === 'seller_ratings') {
-            $sellerRatings = \App\Models\SaleRating::with(['salesQueue.assignedShift.employee'])
-                ->where('rater_type', 'SELLER')
-                ->whereBetween('created_at', [$start, $end])
-                ->orderBy('stars', $sortOrder)
-                ->orderBy('created_at', 'desc')
-                ->paginate(15, ['*'], 'sr_page')->appends(request()->query());
+            // Traemos a todos los vendedores activos
+            $sellersDirectory = Employee::sellers()->get()->map(function($emp) {
+                // Traemos TODO su historial de calificaciones (Dadas por CLIENTES)
+                $ratings = \App\Models\SaleRating::with('salesQueue.customer')
+                    ->where('rater_type', 'CLIENT')
+                    ->whereHas('salesQueue.assignedShift', function($query) use ($emp) {
+                        $query->where('employee_id', $emp->id);
+                    })->orderBy('created_at', 'desc')->get();
+
+                $emp->all_time_stars = $ratings->count() > 0 ? round($ratings->avg('stars'), 1) : null;
+                $emp->comments_history = $ratings;
+                return $emp;
+            })->sortByDesc('all_time_stars'); // Ordenamos a los mejores primero
         }
 
-        // --- RENDIMIENTO INDIVIDUAL ---
+        // --- RENDIMIENTO INDIVIDUAL (Se mantiene igual) ---
         $empData = null;
         if ($selectedEmployeeId && $activeTab === 'performance') {
             $empSalesQuery = SalesQueue::with('ratings')->whereHas('assignedShift', function($q) use ($selectedEmployeeId) {
@@ -147,33 +169,26 @@ class ReportController extends Controller
             $empServed = (clone $empSalesQuery)->count();
             $empAvgSeconds = (clone $empSalesQuery)->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
             
-            // Calculamos el promedio de estrellas que le dieron al vendedor
             $empAvgStars = \App\Models\SaleRating::where('rater_type', 'CLIENT')
                 ->whereIn('sales_queue_id', (clone $empSalesQuery)->select('id'))
                 ->avg('stars');
             
             $breakAnalysis = $this->calculateEmployeeBreaks($selectedEmployeeId, $start, $end);
-
             $empClientsPaginated = (clone $empSalesQuery)->orderBy('completed_at', 'desc')->paginate(10, ['*'], 'emp_page')->appends(request()->query());
             $empClientsPaginated->getCollection()->transform(function ($client) {
-                $client->formatted_wait = $this->formatSeconds(Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)));
-                $client->formatted_serve = $this->formatSeconds(Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)));
-                $client->is_reattended = str_ends_with($client->turn_number, '-R');
+                $client->formatted_wait = $this->formatSeconds($client->queued_at && $client->started_serving_at ? Carbon::parse($client->queued_at)->diffInSeconds(Carbon::parse($client->started_serving_at)) : 0);
+                $client->formatted_serve = $this->formatSeconds($client->started_serving_at && $client->completed_at ? Carbon::parse($client->started_serving_at)->diffInSeconds(Carbon::parse($client->completed_at)) : 0);
                 return $client;
             });
 
             $empData = [
                 'employee' => Employee::find($selectedEmployeeId),
                 'kpis' => [
-                    'served' => $empServed,
-                    'avg_time' => $this->formatSeconds($empAvgSeconds ?? 0),
-                    'total_break' => $breakAnalysis['total_formatted'],
-                    'total_available' => $breakAnalysis['total_available_formatted'],
-                    'avg_stars' => $empAvgStars ? round($empAvgStars, 1) : 0 // <--- NUEVO KPI INDIVIDUAL
+                    'served' => $empServed, 'avg_time' => $this->formatSeconds($empAvgSeconds ?? 0),
+                    'total_break' => $breakAnalysis['total_formatted'], 'total_available' => $breakAnalysis['total_available_formatted'],
+                    'avg_stars' => $empAvgStars ? round($empAvgStars, 1) : 0 
                 ],
-                'daily_breaks' => $breakAnalysis['daily_breaks'],
-                'timeline' => $breakAnalysis['timeline'],
-                'clients' => $empClientsPaginated
+                'daily_breaks' => $breakAnalysis['daily_breaks'], 'timeline' => $breakAnalysis['timeline'], 'clients' => $empClientsPaginated
             ];
         }
 
@@ -192,9 +207,10 @@ class ReportController extends Controller
             'employeesList' => $employeesList,
             'selectedEmployeeId' => $selectedEmployeeId,
             'empData' => $empData,
-            // --- ¡AQUÍ ESTÁ LA MAGIA QUE FALTABA! ---
-            'clientRatings' => $clientRatings,
-            'sellerRatings' => $sellerRatings
+            
+            // NUEVAS VARIABLES AL VISTA
+            'customersDirectory' => $customersDirectory,
+            'sellersDirectory' => $sellersDirectory
         ]);
     }
 

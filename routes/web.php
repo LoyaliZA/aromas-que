@@ -82,6 +82,12 @@ Route::prefix('admin')
         Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
         Route::post('/tv-ads/reorder', [App\Http\Controllers\Admin\TvAdController::class, 'reorder'])->name('tv_ads.reorder');
         Route::post('/tv-ads/{tvAd}/volume', [App\Http\Controllers\Admin\TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
+
+        // --- RUTAS: MÓDULO DE RESEÑAS Y CALIDAD ---
+        Route::get('/reviews', [App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
+        Route::get('/reviews/search', [App\Http\Controllers\Admin\ReviewController::class, 'search'])->name('reviews.search'); // <-- NUEVA
+        Route::get('/reviews/seller/{id}', [App\Http\Controllers\Admin\ReviewController::class, 'showSeller'])->name('reviews.seller');
+        Route::get('/reviews/customer/{id}', [App\Http\Controllers\Admin\ReviewController::class, 'showCustomer'])->name('reviews.customer');
     });
 
 /*

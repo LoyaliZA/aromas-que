@@ -26,7 +26,7 @@ export default defineConfig({
             ],
         },
         hmr: {
-            host: '192.168.1.66',
+            host: '100.75.11.59',
             // Al quitarla, el navegador usará la IP que esté en la barra de direcciones
         },
     },
