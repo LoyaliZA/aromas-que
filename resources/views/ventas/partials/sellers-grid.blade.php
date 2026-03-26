@@ -52,6 +52,8 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     @if($isOnBreak)
     data-on-break="true"
     data-break-start-time="{{ $breakStartTime }}"
+    data-break-reason="{{ $shift->break_reason }}"
+    data-lunch-left="{{ $shift->lunch_seconds_left ?? 1800 }}"
     @endif
     @if($isOnline)
     data-online="true"
@@ -163,17 +165,16 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 </button>
                 
             @elseif($isOnline || $isOnBreak)
-                {{-- TUS BOTONES ORIGINALES DE PAUSA (Intactos) --}}
                 @if($isOnBreak)
                     <form action="{{ route('ventas.toggle-break') }}" method="POST">
                         @csrf
                         <input type="hidden" name="shift_id" value="{{ $shift->id }}">
                         <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
-                            Regresar a Activo
+                            {{ $shift->break_reason === 'LUNCH' ? 'Pausar Comida y Volver' : 'Regresar a Activo' }}
                         </button>
                     </form>
                 @else
-                    <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, hasTakenLunch: {{ $shift->has_taken_lunch ? 'true' : 'false' }} })"
+                    <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, lunchLeft: {{ $shift->lunch_seconds_left ?? 1800 }} })"
                         class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
                         Pausar Turno
                     </button>

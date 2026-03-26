@@ -84,11 +84,11 @@
                         </svg>
                         Baño
                     </button>
-                    <button type="button" @click="selectBreakReason('LUNCH')" :class="hasTakenLunch ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
-                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h14a2 2 0 012 2v6z"></path>
-                        </svg>
-                        Comida <span x-show="hasTakenLunch" class="absolute bottom-2 text-[10px] text-red-400 font-black">Ya Tomado</span>
+                    <button type="button" @click="selectBreakReason('LUNCH')" :class="lunchSecondsLeft <= 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h14a2 2 0 012 2v6z"></path></svg>
+                        Comida 
+                        <span x-show="lunchSecondsLeft <= 0" class="absolute bottom-2 text-[10px] text-red-400 font-black">Agotado</span>
+                        <span x-show="lunchSecondsLeft > 0 && lunchSecondsLeft < 1800" class="absolute bottom-2 text-[10px] text-yellow-400 font-black" x-text="Math.floor(lunchSecondsLeft/60) + ' min' + (lunchSecondsLeft < 60 ? ' (Poco tiempo)' : '')"></span>
                     </button>
                     <button type="button" @click="selectBreakReason('ERRAND')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
                         <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,7 +243,7 @@
                 showBreakModal: false,
                 showLunchConfirmModal: false,
                 breakShiftId: null,
-                hasTakenLunch: false,
+                lunchSecondsLeft: 1800,
 
                 showRetentionModal: false,
                 retentionList: [],
@@ -294,7 +294,7 @@
                     window.speechSynthesis.onvoiceschanged = loadVoices;
                     window.addEventListener('open-break-modal', event => {
                         this.breakShiftId = event.detail.id;
-                        this.hasTakenLunch = event.detail.hasTakenLunch;
+                        this.lunchSecondsLeft = event.detail.lunchLeft;
                         this.showBreakModal = true;
                     });
 
@@ -371,11 +371,9 @@
 
                 selectBreakReason(reason) {
                     if (reason === 'LUNCH') {
-                        if (this.hasTakenLunch) return;
+                        if (this.lunchSecondsLeft <= 0) return; // Ya no tiene tiempo
                         this.showBreakModal = false;
-                        setTimeout(() => {
-                            this.showLunchConfirmModal = true;
-                        }, 200);
+                        setTimeout(() => { this.showLunchConfirmModal = true; }, 200);
                         return;
                     }
                     this.executeBreak(reason);
@@ -410,10 +408,42 @@
                     const breakCards = document.querySelectorAll('.seller-card[data-on-break="true"]');
                     breakCards.forEach(card => {
                         let breakStartTime = parseInt(card.dataset.breakStartTime);
+                        let breakReason = card.dataset.breakReason;
+                        let lunchLeft = parseInt(card.dataset.lunchLeft) || 1800;
                         if (!breakStartTime) return;
-                        let elapsedSecs = Math.floor((now - breakStartTime) / 1000);
+                        
                         let timerEl = card.querySelector('.break-timer');
-                        if (timerEl) {
+                        if (!timerEl) return;
+
+                        let elapsedSecs = Math.floor((now - breakStartTime) / 1000);
+
+                        if (breakReason === 'LUNCH') {
+                            // LÓGICA COMIDA: Cuenta regresiva y 5 mins de Gracia
+                            if (elapsedSecs < 0) {
+                                // Estamos en la gracia de 5 mins
+                                let graceLeft = Math.abs(elapsedSecs);
+                                let gMins = Math.floor(graceLeft / 60);
+                                let gSecs = graceLeft % 60;
+                                timerEl.innerText = `Inicio en: ${gMins.toString().padStart(2, '0')}:${gSecs.toString().padStart(2, '0')}`;
+                                timerEl.className = "break-timer text-xl font-mono font-bold text-blue-400 tracking-wider animate-pulse";
+                            } else {
+                                // Ya cuenta de sus 30 mins
+                                let remaining = lunchLeft - elapsedSecs;
+                                if (remaining < 0) {
+                                    let excess = Math.abs(remaining);
+                                    let eMins = Math.floor(excess / 60);
+                                    let eSecs = excess % 60;
+                                    timerEl.innerText = `-${eMins.toString().padStart(2, '0')}:${eSecs.toString().padStart(2, '0')}`;
+                                    timerEl.className = "break-timer text-2xl font-mono font-black text-red-500 tracking-wider animate-pulse";
+                                } else {
+                                    let rMins = Math.floor(remaining / 60);
+                                    let rSecs = remaining % 60;
+                                    timerEl.innerText = `${rMins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')}`;
+                                    timerEl.className = "break-timer text-2xl font-mono font-bold text-yellow-400 tracking-wider";
+                                }
+                            }
+                        } else {
+                            // PAUSAS NORMALES: Cuenta hacia arriba
                             let absSecs = Math.abs(elapsedSecs);
                             let mins = Math.floor(absSecs / 60);
                             let secs = absSecs % 60;

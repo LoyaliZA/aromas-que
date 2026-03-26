@@ -64,15 +64,17 @@ class QueueController extends Controller
         $shift = DailyShift::findOrFail($request->shift_id);
         $previousStatus = $shift->current_status;
 
+        // ACCIÓN: ENTRAR A UNA PAUSA
         if ($shift->current_status === 'ONLINE') {
             $reason = $request->reason ?? 'GENERAL';
 
             if ($reason === 'LUNCH') {
-                if ($shift->has_taken_lunch) {
-                    return back()->with('error', 'El vendedor ya ha tomado su break de comida hoy.');
+                if ($shift->lunch_seconds_left <= 0) {
+                    return back()->with('error', 'El tiempo de comida se ha agotado.');
                 }
                 $shift->has_taken_lunch = true;
-                $statusChangeAt = now()->addMinutes(5);
+                // LOS 5 MINUTOS DE GRACIA INICIALES
+                $statusChangeAt = now()->addMinutes(5); 
             } else {
                 $statusChangeAt = now();
             }
@@ -88,15 +90,28 @@ class QueueController extends Controller
                 'daily_shift_id' => $shift->id,
                 'previous_status' => $previousStatus,
                 'new_status' => 'BREAK',
-                'reason' => $reason, // <-- AHORA SÍ GUARDAMOS EL MOTIVO HISTÓRICO
+                'reason' => $reason,
                 'changed_at' => now(), 
             ]);
+            
+        // ACCIÓN: SALIR DE UNA PAUSA (REGRESAR A PISO)
         } elseif ($shift->current_status === 'BREAK') {
+            
+            // LÓGICA DE PAUSA DE COMIDA: Restar el tiempo que estuvo ausente
+            if ($shift->break_reason === 'LUNCH') {
+                // Solo restamos tiempo si ya pasaron los 5 minutos de gracia
+                if (now()->greaterThan($shift->last_status_change_at)) {
+                    $consumedSeconds = $shift->last_status_change_at->diffInSeconds(now());
+                    $shift->lunch_seconds_left = max(0, $shift->lunch_seconds_left - $consumedSeconds);
+                }
+            }
+
             $shift->update([
                 'current_status' => 'ONLINE',
                 'break_reason' => null,
+                'lunch_seconds_left' => $shift->lunch_seconds_left,
                 'last_status_change_at' => now(),
-                'last_action_at' => now() // <-- AÑADIDO PARA OTORGAR LOS 10 SEGUNDOS DE GRACIA AL VOLVER A PISO
+                'last_action_at' => now() // <-- LOS 10 SEGUNDOS DE DELAY AL VOLVER A PISO
             ]);
 
             ShiftStatusLog::create([

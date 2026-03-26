@@ -23,6 +23,7 @@ class DailyShift extends Model
         'current_status',       // ONLINE, BREAK, BUSY, OFFLINE
         'break_reason',         // Agregado: BATHROOM, LUNCH, ERRAND, PACKAGING
         'has_taken_lunch',      // Nuevo: Indica si ya tomó su comida hoy
+        'lunch_seconds_left',   // Nuevo: Cuántos segundos de comida le quedan (1800 = 30 min)
         'flagged_as_idle',      // Si el sistema detectó abandono (True/False)
         'customers_served_count',
         'last_status_change_at',
@@ -37,6 +38,7 @@ class DailyShift extends Model
         return [
             'work_date' => 'date',
             'has_taken_lunch' => 'boolean',
+            'lunch_seconds_left' => 'integer',
             'flagged_as_idle' => 'boolean',
             'last_status_change_at' => 'datetime',
             'last_action_at' => 'datetime',
