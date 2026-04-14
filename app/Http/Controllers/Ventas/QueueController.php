@@ -10,6 +10,7 @@ use App\Models\SalesQueue;
 use App\Models\ShiftStatusLog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class QueueController extends Controller
 {
@@ -255,20 +256,33 @@ class QueueController extends Controller
 
     private function runMatchmaker()
     {
+        // 1. Candado Atómico: Previene la condición de carrera.
+        // Si varias peticiones llegan al mismo tiempo, solo una adquiere el bloqueo.
+        $lock = Cache::lock('matchmaker_lock', 5);
+
+        if (!$lock->get()) {
+            return; // Otro proceso ya está emparejando, abortamos silenciosamente.
+        }
+
         try {
             DB::transaction(function () {
                 $waitingClients = SalesQueue::waiting()->sales()->count();
                 if ($waitingClients === 0) return;
 
+                // 2. Optimización (Escalabilidad): Usamos whereNotExists directo en SQL 
+                // en lugar de iterar con Laravel, evitando el problema de consultas N+1.
                 $availableShifts = DailyShift::where('work_date', today())
                     ->where('current_status', 'ONLINE')
+                    ->whereNotExists(function ($query) {
+                        $query->select(DB::raw(1))
+                            ->from('sales_queue')
+                            ->whereColumn('sales_queue.assigned_shift_id', 'daily_shifts.id')
+                            ->where('sales_queue.status', 'SERVING');
+                    })
+                    ->lockForUpdate() // Bloqueo de fila para mayor seguridad
                     ->get();
 
                 $freeShifts = $availableShifts->filter(function ($shift) {
-                    $isServing = SalesQueue::where('assigned_shift_id', $shift->id)
-                        ->where('status', 'SERVING')
-                        ->exists();
-
                     $cooldownPassed = true;
                     if (!empty($shift->last_action_at)) {
                         try {
@@ -278,7 +292,7 @@ class QueueController extends Controller
                         }
                     }
 
-                    return !$isServing && $cooldownPassed;
+                    return $cooldownPassed;
                 });
 
                 if ($freeShifts->isEmpty()) return;
@@ -295,7 +309,12 @@ class QueueController extends Controller
                             'assigned_shift_id' => $shift->id,
                             'started_serving_at' => now(),
                         ]);
-                        $shift->update(['flagged_as_idle' => false]);
+                        
+                        // Refrescamos last_action_at para reiniciar su estado de actividad
+                        $shift->update([
+                            'flagged_as_idle' => false,
+                            'last_action_at' => now() 
+                        ]);
                     } else {
                         break;
                     }
@@ -303,6 +322,9 @@ class QueueController extends Controller
             });
         } catch (\Exception $e) {
             Log::error('Error crítico en el Matchmaker: ' . $e->getMessage());
+        } finally {
+            // 3. Siempre liberamos el candado para que la siguiente ronda pueda ejecutarse
+            $lock->release();
         }
     }
 }
