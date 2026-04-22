@@ -34,8 +34,7 @@
                     Información Laboral
                 </h3>
 
-                {{-- ALPINE.JS para mostrar checkbox del gerente --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ role: '{{ old('job_position', $employee->job_position) }}' }">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ role: '{{ old('job_position', $employee->job_position) }}', dept: '{{ old('department', $employee->department) }}' }">
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Nombre Completo</label>
                         <input type="text" name="full_name" value="{{ old('full_name', $employee->full_name) }}" required
@@ -49,7 +48,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Puesto / Rol</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Puesto de Trabajo</label>
                         <select name="job_position" required x-model="role"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
                             <option value="SELLER">Vendedor (Piso)</option>
@@ -57,6 +56,18 @@
                             <option value="CHECKER">Checador (Recepción)</option>
                             <option value="ADMIN">Administrador</option>
                             <option value="AUXILIAR">Auxiliar (Anuncios TV)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Departamento / Área</label>
+                        <select name="department" required x-model="dept"
+                            class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
+                            <option value="NONE">Sin Área Específica</option>
+                            <option value="AROMAS">Aromas</option>
+                            <option value="BELLAROMA">Logística Bellaroma</option>
+                            <option value="CALLCENTER">Call Center</option>
+                            <option value="CEDIS">CEDIS (Centro de Distribución)</option>
                         </select>
                     </div>
 
@@ -69,12 +80,10 @@
                         </label>
                     </div>
 
-                    {{-- PERMISOS ESPECIALES (Solo se muestran si es MANAGER) --}}
                     <div class="col-span-full" x-show="role === 'MANAGER'" x-cloak>
                         <div class="p-5 bg-aromas-main border border-yellow-500/30 rounded-lg shadow-inner flex flex-col gap-5">
                             <h4 class="text-sm font-bold text-yellow-400 uppercase tracking-wider border-b border-yellow-500/20 pb-2">Permisos Especiales de Gerencia</h4>
 
-                            {{-- Permiso 1: Rezagados --}}
                             <label class="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="can_manage_rezagados" value="1" class="sr-only peer"
                                     {{ old('can_manage_rezagados', $employee->user->can_manage_rezagados ?? false) ? 'checked' : '' }}>
@@ -85,7 +94,6 @@
                                 </div>
                             </label>
 
-                            {{-- Permiso 2: Turnos (NUEVO) --}}
                             <label class="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="can_manage_shifts" value="1" class="sr-only peer"
                                     {{ old('can_manage_shifts', $employee->user->can_manage_shifts ?? false) ? 'checked' : '' }}>
@@ -151,7 +159,6 @@
         </form>
     </div>
 
-    {{-- FORMULARIO DE DESACTIVACIÓN OCULTO --}}
     <form id="delete-form-{{ $employee->id }}" action="{{ route('admin.users.destroy', $employee->id) }}" method="POST" class="hidden">
         @csrf
         @method('DELETE')

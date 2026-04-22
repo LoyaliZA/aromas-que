@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Recepcion;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pickup;
+use App\Models\PickupStatus;
 use App\Models\SalesQueue;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Storage;
@@ -18,12 +19,18 @@ class DeliveryController extends Controller
      */
     public function index(Request $request)
     {
+        // 1. Obtener IDs de los estatus desde el catálogo
+        $inCustodyId = PickupStatus::where('code', 'IN_CUSTODY')->value('id');
+        $dispatchedId = PickupStatus::where('code', 'DISPATCHED')->value('id');
+
+        // 2. Consulta principal (Lo que ya tiene el checador)
         $query = Pickup::visibleForChecker();
 
         if ($request->has('status') && $request->status !== 'ALL') {
-            $query->where('status', $request->status);
+            $statusId = PickupStatus::where('code', $request->status)->value('id');
+            $query->where('status_id', $statusId);
         } else {
-            $query->where('status', 'IN_CUSTODY');
+            $query->where('status_id', $inCustodyId);
         }
 
         if ($request->has('department') && $request->department !== 'ALL') {
@@ -40,9 +47,17 @@ class DeliveryController extends Controller
             });
         }
 
-        $query->orderBy('created_at', 'desc');
-        $pickups = $query->paginate(12)->withQueryString();
+        $pickups = $query->orderBy('created_at', 'desc')->paginate(12)->withQueryString();
         $peopleInQueue = SalesQueue::waiting()->count();
+
+        // 3. NUEVO: Consultar paquetes EN CAMINO (Solo los que son para recoger en tienda)
+        $incomingPickups = Pickup::where('status_id', $dispatchedId)
+            ->whereHas('logistic', function($q) {
+                $q->where('is_store_pickup', true);
+            })
+            ->with('logistic')
+            ->orderBy('updated_at', 'desc')
+            ->get();
 
         if ($request->ajax()) {
             $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
@@ -52,7 +67,7 @@ class DeliveryController extends Controller
             ]);
         }
 
-        return view('recepcion.dashboard', compact('pickups', 'peopleInQueue'));
+        return view('recepcion.dashboard', compact('pickups', 'peopleInQueue', 'incomingPickups'));
     }
 
     /**

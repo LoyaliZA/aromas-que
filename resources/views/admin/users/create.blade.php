@@ -33,8 +33,7 @@
                     Información Laboral
                 </h3>
 
-                {{-- ALPINE.JS: Reactive state para ocultar/mostrar opciones según el puesto --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ role: '{{ old('job_position', 'SELLER') }}' }">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-data="{ role: '{{ old('job_position', 'SELLER') }}', dept: '{{ old('department', 'NONE') }}' }">
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-2">Nombre Completo</label>
                         <input type="text" name="full_name" value="{{ old('full_name') }}" required
@@ -50,7 +49,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Puesto / Rol</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Puesto de Trabajo</label>
                         <select name="job_position" required x-model="role"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
                             <option value="SELLER">Vendedor (Piso)</option>
@@ -61,20 +60,30 @@
                         </select>
                     </div>
 
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Departamento / Área</label>
+                        <select name="department" required x-model="dept"
+                            class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
+                            <option value="NONE">Sin Área Específica</option>
+                            <option value="AROMAS">Aromas</option>
+                            <option value="BELLAROMA">Logística Bellaroma</option>
+                            <option value="CALLCENTER">Call Center</option>
+                            <option value="CEDIS">CEDIS (Centro de Distribución)</option>
+                        </select>
+                    </div>
+
                     <div class="flex items-center pt-8">
                         <label class="inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="appears_in_sales_queue" value="1" class="sr-only peer" {{ old('appears_in_sales_queue', true) ? 'checked' : '' }}>
-                            <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                            <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
                             <span class="ms-3 text-sm font-medium text-gray-300">Mostrar en Pantalla de Turnos</span>
                         </label>
                     </div>
 
-                    {{-- PERMISOS ESPECIALES (Solo se muestran si es MANAGER) --}}
                     <div class="col-span-full" x-show="role === 'MANAGER'" x-cloak>
                         <div class="p-5 bg-aromas-main border border-yellow-500/30 rounded-lg shadow-inner flex flex-col gap-5">
                             <h4 class="text-sm font-bold text-yellow-400 uppercase tracking-wider border-b border-yellow-500/20 pb-2">Permisos Especiales de Gerencia</h4>
 
-                            {{-- Permiso 1: Rezagados --}}
                             <label class="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="can_manage_rezagados" value="1" class="sr-only peer" {{ old('can_manage_rezagados') ? 'checked' : '' }}>
                                 <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
@@ -84,7 +93,6 @@
                                 </div>
                             </label>
 
-                            {{-- Permiso 2: Turnos (NUEVO) --}}
                             <label class="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" name="can_manage_shifts" value="1" class="sr-only peer" {{ old('can_manage_shifts') ? 'checked' : '' }}>
                                 <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>

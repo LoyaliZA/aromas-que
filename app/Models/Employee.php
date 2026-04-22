@@ -14,9 +14,10 @@ class Employee extends Model
 
     protected $fillable = [
         'user_id',
-        'full_name', // <--- CAMBIO: Agregamos full_name a la lista permitida
+        'full_name', 
         'employee_code',
         'job_position',
+        'department', 
         'appears_in_sales_queue',
         'hire_date',
         'is_active',

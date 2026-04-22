@@ -85,12 +85,19 @@ class DailyShift extends Model
     */
 
     /**
-     * Filtra solo los turnos que están "En Línea" y listos para recibir clientes.
+     * Filtra solo los turnos que están "En Línea" y NO están atendiendo a nadie.
      */
     public function scopeAvailable(Builder $query): void
     {
         $query->where('current_status', 'ONLINE')
-              ->where('flagged_as_idle', false);
+            ->where('flagged_as_idle', false)
+            // Nueva protección: No debe tener clientes en estado SERVING
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('sales_queue')
+                    ->whereColumn('sales_queue.assigned_shift_id', 'daily_shifts.id')
+                    ->where('sales_queue.status', 'SERVING');
+            });
     }
 
     /*

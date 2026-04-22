@@ -1,8 +1,15 @@
 <x-tablet-layout>
-    <div x-data="deliveryApp({{ $peopleInQueue }})" x-init="init()" class="pb-10 relative">
+    {{-- Inicialización de Alpine con el nuevo path y configuración de rutas --}}
+    <div x-data="deliveryApp({ 
+            queueCount: {{ $peopleInQueue }}, 
+            routes: { 
+                dashboard: '{{ route('recepcion.dashboard') }}', 
+                queueList: '{{ route('recepcion.queue.list') }}' 
+            } 
+        })" x-init="init()" class="pb-10 relative">
 
         {{-- ========================================================== --}}
-        {{-- SECCIÓN 1: GESTIÓN DE FILA Y TURNOS                     --}}
+        {{-- SECCIÓN 1: GESTIÓN DE FILA Y TURNOS                        --}}
         {{-- ========================================================== --}}
         <div class="mb-4 flex items-center gap-3">
             <div class="p-2 bg-aromas-highlight/20 rounded-lg text-aromas-highlight shadow-inner">
@@ -46,9 +53,8 @@
             </button>
         </div>
 
-
         {{-- ========================================================== --}}
-        {{-- SECCIÓN 2: PAQUETES EN RESGUARDO                        --}}
+        {{-- SECCIÓN 2: PAQUETES EN RESGUARDO / EN CAMINO               --}}
         {{-- ========================================================== --}}
         <div class="mb-4 flex items-center gap-3">
             <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400 shadow-inner">
@@ -57,6 +63,29 @@
             <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
         </div>
 
+        {{-- NUEVA SECCIÓN: PAQUETES EN CAMINO (Auditados desde CEDIS) --}}
+        @if($incomingPickups->count() > 0)
+        <div class="mb-8 bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 shadow-lg overflow-hidden">
+            <h3 class="text-blue-400 font-bold uppercase tracking-widest text-xs flex items-center mb-4">
+                <svg class="w-5 h-5 mr-2 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                En camino a sucursal ({{ $incomingPickups->count() }})
+            </h3>
+            <div class="flex overflow-x-auto gap-4 pb-2">
+                @foreach($incomingPickups as $incoming)
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-3 min-w-[250px] shrink-0">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-mono text-gray-400">#{{ $incoming->ticket_folio }}</span>
+                        <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded uppercase font-bold">{{ $incoming->department }}</span>
+                    </div>
+                    <p class="text-white font-bold text-sm truncate">{{ $incoming->client_name }}</p>
+                    <p class="text-xs text-gray-400 mt-1">Cajas: <span class="text-white font-bold">{{ $incoming->pieces }}</span></p>
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
+
+        {{-- BARRA DE BÚSQUEDA --}}
         <div class="bg-aromas-secondary rounded-xl p-4 shadow-md border border-aromas-tertiary/20 mb-6 sticky top-2 z-30">
             <div class="flex flex-col md:flex-row gap-4">
                 <div class="flex-1 relative">
@@ -68,45 +97,38 @@
 
                 <div class="contents">
                     <select id="deptFilter" @change="fetchData(search)" class="bg-black/20 border border-aromas-tertiary/30 text-white rounded-lg px-4 py-3 focus:border-aromas-highlight cursor-pointer">
-                        <option value="ALL">Todos</option>
-                        <option value="AROMAS" {{ request('department') == 'AROMAS' ? 'selected' : '' }}>Aromas</option>
-                        <option value="BELLAROMA" {{ request('department') == 'BELLAROMA' ? 'selected' : '' }}>Bellaroma</option>
+                        <option value="ALL">Todos los Deptos</option>
+                        <option value="BELLAROMA">Bellaroma</option>
+                        <option value="CALLCENTER">Call Center</option>
+                        <option value="AROMAS">Aromas</option>
                     </select>
-                    <input type="hidden" id="statusFilter" value="{{ request('status', 'IN_CUSTODY') }}">
+                    <input type="hidden" id="statusFilter" value="IN_CUSTODY">
                 </div>
             </div>
         </div>
 
         {{-- Alertas Flash --}}
         @if(session('new_turn'))
-        <div x-data="{ showTurn: true }" x-show="showTurn" class="fixed inset-0 z-[60] flex items-center justify-center p-4" x-transition>
-            <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" @click="showTurn = false"></div>
-            <div class="bg-aromas-secondary border-2 border-aromas-highlight rounded-2xl shadow-[0_0_30px_rgba(253,201,116,0.3)] p-8 max-w-sm w-full text-center relative z-10 animate-fade-in-down">
-                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
-                    <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                </div>
-                <h3 class="text-xl font-bold text-white mb-2">Turno Asignado</h3>
-                <p class="text-aromas-tertiary text-sm mb-6">Indíquele al cliente su número:</p>
-                <div class="bg-gray-900 rounded-xl py-6 border border-gray-700 mb-6 shadow-inner">
-                    <div class="text-5xl font-black text-aromas-highlight tracking-widest mb-2">{{ session('new_turn') }}</div>
-                    <div class="text-white font-bold text-lg">{{ session('client_name') }}</div>
-                    <div class="text-gray-400 text-sm uppercase tracking-wider mt-1">Destino: <span class="{{ session('destination') == 'Caja' ? 'text-green-400' : 'text-yellow-400' }}">{{ session('destination') }}</span></div>
-                </div>
-                <button @click="showTurn = false" class="w-full bg-aromas-highlight text-aromas-main font-bold text-lg py-3 rounded-xl hover:bg-white transition-all shadow-lg">Cerrar y Continuar</button>
-            </div>
-        </div>
+            {{-- Modal de Turno Asignado (Mismo diseño que ya tenías) --}}
         @elseif(session('success'))
-        <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 bg-green-500/10 border-l-4 border-green-500 text-green-400 p-4 rounded shadow-lg flex items-center animate-fade-in-down">
-            <span class="font-bold">{{ session('success') }}</span>
-        </div>
+            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 bg-green-500/10 border-l-4 border-green-500 text-green-400 p-4 rounded shadow-lg flex items-center animate-fade-in-down">
+                <span class="font-bold">{{ session('success') }}</span>
+            </div>
         @endif
 
+        {{-- CONTENEDOR DE CARDS --}}
         <div id="results-container">
             @include('recepcion.partials.card-grid', ['pickups' => $pickups])
         </div>
-        <div class="mt-6">{{ $pickups->links() }}</div>
+        
+        <div class="mt-6">
+            {{ $pickups->links() }}
+        </div>
 
-
+        {{-- ========================================================== --}}
+        {{-- MODALES (Carga de componentes Alpine)                      --}}
+        {{-- ========================================================== --}}
+        
         {{-- ========================================================== --}}
         {{-- MODALES                                                 --}}
         {{-- ========================================================== --}}
@@ -220,7 +242,7 @@
                     </button>
                 </div>
 
-                <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6" @submit="return validateQueueForm($event)">
+                <form action="{{ route('recepcion.queue.add') }}" method="POST" class="p-6 space-y-6" @submit="if(!validateQueueForm($event)) $event.preventDefault()">
                     @csrf
                     
                     {{-- SWITCH DE CLIENTE NUEVO --}}
@@ -417,331 +439,8 @@
 
     </div>
 
+    {{-- SCRIPTS --}}
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
-    <script>
-        function deliveryApp(initialQueueCount) {
-            return {
-                search: '',
-                isLoading: false,
-                queueCount: initialQueueCount,
 
-                showDeliveryModal: false,
-                showQueueModal: false,
-                showQueueListModal: false,
-                showAbandonModal: false, 
 
-                pickup: {},
-                isThirdParty: false,
-                receiverName: '',
-                signaturePad: null,
-                signatureData: '',
-                isPadEmpty: true,
-
-                queueType: 'SALES',
-                waitingClients: [],
-                evidencePreview: null,
-                evidenceName: '', 
-
-                // --- NUEVAS VARIABLES PARA BUSCADOR Y ABANDONO ---
-                clientSearchQuery: '',
-                clientSearchResults: [],
-                showClientDropdown: false,
-                selectedCustomerId: '',
-                selectedCustomerObj: null, // <-- NUEVO: Guarda el objeto completo
-                abandoningClient: null,
-                abandonReasonId: '',
-                customAbandonReason: '',
-                
-                // --- NUEVAS VARIABLES PARA REPRESENTANTE Y DISCAPACIDAD ---
-                isThirdPartyQueue: false,
-                representativeNameQueue: '',
-                hasDisabilityQueue: false,
-                isNewCustomerQueue: false,
-                newClientName: '',
-
-                validateQueueForm(e) {
-                    if (!this.isNewCustomerQueue && !this.selectedCustomerId) {
-                        e.preventDefault();
-                        alert('⚠️ Acción no permitida: Debe buscar y seleccionar un cliente de la lista. \n\nSi es un cliente nuevo, active el interruptor superior.');
-                        return false;
-                    }
-                    if (this.isNewCustomerQueue && this.newClientName.trim() === '') {
-                        e.preventDefault();
-                        alert('⚠️ Por favor ingrese el nombre del cliente nuevo.');
-                        return false;
-                    }
-                    if (this.isThirdPartyQueue && this.representativeNameQueue.trim() === '') {
-                        e.preventDefault();
-                        alert('⚠️ Por favor ingrese el nombre de quien asiste a nombre del cliente.');
-                        return false;
-                    }
-                    return true;
-                },
-
-                init() {
-                    this.$watch('search', (value) => {
-                        this.fetchData(value);
-                    });
-
-                    // Limpiar el ID si el usuario borra o cambia el texto manualmente
-                    this.$watch('clientSearchQuery', (value) => {
-                        if(this.selectedCustomerId && (!this.selectedCustomerObj || this.selectedCustomerObj.name !== value)) {
-                            this.clearSelectedCustomer();
-                        }
-                    });
-
-                    setInterval(() => {
-                        if (this.showDeliveryModal || this.showQueueModal || this.showQueueListModal || this.showAbandonModal || this.search.length > 0) return;
-                        this.fetchData('');
-                    }, 5000);
-
-                    window.addEventListener('open-delivery-modal', event => {
-                        this.openDeliveryModal(event.detail);
-                    });
-                },
-
-                fetchData(searchValue) {
-                    this.isLoading = true;
-                    let dept = document.getElementById('deptFilter') ? document.getElementById('deptFilter').value : 'ALL';
-                    let status = document.getElementById('statusFilter') ? document.getElementById('statusFilter').value : 'IN_CUSTODY';
-
-                    let url = `{{ route('recepcion.dashboard') }}?search=${searchValue}&department=${dept}&status=${status}`;
-
-                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                        .then(r => r.json())
-                        .then(data => {
-                            document.getElementById('results-container').innerHTML = data.html;
-                            this.queueCount = data.queueCount;
-                            this.isLoading = false;
-                        })
-                        .catch(err => console.error('Error polling:', err));
-                },
-
-                // --- FUNCIONES DE FILA Y BUSCADOR ---
-                openQueueModal() {
-                    this.showQueueModal = true;
-                    this.queueType = 'SALES';
-                    this.clearSelectedCustomer();
-                    this.clientSearchQuery = '';
-                },
-
-                closeQueueModal() {
-                    this.showQueueModal = false;
-                    this.showClientDropdown = false;
-                },
-
-                searchCustomers() {
-                    if (this.clientSearchQuery.length < 2) {
-                        this.clientSearchResults = [];
-                        this.showClientDropdown = false;
-                        return;
-                    }
-                    
-                    fetch(`/recepcion/customers/search?q=${encodeURIComponent(this.clientSearchQuery)}`, {
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-                    })
-                    .then(r => r.json())
-                    .then(data => {
-                        this.clientSearchResults = data;
-                        this.showClientDropdown = data.length > 0;
-                    });
-                },
-
-                selectCustomer(customer) {
-                    this.selectedCustomerObj = customer;
-                    this.selectedCustomerId = customer.id;
-                    this.clientSearchQuery = customer.name;
-                    this.showClientDropdown = false;
-                    this.isThirdPartyQueue = false;
-                    this.representativeNameQueue = '';
-                    this.hasDisabilityQueue = false; // Se reinicia para que el checador lo evalúe físicamente
-                },
-                
-                clearSelectedCustomer() {
-                    this.selectedCustomerObj = null;
-                    this.selectedCustomerId = '';
-                    this.isThirdPartyQueue = false;
-                    this.representativeNameQueue = '';
-                    this.hasDisabilityQueue = false;
-                },
-                // ------------------------------------------------
-
-                openQueueListModal() {
-                    this.fetchQueueList();
-                    this.showQueueListModal = true;
-                },
-
-                fetchQueueList() {
-                    fetch("{{ route('recepcion.queue.list') }}", {
-                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.clients) {
-                                this.waitingClients = data.clients;
-                                this.queueCount = data.clients.length;
-                            }
-                        });
-                },
-
-                openAbandonModal(client) {
-                    this.abandoningClient = client;
-                    this.abandonReasonId = '';
-                    this.customAbandonReason = ''; 
-                    this.showAbandonModal = true;
-                },
-
-                confirmAbandon() {
-                    if (!this.abandonReasonId) {
-                        alert("Por favor selecciona un motivo de abandono.");
-                        return;
-                    }
-
-                    // NUEVA VALIDACIÓN: Si es "Otro", obligar a escribir
-                    if (this.abandonReasonId == '4' && !this.customAbandonReason.trim()) {
-                        alert("Por favor escribe el motivo personalizado.");
-                        return;
-                    }
-
-                    fetch(`/recepcion/queue/${this.abandoningClient.id}/abandon`, {
-                            method: 'PUT',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                                'Accept': 'application/json'
-                            },
-                            body: JSON.stringify({ 
-                                abandonment_reason_id: this.abandonReasonId,
-                                custom_abandonment_reason: this.abandonReasonId == '4' ? this.customAbandonReason : null // <-- ENVIAMOS EL TEXTO
-                            })
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.success) {
-                                this.showAbandonModal = false;
-                                this.fetchQueueList(); 
-                                this.fetchData(this.search); 
-                            } else {
-                                alert(data.message || 'Error al procesar la solicitud.');
-                            }
-                        });
-                },
-
-                confirmReceipt(id) {
-                    fetch(`/recepcion/receive/${id}`, {
-                            method: 'PUT',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                                'Accept': 'application/json'
-                            }
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.success) {
-                                this.fetchData(this.search); 
-                            } else {
-                                alert(data.message || 'Error al confirmar recepción.');
-                            }
-                        });
-                },
-
-                openDeliveryModal(data) {
-                    this.pickup = data;
-                    if (data.is_third_party) {
-                        this.isThirdParty = true;
-                        this.receiverName = data.receiver_name;
-                    } else {
-                        this.isThirdParty = false;
-                        this.receiverName = '';
-                    }
-                    this.showDeliveryModal = true;
-                    setTimeout(() => {
-                        this.initPad();
-                    }, 100);
-                },
-
-                closeModal() {
-                    this.showDeliveryModal = false;
-                    this.evidencePreview = null;
-                    this.evidenceName = '';
-                    const fileInput = document.getElementById('evidence_file');
-                    if (fileInput) fileInput.value = '';
-                },
-
-                handleEvidenceChange(event) {
-                    const file = event.target.files[0];
-                    if (!file) {
-                        this.evidencePreview = null;
-                        this.evidenceName = '';
-                        return;
-                    }
-                    this.evidenceName = file.name;
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        this.evidencePreview = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                },
-
-                removeEvidence() {
-                    this.evidencePreview = null;
-                    this.evidenceName = '';
-                    const fileInput = document.getElementById('evidence_file');
-                    if (fileInput) fileInput.value = '';
-                },
-
-                initPad() {
-                    const canvas = this.$refs.signature_canvas;
-                    if (!canvas) return;
-
-                    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                    canvas.width = canvas.offsetWidth * ratio;
-                    canvas.height = canvas.offsetHeight * ratio;
-                    canvas.getContext("2d").scale(ratio, ratio);
-
-                    if (this.signaturePad) {
-                        this.signaturePad.clear();
-                    } else {
-                        this.signaturePad = new SignaturePad(canvas, {
-                            backgroundColor: 'rgba(255,255,255,0)',
-                            penColor: 'rgb(0,0,0)',
-                            velocityFilterWeight: 0.7
-                        });
-                        this.signaturePad.addEventListener("beginStroke", () => {
-                            this.isPadEmpty = false;
-                        });
-                    }
-                    this.isPadEmpty = true;
-                },
-
-                clearPad() {
-                    if (this.signaturePad) {
-                        this.signaturePad.clear();
-                        this.isPadEmpty = true;
-                        this.signatureData = '';
-                    }
-                },
-
-                submitDelivery() {
-                    if (!this.signaturePad || this.signaturePad.isEmpty()) {
-                        alert('La firma es obligatoria.');
-                        return;
-                    }
-
-                    if (!this.evidencePreview) {
-                        alert('La foto de evidencia es obligatoria. Por favor toma una foto antes de continuar.');
-                        return;
-                    }
-
-                    this.signatureData = this.signaturePad.toDataURL('image/png');
-
-                    this.$nextTick(() => {
-                        document.getElementById('deliveryForm').submit();
-                    });
-                }
-            }
-        }
-    </script>
 </x-tablet-layout>

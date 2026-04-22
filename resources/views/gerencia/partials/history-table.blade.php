@@ -19,23 +19,28 @@
                         <td class="px-6 py-3 font-mono text-aromas-highlight font-medium">{{ $pickup->ticket_folio }}</td>
                         <td class="px-6 py-3"><div class="font-bold text-white">{{ $pickup->client_name }}</div><span class="text-xs text-gray-500">ID: {{ $pickup->client_ref_id }}</span></td>
                         <td class="px-6 py-3 text-center">
-                            @if($pickup->department === 'AROMAS') <span class="px-2 py-1 bg-purple-900/40 text-purple-300 rounded text-xs border border-purple-500/20">Aromas</span>
+                            @if($pickup->department === 'CALLCENTER') <span class="px-2 py-1 bg-indigo-900/40 text-indigo-300 rounded text-xs border border-indigo-500/20">Call Center</span>
+                            @elseif($pickup->department === 'AROMAS') <span class="px-2 py-1 bg-purple-900/40 text-purple-300 rounded text-xs border border-purple-500/20">Aromas</span>
                             @else <span class="px-2 py-1 bg-pink-900/40 text-pink-300 rounded text-xs border border-pink-500/20">Bellaroma</span> @endif
                         </td>
                         <td class="px-6 py-3 text-center text-white font-bold">{{ $pickup->pieces }}</td>
                         <td class="px-6 py-3">
-                            @if($pickup->status === 'DELIVERED')
+                            @if($pickup->currentStatus?->code === 'DELIVERED')
                                 @if($pickup->is_third_party) <div class="text-yellow-400 text-xs font-bold uppercase mb-0.5">Tercero:</div><div class="text-white">{{ $pickup->receiver_name }}</div>
                                 @else <div class="text-gray-400 text-xs uppercase mb-0.5">Titular:</div><div class="text-white">{{ $pickup->receiver_name ?? $pickup->client_name }}</div> @endif
                             @else <span class="text-gray-600">---</span> @endif
                         </td>
                         <td class="px-6 py-3">
-                            @if($pickup->status === 'IN_CUSTODY') <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-500 border border-yellow-500/20">En Custodia</span>
-                            @else <div class="flex flex-col"><span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">Entregado</span><span class="text-[10px] text-gray-500 mt-1">{{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i') : '' }}</span></div> @endif
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/10 text-{{ $pickup->currentStatus?->color ?? 'gray' }}-400 border border-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/20">
+                                {{ $pickup->currentStatus?->name ?? 'Desconocido' }}
+                            </span>
+                            @if($pickup->currentStatus?->code === 'DELIVERED')
+                                <span class="block text-[10px] text-gray-500 mt-1">{{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i') : '' }}</span>
+                            @endif
                         </td>
                         <td class="px-6 py-3 text-right text-aromas-tertiary">{{ $pickup->created_at->format('d/m/Y H:i') }}</td>
                         <td class="px-6 py-3 text-center">
-                            @if($pickup->status === 'DELIVERED')
+                            @if($pickup->currentStatus?->code === 'DELIVERED')
                                 <button @click="openDetailsModal({
                                             ticket_folio: '{{ $pickup->ticket_folio }}',
                                             client_name: '{{ addslashes($pickup->client_name) }}',

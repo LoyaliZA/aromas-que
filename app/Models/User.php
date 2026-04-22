@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Laravel\Sanctum\HasApiTokens; // <-- Importar el trait de Sanctum
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    // <-- Agregar HasApiTokens al inicio
+    use HasApiTokens, HasFactory, Notifiable; 
 
     /**
      * Los atributos que se pueden asignar masivamente (Mass Assignable).
@@ -74,10 +76,24 @@ class User extends Authenticatable
         return $this->role === 'SELLER';
     }
 
-    // Método para el nuevo rol de Auxiliar
     public function isAuxiliar(): bool
     {
         return $this->role === 'AUXILIAR';
+    }
+
+    public function isBellaroma(): bool
+    {
+        return $this->role === 'BELLAROMA';
+    }
+
+    public function isCallCenter(): bool
+    {
+        return $this->role === 'CALLCENTER';
+    }
+
+    public function isCedis(): bool
+    {
+        return $this->role === 'CEDIS';
     }
 
     /**

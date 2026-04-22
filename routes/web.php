@@ -6,14 +6,23 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ReportController;
-
-// --- NUEVOS CONTROLADORES (MODULOS) ---
+use App\Http\Controllers\Admin\CatalogController;
 use App\Http\Controllers\Gerencia\PickupController;
 use App\Http\Controllers\Recepcion\DeliveryController;
 use App\Http\Controllers\Ventas\QueueController;
 use App\Http\Controllers\Public\TvController;
-// Añadimos el nuevo controlador de clientes para el admin
+use App\Http\Controllers\Admin\TvAdController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\ReviewController;
+use App\Http\Controllers\Gerencia\StaffController;
+use App\Http\Controllers\Gerencia\ClientRatingController;
+use App\Http\Controllers\Logistica\BellaromaController;
+use App\Http\Controllers\Logistica\CallCenterController;
+use App\Http\Controllers\Logistica\CedisController;
+
+
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +42,10 @@ Route::get('/', function () {
 
         // NUEVO: Redirección para Auxiliar desde la raíz
         if ($role === 'AUXILIAR') return redirect()->route('auxiliar.dashboard');
+        // --- NUEVO: Redirecciones de Logística ---
+        if ($role === 'BELLAROMA') return redirect()->route('bellaroma.dashboard');
+        if ($role === 'CALLCENTER') return redirect()->route('callcenter.dashboard');
+        if ($role === 'CEDIS') return redirect()->route('cedis.dashboard');
 
         return redirect()->route('dashboard');
     }
@@ -76,18 +89,25 @@ Route::prefix('admin')
         Route::get('/reports/audit', [ReportController::class, 'audit'])->name('reports.audit');
 
         // --- PUBLICIDAD TV ---
-        Route::get('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('tv_ads.index');
-        Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
-        Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
-        Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
-        Route::post('/tv-ads/reorder', [App\Http\Controllers\Admin\TvAdController::class, 'reorder'])->name('tv_ads.reorder');
-        Route::post('/tv-ads/{tvAd}/volume', [App\Http\Controllers\Admin\TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
+        Route::get('/tv-ads', [TvAdController::class, 'index'])->name('tv_ads.index');
+        Route::post('/tv-ads', [TvAdController::class, 'store'])->name('tv_ads.store');
+        Route::post('/tv-ads/{tvAd}/toggle', [TvAdController::class, 'toggle'])->name('tv_ads.toggle');
+        Route::delete('/tv-ads/{tvAd}', [TvAdController::class, 'destroy'])->name('tv_ads.destroy');
+        Route::post('/tv-ads/reorder', [TvAdController::class, 'reorder'])->name('tv_ads.reorder');
+        Route::post('/tv-ads/{tvAd}/volume', [TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
 
         // --- RUTAS: MÓDULO DE RESEÑAS Y CALIDAD ---
-        Route::get('/reviews', [App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
-        Route::get('/reviews/search', [App\Http\Controllers\Admin\ReviewController::class, 'search'])->name('reviews.search'); // <-- NUEVA
-        Route::get('/reviews/seller/{id}', [App\Http\Controllers\Admin\ReviewController::class, 'showSeller'])->name('reviews.seller');
-        Route::get('/reviews/customer/{id}', [App\Http\Controllers\Admin\ReviewController::class, 'showCustomer'])->name('reviews.customer');
+        Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
+        Route::get('/reviews/search', [ReviewController::class, 'search'])->name('reviews.search'); // <-- NUEVA
+        Route::get('/reviews/seller/{id}', [ReviewController::class, 'showSeller'])->name('reviews.seller');
+        Route::get('/reviews/customer/{id}', [ReviewController::class, 'showCustomer'])->name('reviews.customer');
+
+        // --- CONFIGURACIONES / CATÁLOGOS ---
+        Route::get('/settings/catalogs', [CatalogController::class, 'index'])->name('settings.catalogs');
+        Route::post('/settings/catalogs/store', [CatalogController::class, 'store'])->name('settings.catalogs.store');
+        Route::put('/settings/catalogs/{id}', [CatalogController::class, 'update'])->name('settings.catalogs.update');
+        Route::post('/settings/catalogs/{id}/toggle', [CatalogController::class, 'toggle'])->name('settings.catalogs.toggle');
+        Route::delete('/settings/catalogs/{id}', [CatalogController::class, 'destroy'])->name('settings.catalogs.destroy');
     });
 
 /*
@@ -109,13 +129,13 @@ Route::prefix('gerencia')
         Route::get('/rezagados', [PickupController::class, 'rezagados'])->name('rezagados.index');
         Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
 
-        Route::get('/staff', [App\Http\Controllers\Gerencia\StaffController::class, 'index'])->name('staff.index');
-        Route::post('/staff/toggle', [App\Http\Controllers\Gerencia\StaffController::class, 'toggleShift'])->name('staff.toggle');
+        Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::post('/staff/toggle', [StaffController::class, 'toggleShift'])->name('staff.toggle');
 
         // --- RUTAS: CALIFICACIÓN CLIENTES (TABLET) ---
-        Route::get('/calificacion-cliente', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'index'])->name('calificacion.index');
-        Route::get('/calificacion-cliente/recent', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'getRecentSales'])->name('calificacion.recent');
-        Route::post('/calificacion-cliente/store', [App\Http\Controllers\Gerencia\ClientRatingController::class, 'store'])->name('calificacion.store');
+        Route::get('/calificacion-cliente', [ClientRatingController::class, 'index'])->name('calificacion.index');
+        Route::get('/calificacion-cliente/recent', [ClientRatingController::class, 'getRecentSales'])->name('calificacion.recent');
+        Route::post('/calificacion-cliente/store', [ClientRatingController::class, 'store'])->name('calificacion.store');
     });
 
 /*
@@ -151,15 +171,15 @@ Route::prefix('ventas')
     ->name('ventas.')
     ->middleware(['auth', 'role:SELLER,MANAGER,ADMIN']) // <-- Agregamos los roles aquí
     ->group(function () {
-        Route::get('/dashboard', [App\Http\Controllers\Ventas\QueueController::class, 'index'])->name('dashboard');
-        Route::get('/poll', [App\Http\Controllers\Ventas\QueueController::class, 'poll'])->name('poll');
-        Route::post('/toggle-break', [App\Http\Controllers\Ventas\QueueController::class, 'toggleBreak'])->name('toggle-break');
-        Route::post('/finish-service', [App\Http\Controllers\Ventas\QueueController::class, 'finishService'])->name('finish-service');
-        Route::post('/submit-rating', [App\Http\Controllers\Ventas\QueueController::class, 'submitRating'])->name('submit-rating');
+        Route::get('/dashboard', [QueueController::class, 'index'])->name('dashboard');
+        Route::get('/poll', [QueueController::class, 'poll'])->name('poll');
+        Route::post('/toggle-break', [QueueController::class, 'toggleBreak'])->name('toggle-break');
+        Route::post('/finish-service', [QueueController::class, 'finishService'])->name('finish-service');
+        Route::post('/submit-rating', [QueueController::class, 'submitRating'])->name('submit-rating');
 
         // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---
-        Route::get('/retention/list', [App\Http\Controllers\Ventas\QueueController::class, 'getRetentionList'])->name('retention.list');
-        Route::post('/retention/reassign', [App\Http\Controllers\Ventas\QueueController::class, 'reassignRetention'])->name('retention.reassign');
+        Route::get('/retention/list', [QueueController::class, 'getRetentionList'])->name('retention.list');
+        Route::post('/retention/reassign', [QueueController::class, 'reassignRetention'])->name('retention.reassign');
         
     });
 
@@ -173,15 +193,42 @@ Route::prefix('auxiliar')
     ->middleware(['auth', 'role:AUXILIAR'])
     ->group(function () {
         // Dashboard principal del auxiliar
-        Route::get('/dashboard', [App\Http\Controllers\Admin\TvAdController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [TvAdController::class, 'index'])->name('dashboard');
 
         // Rutas de acciones para anuncios
-        Route::post('/tv-ads', [App\Http\Controllers\Admin\TvAdController::class, 'store'])->name('tv_ads.store');
-        Route::put('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'update'])->name('tv_ads.update');
-        Route::post('/tv-ads/{tvAd}/toggle', [App\Http\Controllers\Admin\TvAdController::class, 'toggle'])->name('tv_ads.toggle');
-        Route::delete('/tv-ads/{tvAd}', [App\Http\Controllers\Admin\TvAdController::class, 'destroy'])->name('tv_ads.destroy');
-        Route::post('/tv-ads/reorder', [App\Http\Controllers\Admin\TvAdController::class, 'reorder'])->name('tv_ads.reorder');
-        Route::post('/tv-ads/{tvAd}/volume', [App\Http\Controllers\Admin\TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
+        Route::post('/tv-ads', [TvAdController::class, 'store'])->name('tv_ads.store');
+        Route::put('/tv-ads/{tvAd}', [TvAdController::class, 'update'])->name('tv_ads.update');
+        Route::post('/tv-ads/{tvAd}/toggle', [TvAdController::class, 'toggle'])->name('tv_ads.toggle');
+        Route::delete('/tv-ads/{tvAd}', [TvAdController::class, 'destroy'])->name('tv_ads.destroy');
+        Route::post('/tv-ads/reorder', [TvAdController::class, 'reorder'])->name('tv_ads.reorder');
+        Route::post('/tv-ads/{tvAd}/volume', [TvAdController::class, 'updateVolume'])->name('tv_ads.volume');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| NUEVOS MÓDULOS DE LOGÍSTICA
+|--------------------------------------------------------------------------
+*/
+Route::prefix('bellaroma')
+    ->name('bellaroma.')
+    ->middleware(['auth', 'role:BELLAROMA,ADMIN'])
+    ->group(function () {
+        Route::get('/dashboard', [BellaromaController::class, 'index'])->name('dashboard');
+        Route::get('/history', [BellaromaController::class, 'history'])->name('history');
+    });
+
+Route::prefix('callcenter')
+    ->name('callcenter.')
+    ->middleware(['auth', 'role:CALLCENTER,ADMIN'])
+    ->group(function () {
+        Route::get('/dashboard', [CallCenterController::class, 'index'])->name('dashboard');
+    });
+
+Route::prefix('cedis')
+    ->name('cedis.')
+    ->middleware(['auth', 'role:CEDIS,ADMIN'])
+    ->group(function () {
+        Route::get('/dashboard', [CedisController::class, 'index'])->name('dashboard');
     });
 
 /*

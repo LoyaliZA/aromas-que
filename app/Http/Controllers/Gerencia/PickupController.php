@@ -46,24 +46,29 @@ class PickupController extends Controller
      */
     public function daily(Request $request)
     {
-        // 1. Iniciamos consulta BASE
-        // Regla: Mostrar lo de HOY -O- lo EN CUSTODIA (pero menor a 15 días)
-        $query = Pickup::query()->where(function ($q) {
-            $q->whereDate('created_at', today())
-                ->orWhere(function ($subQ) {
-                    $subQ->where('status', 'IN_CUSTODY')
-                        ->where('created_at', '>=', now()->subDays(15)->startOfDay());
-                });
-        });
+        // 1. Iniciamos consulta BASE seleccionando explicitamente la tabla
+        $query = Pickup::query()
+            ->select('pickups.*')
+            ->with('currentStatus')
+            ->where(function ($q) {
+                $q->whereDate('pickups.created_at', today())
+                    ->orWhere(function ($subQ) {
+                        $subQ->whereHas('currentStatus', function ($statusQ) {
+                            $statusQ->where('code', 'IN_CUSTODY');
+                        })
+                        ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
+                    });
+            });
 
         // 2. Aplicamos Filtros (Buscador, Estatus, Depto)
         $query->search($request->search)
             ->byStatus($request->status)
             ->byDepartment($request->department);
 
-        // 3. Obtenemos resultados ordenados
-        $todaysPickups = $query->orderByRaw("FIELD(status, 'IN_CUSTODY', 'DELIVERED')")
-            ->orderBy('created_at', 'desc')
+        // 3. Obtenemos resultados ordenados aprovechando el sort_order del catálogo
+        $todaysPickups = $query->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
+            ->orderBy('pickup_statuses.sort_order', 'asc')
+            ->orderBy('pickups.created_at', 'desc')
             ->get();
 
         if ($request->ajax()) {
@@ -117,7 +122,6 @@ class PickupController extends Controller
      */
     public function entregarRezagado(Request $request, $id)
     {
-        // CORREGIDO: Leemos la propiedad directamente para evitar errores del editor
         if (!Auth::user()->can_manage_rezagados) {
             return redirect()->route('gerencia.dashboard')->with('error', 'No tienes permisos para entregar paquetes rezagados.');
         }
@@ -130,21 +134,20 @@ class PickupController extends Controller
         ]);
 
         DB::transaction(function () use ($pickup, $request) {
-            // Actualizamos el paquete a entregado
+            $deliveredStatus = \App\Models\PickupStatus::where('code', 'DELIVERED')->first();
+
             $pickup->update([
-                'status' => 'DELIVERED',
+                'status_id' => $deliveredStatus->id,
                 'receiver_name' => $request->receiver_name,
-                // Le forzamos una nota indicando que fue una entrega excepcional
                 'notes' => $request->notes ? "ENTREGA DE REZAGO. Notas: " . $request->notes : "ENTREGA DE REZAGO.",
                 'delivered_at' => now(),
             ]);
 
-            // Auditoría Obligatoria
             PickupEdit::create([
                 'pickup_id' => $pickup->id,
                 'user_id' => Auth::id(),
                 'changes' => json_encode(['status' => ['old' => 'IN_CUSTODY', 'new' => 'DELIVERED']]),
-                'reason' => 'Entrega especial de resguardo rezagado (+15 días) gestionada por: ' . Auth::user()->name
+                'reason' => 'Entrega especial de resguardo rezagado gestionada por: ' . Auth::user()->name
             ]);
         });
 

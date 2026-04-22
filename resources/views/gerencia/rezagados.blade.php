@@ -45,10 +45,19 @@
                                     <div class="font-bold text-gray-200">{{ $pickup->client_name }}</div>
                                 </td>
                                 <td class="p-4">
-                                    <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider 
-                                        {{ $pickup->department === 'BELLAROMA' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30' }}">
-                                        {{ $pickup->department }}
-                                    </span>
+                                    @if($pickup->department === 'CALLCENTER')
+                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                                            Call Center
+                                        </span>
+                                    @elseif($pickup->department === 'AROMAS')
+                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                            Aromas
+                                        </span>
+                                    @else
+                                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                                            Bellaroma
+                                        </span>
+                                    @endif
                                     <div class="mt-2 text-xs font-bold text-gray-400">{{ $pickup->pieces }} Piezas</div>
                                 </td>
                                 <td class="p-4 text-gray-400">

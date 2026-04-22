@@ -33,24 +33,29 @@ class UserController extends Controller
             'full_name' => 'required|string|max:100',
             'employee_code' => 'required|string|unique:employees,employee_code',
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER,AUXILIAR',
+            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER,CEDIS,NONE',
             'appears_in_sales_queue' => 'nullable|boolean',
             'can_manage_rezagados' => 'nullable|boolean', 
             'can_manage_shifts' => 'nullable|boolean',
-            'has_access' => 'nullable|boolean', // <-- NUEVO: Control explícito de acceso
+            'has_access' => 'nullable|boolean',
             'email' => 'nullable|email|unique:users,email',
-            'password' => $request->has('has_access') ? 'required|min:8' : 'nullable', // <-- Obligatorio solo si se da acceso
+            'password' => $request->has('has_access') ? 'required|min:8' : 'nullable',
         ]);
 
+        // Determinar el rol de acceso: Si es de logística, el rol es el departamento. Si no, es su puesto.
+        $userRole = in_array($validated['department'], ['BELLAROMA', 'CALLCENTER', 'CEDIS']) 
+            ? $validated['department'] 
+            : $validated['job_position'];
+
         try {
-            DB::transaction(function () use ($validated, $request) {
-                // A. Crear Usuario (Si aplica)
+            DB::transaction(function () use ($validated, $request, $userRole) {
                 $userId = null;
                 if ($request->has('has_access')) {
                     $user = User::create([
                         'name' => $validated['full_name'],
-                        'email' => $validated['email'] ?? null, // <-- Puede ser null
+                        'email' => $validated['email'] ?? null,
                         'password' => Hash::make($validated['password']),
-                        'role' => $validated['job_position'], 
+                        'role' => $userRole, 
                         'is_active' => true,
                         'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                         'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
@@ -58,12 +63,12 @@ class UserController extends Controller
                     $userId = $user->id;
                 }
 
-                // B. Crear Empleado
                 Employee::create([
                     'user_id' => $userId,
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
+                    'department' => $validated['department'],
                     'appears_in_sales_queue' => $request->has('appears_in_sales_queue'), 
                     'is_active' => true,
                     'hire_date' => now(),
@@ -92,32 +97,36 @@ class UserController extends Controller
             'full_name' => 'required|string|max:100',
             'employee_code' => ['required', Rule::unique('employees')->ignore($employee->id)],
             'job_position' => 'required|in:ADMIN,MANAGER,CHECKER,SELLER,AUXILIAR',
+            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER,CEDIS,NONE',
             'appears_in_sales_queue' => 'nullable|boolean',
             'can_manage_rezagados' => 'nullable|boolean', 
             'can_manage_shifts' => 'nullable|boolean',
-            'has_access' => 'nullable|boolean', // <-- NUEVO: Control explícito de acceso
+            'has_access' => 'nullable|boolean',
             'email' => ['nullable', 'email', Rule::unique('users')->ignore($employee->user_id)],
             'password' => ($request->has('has_access') && !$employee->user) ? 'required|min:8' : 'nullable|min:8', 
         ]);
 
+        $userRole = in_array($validated['department'], ['BELLAROMA', 'CALLCENTER', 'CEDIS']) 
+            ? $validated['department'] 
+            : $validated['job_position'];
+
         try {
-            DB::transaction(function () use ($validated, $request, $employee) {
+            DB::transaction(function () use ($validated, $request, $employee, $userRole) {
                 
-                // 1. Actualizar Empleado
                 $employee->update([
                     'full_name' => $validated['full_name'],
                     'employee_code' => $validated['employee_code'],
                     'job_position' => $validated['job_position'],
+                    'department' => $validated['department'],
                     'appears_in_sales_queue' => $request->has('appears_in_sales_queue'),
                 ]);
 
-                // 2. Lógica de Usuario basada en el Checkbox de Acceso
                 if ($request->has('has_access')) {
                     if ($employee->user) {
                         $dataToUpdate = [
                             'name' => $validated['full_name'],
                             'email' => $validated['email'] ?? null,
-                            'role' => $validated['job_position'],
+                            'role' => $userRole,
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
                         ];
@@ -130,7 +139,7 @@ class UserController extends Controller
                             'name' => $validated['full_name'],
                             'email' => $validated['email'] ?? null,
                             'password' => Hash::make($validated['password']),
-                            'role' => $validated['job_position'],
+                            'role' => $userRole,
                             'is_active' => true,
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
@@ -139,7 +148,6 @@ class UserController extends Controller
                     }
 
                 } else {
-                    // Si le quitan el check de acceso, se borra el usuario
                     if ($employee->user) {
                         $user = $employee->user;
                         $employee->update(['user_id' => null]);

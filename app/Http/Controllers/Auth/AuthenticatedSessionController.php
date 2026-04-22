@@ -29,8 +29,10 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
 
         // 2. Lógica de Redirección por ROL
-        $role = $request->user()->role;
+        $user = $request->user();
+        $role = $user->role;
 
+        // Redirecciones de roles base
         if ($role === 'ADMIN') {
             return redirect()->intended(route('admin.dashboard'));
         }
@@ -43,13 +45,17 @@ class AuthenticatedSessionController extends Controller
         if ($role === 'SELLER') {
             return redirect()->intended(route('ventas.dashboard'));
         }
-        // NUEVO: Redirección para el rol Auxiliar
         if ($role === 'AUXILIAR') {
             return redirect()->intended(route('auxiliar.dashboard'));
         }
 
+        // --- NUEVAS REDIRECCIONES PARA LOGÍSTICA ---
+        // Aquí enviamos a Bellaroma, Call Center o Cedis según el rol que le asignamos en el UserController
+        if (in_array($role, ['BELLAROMA', 'CALLCENTER', 'CEDIS'])) {
+            return redirect()->intended(route(strtolower($role) . '.dashboard'));
+        }
+
         // 3. Fallback (Por defecto)
-        // Si es Empleado normal, Cliente o no tiene rol, va al dashboard estándar
         return redirect()->intended(route('dashboard', absolute: false));
     }
     
