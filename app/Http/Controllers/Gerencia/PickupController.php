@@ -6,14 +6,16 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pickup;
 use App\Models\PickupEdit;
+use App\Models\PickupStatus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Employee;
 use App\Models\SalesQueue;
+use Illuminate\Support\Facades\Storage;
 
 class PickupController extends Controller
 {
-    
+
     /**
      * DASHBOARD: Panel de Control Global de Gerencia
      */
@@ -56,7 +58,7 @@ class PickupController extends Controller
                         $subQ->whereHas('currentStatus', function ($statusQ) {
                             $statusQ->where('code', 'IN_CUSTODY');
                         })
-                        ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
+                            ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
                     });
             });
 
@@ -197,7 +199,7 @@ class PickupController extends Controller
         $validated = $request->validate([
             'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio,' . $id,
             'client_name'  => 'required|string|max:150',
-            'department'   => 'required|in:AROMAS,BELLAROMA',
+            'department'   => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
             'pieces'       => 'required|integer|min:1',
             'notes'        => 'nullable|string|max:500',
             'is_third_party' => 'nullable|boolean',
@@ -231,5 +233,132 @@ class PickupController extends Controller
         }
 
         return redirect()->route('gerencia.daily')->with('info', 'No se detectaron cambios.');
+    }
+
+    public function destroy($id)
+    {
+        $pickup = Pickup::findOrFail($id);
+
+        // Eliminamos las fotos del disco local si existen
+        if ($pickup->initial_evidence_path) {
+            Storage::disk('public')->delete($pickup->initial_evidence_path);
+        }
+        if ($pickup->package_evidence_path) {
+            Storage::disk('public')->delete($pickup->package_evidence_path);
+        }
+
+        $pickup->delete();
+
+        return redirect()->route('gerencia.daily')->with('success', 'Resguardo eliminado permanentemente.');
+    }
+
+    /**
+     * FASE 1: Registro Preliminar por el Gerente
+     */
+    public function storePreliminar(Request $request)
+    {
+        $request->validate([
+            'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio',
+            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
+            'pieces' => 'required|integer|min:1',
+            'initial_evidence' => 'nullable|image|max:5120',
+            'notes' => 'nullable|string|max:500',
+            'is_complementary' => 'nullable|boolean',
+            'parent_folio' => 'nullable|string|required_if:is_complementary,1',
+        ]);
+
+        // Guardamos la foto inicial tomada por el gerente
+        $evidencePath = null;
+        if ($request->hasFile('initial_evidence')) {
+            $evidencePath = $request->file('initial_evidence')->store('pickups/initial_evidence', 'public');
+        }
+
+
+        $parentId = null;
+        if ($request->filled('is_complementary') && $request->filled('parent_folio')) {
+            $parentPickup = Pickup::where('ticket_folio', $request->parent_folio)->first();
+            if ($parentPickup) {
+                $parentId = $parentPickup->id;
+            }
+        }
+
+        // Ahora el estatus inicial es PRE_REGISTERED (Pre-Registro)
+        $statusId = PickupStatus::where('code', 'PRE_REGISTERED')->value('id');
+
+        Pickup::create([
+            'ticket_folio' => $request->ticket_folio,
+            'ticket_date' => now(),
+            'department' => $request->department,
+            'pieces' => $request->pieces,
+            'notes' => $request->notes,
+            'initial_evidence_path' => $evidencePath,
+            'is_complementary' => $request->has('is_complementary'),
+            'parent_pickup_id' => $parentId,
+            'status_id' => $statusId,
+
+            // Valores Provisionales
+            'client_name' => 'Pendiente por Checador',
+            'amount' => 0,
+            'balance' => 0,
+        ]);
+
+        return redirect()->route('gerencia.daily')->with('success', 'Resguardo preliminar registrado con éxito. En espera del checador.');
+    }
+
+    /**
+     * FASE 3: Aprobar resguardo (Pasa a Custodia oficial)
+     */
+    public function approveAudit($id)
+    {
+        $pickup = Pickup::findOrFail($id);
+        $inCustodyId = \App\Models\PickupStatus::where('code', 'IN_CUSTODY')->value('id');
+
+        $pickup->update([
+            'status_id' => $inCustodyId,
+            'correction_notes' => null
+        ]);
+
+        return redirect()->route('gerencia.daily')->with('success', 'Resguardo aprobado. Ya está en custodia oficial.');
+    }
+
+    /**
+     * FASE 3: Rechazar resguardo (Regresa al checador)
+     */
+    public function rejectAudit(Request $request, $id)
+    {
+        $pickup = Pickup::findOrFail($id);
+
+        $request->validate([
+            'correction_notes' => 'required|string|max:500'
+        ]);
+
+        $needsCorrectionId = \App\Models\PickupStatus::where('code', 'NEEDS_CORRECTION')->value('id');
+
+        $pickup->update([
+            'status_id' => $needsCorrectionId,
+            'correction_notes' => $request->correction_notes
+        ]);
+
+        return redirect()->route('gerencia.daily')->with('error', 'Resguardo devuelto al checador para corrección.');
+    }
+
+    /**
+     * BUSCAR FOLIOS PARA RESGUARDOS COMPLEMENTARIOS
+     */
+    public function searchFolio(Request $request)
+    {
+        if ($request->ajax()) {
+            $search = trim($request->get('q'));
+            if (strlen($search) < 2) return response()->json([]);
+
+            $pickups = Pickup::select('id', 'ticket_folio', 'client_name')
+                ->where('ticket_folio', 'LIKE', "%{$search}%")
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+
+            return response()->json($pickups);
+        }
+        return response()->json(['error' => 'No autorizado'], 403);
     }
 }

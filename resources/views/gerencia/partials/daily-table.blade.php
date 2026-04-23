@@ -8,105 +8,113 @@
                     <th class="px-6 py-3 font-semibold text-center">Área</th>
                     <th class="px-6 py-3 font-semibold text-center">Piezas</th>
                     <th class="px-6 py-3 font-semibold">Estado</th>
-                    <th class="px-6 py-3 font-semibold text-right">Recibido</th>
-                    <th class="px-6 py-3 font-semibold text-right">Entregado</th>
                     <th class="px-6 py-3 font-semibold text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-aromas-tertiary/10 text-sm">
                 @forelse($todaysPickups as $pickup)
-                    <tr class="hover:bg-white/5 transition-colors group">
-                        <td class="px-6 py-3 font-mono font-medium">
-                            <span class="{{ $pickup->created_at->isToday() ? 'text-aromas-highlight' : 'text-orange-400' }}">
-                                {{ $pickup->ticket_folio }}
-                            </span>
-                            @if(!$pickup->created_at->isToday()) <span class="block text-[10px] text-orange-400/80 uppercase">Rezagado</span> @endif
-                        </td>
-                        
-                        <td class="px-6 py-3">
-                            <div class="font-bold text-white">{{ $pickup->client_name }}</div>
-                            @if($pickup->notes)
-                                <div class="text-xs text-yellow-500/80 mt-1 flex items-center">
-                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                                    Nota: {{ Str::limit($pickup->notes, 30) }}
-                                </div>
+                <tr class="hover:bg-white/5 transition-colors group">
+                    <td class="px-6 py-3 font-mono font-medium text-aromas-highlight">
+                        {{ $pickup->ticket_folio }}
+                        @if($pickup->is_complementary)
+                        <span class="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-black">- C</span>
+                        @endif
+                    </td>
+                    <td class="px-6 py-3 text-white font-bold">{{ $pickup->client_name ?? 'Pendiente por Checador' }}</td>
+                    <td class="px-6 py-3 text-center text-gray-400">{{ $pickup->department }}</td>
+                    <td class="px-6 py-3 text-center font-bold text-gray-300">{{ $pickup->pieces }}</td>
+                    <td class="px-6 py-3">
+                        <span class="px-2 py-1 text-[10px] font-bold uppercase rounded-full bg-{{ $pickup->currentStatus->color ?? 'gray' }}-500/20 text-{{ $pickup->currentStatus->color ?? 'gray' }}-400 border border-{{ $pickup->currentStatus->color ?? 'gray' }}-500/30">
+                            {{ $pickup->currentStatus->name ?? 'Capturado' }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-3 text-center">
+                        <div class="flex items-center justify-center gap-2">
+
+                            {{-- BOTÓN AUDITAR (Prioridad Alta - Visible si está esperando confirmación) --}}
+                            @if($pickup->currentStatus?->code === 'PENDING_CONFIRMATION')
+                            <button @click="openAuditModal({
+                                    id: {{ $pickup->id }},
+                                    ticket_folio: '{{ $pickup->ticket_folio }}',
+                                    client_name: {{ json_encode($pickup->client_name) }},
+                                    pieces: {{ $pickup->pieces }},
+                                    bags: {{ $pickup->bags ?? 0 }},
+                                    department: '{{ $pickup->department }}',
+                                    notes: {{ json_encode($pickup->notes ?? '') }},
+                                    initial_evidence_url: {{ json_encode($pickup->initial_evidence_path ? asset('storage/'.$pickup->initial_evidence_path) : '') }},
+                                    package_evidence_url: {{ json_encode($pickup->package_evidence_path ? asset('storage/'.$pickup->package_evidence_path) : '') }}
+                                })" class="px-3 py-1.5 bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-black font-bold uppercase text-[10px] rounded-lg transition-colors border border-amber-500/50 flex items-center gap-1 shadow-lg shadow-amber-500/20" title="Auditar Resguardo">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Auditar
+                            </button>
                             @endif
-                        </td>
 
-                        <td class="px-6 py-3 text-center">
-                            @if($pickup->department === 'CALLCENTER')
-                                <span class="px-2 py-1 bg-indigo-900/40 text-indigo-300 rounded text-xs border border-indigo-500/20">Call Center</span>
-                            @elseif($pickup->department === 'AROMAS')
-                                <span class="px-2 py-1 bg-purple-900/40 text-purple-300 rounded text-xs border border-purple-500/20">Aromas</span>
-                            @else
-                                <span class="px-2 py-1 bg-pink-900/40 text-pink-300 rounded text-xs border border-pink-500/20">Bellaroma</span>
-                            @endif
-                        </td>
+                            {{-- MENÚ DESPLEGABLE (3 PUNTITOS) --}}
+                            <div x-data="{ 
+                                openDropdown: false, 
+                                menuTop: '0px', 
+                                menuLeft: '0px',
+                                toggleMenu(e) {
+                                    this.openDropdown = !this.openDropdown;
+                                    if(this.openDropdown) {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        this.menuTop = (rect.bottom + 5) + 'px'; 
+                                        this.menuLeft = (rect.right - 160) + 'px';
+                                    }
+                                }
+                            }">
 
-                        <td class="px-6 py-3 text-center text-white font-bold">{{ $pickup->pieces }}</td>
+                                <button @click="toggleMenu($event)" @click.away="openDropdown = false" @scroll.window="openDropdown = false" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
 
-                        <td class="px-6 py-3">
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-{{ $pickup->currentStatus->color ?? 'gray' }}-500/10 text-{{ $pickup->currentStatus->color ?? 'gray' }}-400 border border-{{ $pickup->currentStatus->color ?? 'gray' }}-500/20 mb-1">
-                                @if($pickup->currentStatus?->code === 'IN_CUSTODY') <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> @endif
-                                {{ $pickup->currentStatus?->name ?? 'Desconocido' }}
-                            </span>
-                            
-                            @if($pickup->currentStatus?->code === 'IN_CUSTODY')
-                                @if($pickup->received_by_checker_at)
-                                    <div class="text-[13px] text-green-400 font-medium flex items-center gap-1 mt-1">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                        Recibido a las: {{ $pickup->received_by_checker_at->format('H:i:s') }}
-                                    </div>
-                                @else
-                                    <div class="text-[10px] text-gray-400 font-medium flex items-center gap-1 mt-1">
-                                        <svg class="w-3 h-3 animate-spin text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                        Esperando confirmación...
-                                    </div>
-                                @endif
-                            @endif
-                        </td>
+                                <div x-show="openDropdown" x-transition.opacity.duration.200ms style="display: none; position: fixed;" :style="{ top: menuTop, left: menuLeft }" class="w-40 bg-aromas-secondary border border-aromas-tertiary/30 rounded-lg shadow-2xl z-[9999] overflow-hidden text-sm font-medium">
 
-                        <td class="px-6 py-3 text-right text-gray-400 text-xs">{{ $pickup->created_at->format('d/m H:i:s') }}</td>
-                        <td class="px-6 py-3 text-right text-gray-400 text-xs">
-                            {{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m H:i:s') : '---' }}
-                        </td>
-
-                        <td class="px-6 py-3 text-center">
-                            @if($pickup->currentStatus?->code === 'IN_CUSTODY' && $pickup->created_at->isToday())
-                                <button @click="openEditModal({ 
-                                            id: {{ $pickup->id }}, 
+                                    {{-- 1. Visualizar Detalles --}}
+                                    <button @click="openDropdown = false; openDetailsModal({
                                             ticket_folio: '{{ $pickup->ticket_folio }}',
-                                            client_name: '{{ addslashes($pickup->client_name) }}',
+                                            client_name: {{ json_encode($pickup->client_name) }},
+                                            pieces: {{ $pickup->pieces }},
+                                            status_name: '{{ $pickup->currentStatus->name ?? 'Capturado' }}',
+                                            department: '{{ $pickup->department }}',
+                                            notes: {{ json_encode($pickup->notes ?? '') }},
+                                            initial_evidence_url: {{ json_encode($pickup->initial_evidence_path ? asset('storage/'.$pickup->initial_evidence_path) : '') }},
+                                            package_evidence_url: {{ json_encode($pickup->package_evidence_path ? asset('storage/'.$pickup->package_evidence_path) : '') }},
+                                            evidence_url: {{ json_encode($pickup->evidence_path ? asset('storage/'.$pickup->evidence_path) : '') }}
+                                        })" class="w-full text-left px-4 py-2.5 text-blue-400 hover:bg-white/5 flex items-center gap-2 border-b border-aromas-tertiary/10 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                        Ver Detalles
+                                    </button>
+
+                                    {{-- 2. Editar --}}
+                                    <button @click="openDropdown = false; openEditModal({
+                                            id: {{ $pickup->id }},
+                                            ticket_folio: '{{ $pickup->ticket_folio }}',
                                             department: '{{ $pickup->department }}',
                                             pieces: {{ $pickup->pieces }},
-                                            notes: '{{ addslashes(str_replace(["\r", "\n"], " ", (string)$pickup->notes)) }}',
-                                            is_third_party: {{ $pickup->is_third_party ? 'true' : 'false' }},
-                                            receiver_name: '{{ addslashes($pickup->receiver_name) }}'
-                                        })"
-                                        class="text-aromas-highlight hover:text-white hover:bg-aromas-highlight/20 p-2 rounded transition-colors" title="Editar">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                                </button>
-                            @elseif($pickup->currentStatus?->code === 'DELIVERED')
-                                <button @click="openDetailsModal({
-                                            ticket_folio: '{{ $pickup->ticket_folio }}',
-                                            client_name: '{{ addslashes($pickup->client_name) }}',
-                                            receiver_name: '{{ addslashes($pickup->receiver_name) }}',
-                                            is_third_party: {{ $pickup->is_third_party ? 'true' : 'false' }},
-                                            delivered_at: '{{ $pickup->delivered_at ? $pickup->delivered_at->format('d/m/Y h:i A') : '' }}',
-                                            signature_url: '{{ $pickup->signature_path ? asset('storage/'.$pickup->signature_path) : '' }}',
-                                            notes: '{{ addslashes(str_replace(["\r", "\n"], " ", (string)$pickup->notes)) }}',
-                                            evidence_url: '{{ $pickup->evidence_path ? asset('storage/'.$pickup->evidence_path) : '' }}'
-                                        })"
-                                        class="text-green-500 hover:text-white hover:bg-green-500/20 p-2 rounded transition-colors" title="Ver Firma y Detalles">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                </button>
-                            @else
-                                <span class="text-gray-600 cursor-not-allowed p-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg></span>
-                            @endif
-                        </td>
-                    </tr>
+                                            notes: {{ json_encode($pickup->notes ?? '') }}
+                                        })" class="w-full text-left px-4 py-2.5 text-aromas-highlight hover:bg-white/5 flex items-center gap-2 border-b border-aromas-tertiary/10 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                        Editar
+                                    </button>
+
+                                    {{-- 3. Eliminar --}}
+                                    <button @click="openDropdown = false; openDeleteModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full text-left px-4 py-2.5 text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        Eliminar
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </td>
+                </tr>
                 @empty
-                    <tr><td colspan="8" class="px-6 py-12 text-center text-aromas-tertiary">No hay registros.</td></tr>
+                <tr><td colspan="6" class="px-6 py-12 text-center text-gray-500">No hay resguardos registrados.</td></tr>
                 @endforelse
             </tbody>
         </table>

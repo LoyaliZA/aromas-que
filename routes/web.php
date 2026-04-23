@@ -123,11 +123,18 @@ Route::prefix('gerencia')
         Route::get('/daily', [PickupController::class, 'daily'])->name('daily');
         Route::post('/store', [PickupController::class, 'store'])->name('store');
         Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
+        Route::delete('/destroy/{id}', [PickupController::class, 'destroy'])->name('destroy');
         Route::get('/history', [PickupController::class, 'history'])->name('history');
 
         // --- RUTAS: REZAGADOS ---
         Route::get('/rezagados', [PickupController::class, 'rezagados'])->name('rezagados.index');
         Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
+        // --- Resguardos --
+        Route::post('/pickups/preliminar', [PickupController::class, 'storePreliminar'])->name('pickups.storePreliminar');
+        // --- RUTAS DE AUDITORIA ---
+        Route::post('/pickups/{id}/approve', [PickupController::class, 'approveAudit'])->name('pickups.approveAudit');
+        Route::post('/pickups/{id}/reject', [PickupController::class, 'rejectAudit'])->name('pickups.rejectAudit');
+        Route::get('/pickups/search-folio', [PickupController::class, 'searchFolio'])->name('pickups.searchFolio');
 
         Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
         Route::post('/staff/toggle', [StaffController::class, 'toggleShift'])->name('staff.toggle');
@@ -152,6 +159,7 @@ Route::prefix('recepcion')
         // Acciones de Resguardos
         Route::put('/confirm/{id}', [DeliveryController::class, 'confirm'])->name('confirm');
         Route::put('/receive/{id}', [DeliveryController::class, 'markAsReceived'])->name('receive');
+        Route::post('/preliminar/{id}/complete', [DeliveryController::class, 'completePreliminar'])->name('preliminar.complete');
 
         // Acciones de Fila (Kiosco)
         Route::post('/queue/add', [DeliveryController::class, 'addToQueue'])->name('queue.add');

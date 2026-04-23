@@ -17,17 +17,23 @@ class Pickup extends Model
         'client_ref_id',
         'client_name',
         'department',
-        'amount',         // Añadido para la nota
-        'balance',        // Añadido para el saldo a favor
-        'seller_id',      // Añadido para guardar a la vendedora
+        'amount',         
+        'balance',        
+        'seller_id',      
         'pieces',
-        'box_type_id',    // Añadido para la logística de cajas
+        'bags',           // <-- NUEVO CAMPO
+        'box_type_id',    
         'status_id',
         'notes',
+        'correction_notes',
         'receiver_name',
         'is_third_party',
         'signature_path',
         'evidence_path',
+        'initial_evidence_path', // <-- NUEVO
+        'package_evidence_path', // <-- NUEVO
+        'is_complementary',      // <-- NUEVO
+        'parent_pickup_id',      // <-- NUEVO
         'received_by_checker_at',
         'delivered_at',
     ];
@@ -156,5 +162,17 @@ class Pickup extends Model
     public function boxType()
     {
         return $this->belongsTo(BoxType::class, 'box_type_id');
+    }
+
+    // Relación recursiva para obtener el resguardo original si este es complementario
+    public function parentPickup()
+    {
+        return $this->belongsTo(Pickup::class, 'parent_pickup_id');
+    }
+
+    // Relación para obtener los complementarios que dependen de este resguardo
+    public function complementaryPickups()
+    {
+        return $this->hasMany(Pickup::class, 'parent_pickup_id');
     }
 }

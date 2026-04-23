@@ -19,18 +19,22 @@ class DeliveryController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Obtener IDs de los estatus desde el catálogo
+        // 1. Obtener IDs de los estatus
         $inCustodyId = PickupStatus::where('code', 'IN_CUSTODY')->value('id');
+        $preRegisteredId = PickupStatus::where('code', 'PRE_REGISTERED')->value('id');
+        $needsCorrectionId = PickupStatus::where('code', 'NEEDS_CORRECTION')->value('id');
+        $pendingConfirmationId = PickupStatus::where('code', 'PENDING_CONFIRMATION')->value('id');
         $dispatchedId = PickupStatus::where('code', 'DISPATCHED')->value('id');
 
-        // 2. Consulta principal (Lo que ya tiene el checador)
+        // 2. Consulta principal
         $query = Pickup::visibleForChecker();
 
         if ($request->has('status') && $request->status !== 'ALL') {
             $statusId = PickupStatus::where('code', $request->status)->value('id');
             $query->where('status_id', $statusId);
         } else {
-            $query->where('status_id', $inCustodyId);
+            // Por defecto mostramos Custodia, Pre-Registros y los que requieren corrección
+            $query->whereIn('status_id', [$inCustodyId, $preRegisteredId, $needsCorrectionId, $pendingConfirmationId]);
         }
 
         if ($request->has('department') && $request->department !== 'ALL') {
@@ -99,8 +103,11 @@ class DeliveryController extends Controller
             $evidencePath = $request->file('evidence_file')->store('evidences', 'public');
         }
 
+        // NUEVO: Obtener el ID oficial del estatus DELIVERED desde el catálogo
+        $deliveredStatusId = PickupStatus::where('code', 'DELIVERED')->value('id');
+
         $pickup->update([
-            'status' => 'DELIVERED',
+            'status_id' => $deliveredStatusId, // <-- CORRECCIÓN: Usar status_id
             'delivered_at' => now(),
             'checker_id' => Auth::id(),
             'signature_path' => $signaturePath,
@@ -277,5 +284,47 @@ class DeliveryController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'No se pudo confirmar la recepción.'], 400);
+    }
+    /**
+     * FASE 2: Checador completa la información del paquete
+     */
+    /**
+     * FASE 2: Checador completa la información del paquete
+     */
+    public function completePreliminar(Request $request, $id)
+    {
+        $pickup = Pickup::findOrFail($id);
+
+        $request->validate([
+            'client_name' => 'required|string|max:150',
+            'customer_id' => 'nullable|exists:customers,id', // ID que viene del buscador
+            'received_at' => 'required|date',
+            'bags' => 'nullable|integer|min:1',
+            'package_evidence' => 'required|image|max:5120',
+            'notes' => 'nullable|string|max:500'
+        ]);
+
+        // Guardamos la foto tomada por el checador
+        $evidencePath = $request->file('package_evidence')->store('pickups/package_evidence', 'public');
+        
+        $pendingStatusId = PickupStatus::where('code', 'PENDING_CONFIRMATION')->value('id');
+
+        $finalNotes = $pickup->notes;
+        if ($request->filled('notes')) {
+            $finalNotes .= "\n[Checador]: " . $request->notes;
+        }
+
+        $pickup->update([
+            'client_name' => $request->client_name,
+            'client_ref_id' => $request->customer_id ?? $pickup->client_ref_id,
+            'bags' => $request->bags,
+            'package_evidence_path' => $evidencePath,
+            'notes' => $finalNotes,
+            'status_id' => $pendingStatusId,
+            'correction_notes' => null,
+            'received_by_checker_at' => $request->received_at, // Fecha indicada por el checador
+        ]);
+
+        return redirect()->route('recepcion.dashboard')->with('success', 'Información completada. Enviado a Gerencia para confirmación.');
     }
 }
