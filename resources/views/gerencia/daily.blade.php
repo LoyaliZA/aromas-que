@@ -14,6 +14,23 @@
 
             // Lógica de Confirmación Masiva (Con filtro anti-duplicados)
             selectedPickups: [],
+            
+            // NUEVO: Inicializador de Smart Polling
+            init() {
+                setInterval(() => {
+                    const isBusy = this.selectedPickups.length > 0 || 
+                                   this.showRejectModal || 
+                                   this.showEditModal || 
+                                   this.showDetailsModal || 
+                                   this.showDeleteModal || 
+                                   this.showImageViewer;
+                    
+                    if (!isBusy) {
+                        this.fetchResults(true); // true = actualización silenciosa
+                    }
+                }, 15000); // 15000 milisegundos = 15 segundos
+            },
+
             toggleAll(event) {
                 if (event.target.checked) {
                     let ids = new Set();
@@ -24,55 +41,18 @@
                 }
             },
 
-            // Lógica de Rechazo Rápido
-            showRejectModal: false,
-            rejectData: { id: 0, ticket_folio: '' },
-            openRejectModal(id, folio) {
-                this.rejectData = { id, ticket_folio: folio };
-                this.showRejectModal = true;
-            },
+            // ... (deja tus modales openRejectModal, openEditModal, openDetailsModal igual) ...
 
-            // Resto de variables
-            editData: { id: 0, ticket_folio: '', department: 'AROMAS', pieces: 1, notes: '' },
-            detailsData: { ticket_folio: '', client_name: '', pieces: 0, status_name: '', notes: '', initial_evidence_url: '', package_evidence_url: '', evidence_url: '', signature_url: '', delivered_at: '' },
-            deleteId: null, deleteFolio: '',
-
-            openEditModal(data) {
-                this.editData = { id: data.id, ticket_folio: data.ticket_folio, department: data.department, pieces: data.pieces, notes: data.notes || '' };
-                this.showEditModal = true;
-            },
-
-            openDetailsModal(data) {
-                let rawNotes = data.notes || '';
-                if (!rawNotes.includes('\n') && rawNotes.includes('[Checador]:')) {
-                    rawNotes = rawNotes.split('[Checador]:').join('\n[Checador]:');
-                }
-                let parsed = [];
-                let lines = rawNotes.split('\n');
-                lines.forEach((line, index) => {
-                    let text = line.trim();
-                    if(text !== '') {
-                        let isChecker = text.startsWith('[Checador]:');
-                        let cleanText = text.replace('[Checador]:', '').trim();
-                        parsed.push({ id: index, isChecker: isChecker, author: isChecker ? 'Checador' : 'Gerencia', text: cleanText });
-                    }
-                });
-                data.parsedNotes = parsed;
-                this.detailsData = data;
-                this.showDetailsModal = true;
-            },
-
-            openDeleteModal(id, folio) { this.deleteId = id; this.deleteFolio = folio; this.showDeleteModal = true; },
-
-            async fetchResults() {
-                this.isLoading = true;
+            // MODIFICADO: fetchResults ahora acepta modo silencioso
+            async fetchResults(silent = false) {
+                if (!silent) this.isLoading = true;
                 const params = new URLSearchParams({ search: this.search, status: this.status, department: this.department });
-                const url = `{{ route('gerencia.daily') }}?${params.toString()}`;
+                const url = `/gerencia/daily?${params.toString()}`;
                 try {
                     const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                     document.getElementById('table-container').innerHTML = await response.text();
                 } catch (e) { console.error(e); }
-                this.isLoading = false;
+                if (!silent) this.isLoading = false;
             }
         }" class="pb-20">
 
