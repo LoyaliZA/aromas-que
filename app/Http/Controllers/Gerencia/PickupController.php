@@ -253,56 +253,40 @@ class PickupController extends Controller
     }
 
     /**
-     * FASE 1: Registro Preliminar por el Gerente
+     * FASE 1: Check-In Express por el Gerente (Mobile Optimized)
      */
     public function storePreliminar(Request $request)
     {
         $request->validate([
             'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio',
             'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
-            'pieces' => 'required|integer|min:1',
             'initial_evidence' => 'nullable|image|max:5120',
             'notes' => 'nullable|string|max:500',
-            'is_complementary' => 'nullable|boolean',
-            'parent_folio' => 'nullable|string|required_if:is_complementary,1',
         ]);
 
-        // Guardamos la foto inicial tomada por el gerente
         $evidencePath = null;
         if ($request->hasFile('initial_evidence')) {
             $evidencePath = $request->file('initial_evidence')->store('pickups/initial_evidence', 'public');
         }
 
-
-        $parentId = null;
-        if ($request->filled('is_complementary') && $request->filled('parent_folio')) {
-            $parentPickup = Pickup::where('ticket_folio', $request->parent_folio)->first();
-            if ($parentPickup) {
-                $parentId = $parentPickup->id;
-            }
-        }
-
-        // Ahora el estatus inicial es PRE_REGISTERED (Pre-Registro)
         $statusId = PickupStatus::where('code', 'PRE_REGISTERED')->value('id');
 
         Pickup::create([
             'ticket_folio' => $request->ticket_folio,
             'ticket_date' => now(),
             'department' => $request->department,
-            'pieces' => $request->pieces,
+            'pieces' => 1, // Provisional, el checador pondrá el real
             'notes' => $request->notes,
             'initial_evidence_path' => $evidencePath,
-            'is_complementary' => $request->has('is_complementary'),
-            'parent_pickup_id' => $parentId,
+            'is_complementary' => false, // El checador lo definirá
+            'parent_pickup_id' => null,
             'status_id' => $statusId,
-
-            // Valores Provisionales
             'client_name' => 'Pendiente por Checador',
             'amount' => 0,
             'balance' => 0,
         ]);
 
-        return redirect()->route('gerencia.daily')->with('success', 'Resguardo preliminar registrado con éxito. En espera del checador.');
+        return redirect()->route('gerencia.daily')->with('success', 'Check-In rápido exitoso. El checador completará los detalles.');
     }
 
     /**
@@ -360,5 +344,29 @@ class PickupController extends Controller
             return response()->json($pickups);
         }
         return response()->json(['error' => 'No autorizado'], 403);
+    }
+
+    /**
+     * APROBACIÓN MASIVA DE RESGUARDOS
+     */
+    public function bulkApprove(Request $request)
+    {
+        $request->validate([
+            'pickup_ids' => 'required|array',
+            'pickup_ids.*' => 'exists:pickups,id'
+        ]);
+
+        $inCustodyId = \App\Models\PickupStatus::where('code', 'IN_CUSTODY')->value('id');
+
+        Pickup::whereIn('id', $request->pickup_ids)
+            ->whereHas('currentStatus', function($q) {
+                $q->where('code', 'PENDING_CONFIRMATION');
+            })
+            ->update([
+                'status_id' => $inCustodyId,
+                'correction_notes' => null
+            ]);
+
+        return redirect()->route('gerencia.daily')->with('success', 'Resguardos confirmados masivamente con éxito.');
     }
 }

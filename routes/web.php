@@ -131,6 +131,7 @@ Route::prefix('gerencia')
         Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
         // --- Resguardos --
         Route::post('/pickups/preliminar', [PickupController::class, 'storePreliminar'])->name('pickups.storePreliminar');
+        Route::post('/pickups/bulk-approve', [PickupController::class, 'bulkApprove'])->name('pickups.bulkApprove');
         // --- RUTAS DE AUDITORIA ---
         Route::post('/pickups/{id}/approve', [PickupController::class, 'approveAudit'])->name('pickups.approveAudit');
         Route::post('/pickups/{id}/reject', [PickupController::class, 'rejectAudit'])->name('pickups.rejectAudit');
@@ -166,8 +167,11 @@ Route::prefix('recepcion')
         Route::get('/queue/list', [DeliveryController::class, 'getQueueList'])->name('queue.list');
         Route::put('/queue/{id}/abandon', [DeliveryController::class, 'markAsAbandoned'])->name('queue.abandon');
 
-        // --- BUSCADOR DE CLIENTES EN VIVO (Hacía falta) ---
+        // --- BUSCADOR DE CLIENTES Y FOLIOS EN VIVO ---
         Route::get('/customers/search', [DeliveryController::class, 'searchCustomers'])->name('customers.search');
+        Route::get('/pickups/search-folio', [DeliveryController::class, 'searchFolio'])->name('pickups.searchFolio'); // <-- NUEVA
+        // --- NUEVO: Checador registra resguardo desde cero ---
+        Route::post('/pickups/store', [DeliveryController::class, 'storePickup'])->name('pickups.store');
     });
 
 /*

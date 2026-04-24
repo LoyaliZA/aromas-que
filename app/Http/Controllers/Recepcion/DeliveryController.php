@@ -327,4 +327,60 @@ class DeliveryController extends Controller
 
         return redirect()->route('recepcion.dashboard')->with('success', 'Información completada. Enviado a Gerencia para confirmación.');
     }
+
+    /**
+     * NUEVO FLUJO: Checador registra el resguardo desde cero
+     */
+    public function storePickup(Request $request)
+    {
+        $request->validate([
+            'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio',
+            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
+            'client_name' => 'required|string|max:150',
+            'customer_id' => 'nullable|exists:customers,id',
+            'pieces' => 'required|integer|min:1',
+            'bags' => 'required|integer|min:1',
+            'ticket_evidence' => 'required|image|max:5120',
+            'package_evidence' => 'required|image|max:5120',
+            'notes' => 'nullable|string|max:500',
+            'is_complementary' => 'nullable|boolean',
+            'parent_folio' => 'nullable|string|required_if:is_complementary,1',
+        ]);
+
+        // Guardamos las dos evidencias en los campos que el gerente ya audita
+        $ticketPath = $request->file('ticket_evidence')->store('pickups/initial_evidence', 'public');
+        $packagePath = $request->file('package_evidence')->store('pickups/package_evidence', 'public');
+
+        $pendingStatusId = PickupStatus::where('code', 'PENDING_CONFIRMATION')->value('id');
+
+        // Búsqueda del folio base si es complementario
+        $parentId = null;
+        if ($request->filled('is_complementary') && $request->filled('parent_folio')) {
+            $parentPickup = Pickup::where('ticket_folio', $request->parent_folio)->first();
+            if ($parentPickup) {
+                $parentId = $parentPickup->id;
+            }
+        }
+
+        Pickup::create([
+            'ticket_folio' => $request->ticket_folio,
+            'ticket_date' => now(),
+            'department' => $request->department,
+            'client_name' => $request->client_name,
+            'client_ref_id' => $request->customer_id,
+            'pieces' => $request->pieces,
+            'bags' => $request->bags,
+            'initial_evidence_path' => $ticketPath,   // Aquí va el Ticket
+            'package_evidence_path' => $packagePath,  // Aquí van las Bolsas
+            'notes' => $request->filled('notes') ? "[Checador]: " . $request->notes : null,
+            'is_complementary' => $request->boolean('is_complementary'),
+            'parent_pickup_id' => $parentId,
+            'status_id' => $pendingStatusId,
+            'amount' => 0,
+            'balance' => 0,
+            'received_by_checker_at' => now(), // Se asume recibido al instante
+        ]);
+
+        return redirect()->route('recepcion.dashboard')->with('success', 'Resguardo registrado exitosamente. Enviado a Gerencia para auditoría.');
+    }
 }

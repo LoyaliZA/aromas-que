@@ -1,3 +1,188 @@
+{{-- MODAL NUEVO FLUJO: CHECADOR CREA RESGUARDO DESDE CERO --}}
+        <div x-data="{
+                showCreateModal: false,
+                ticketPreview: null,
+                packagePreview: null,
+                isComplementary: false,
+                
+                // Buscador Clientes
+                clientSearchQuery: '',
+                selectedCustomerId: '',
+                clientSearchResults: [],
+                showClientDropdown: false,
+                
+                // Buscador Folios
+                folioSearchQuery: '',
+                folioSearchResults: [],
+                showFolioDropdown: false,
+
+                async searchCustomers() {
+                    if (this.clientSearchQuery.length < 2 && !/^\d+$/.test(this.clientSearchQuery)) {
+                        this.clientSearchResults = []; return;
+                    }
+                    try {
+                        const res = await fetch(`/recepcion/customers/search?q=${this.clientSearchQuery}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        this.clientSearchResults = await res.json();
+                        this.showClientDropdown = true;
+                    } catch (e) {}
+                },
+                selectCustomer(c) {
+                    this.selectedCustomerId = c.id;
+                    this.clientSearchQuery = c.name;
+                    this.showClientDropdown = false;
+                },
+
+                async searchFolios() {
+                    if (this.folioSearchQuery.length < 2) { this.folioSearchResults = []; return; }
+                    try {
+                        const res = await fetch(`/recepcion/pickups/search-folio?q=${this.folioSearchQuery}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        this.folioSearchResults = await res.json();
+                        this.showFolioDropdown = true;
+                    } catch (e) {}
+                },
+                selectFolio(p) {
+                    this.folioSearchQuery = p.ticket_folio;
+                    this.showFolioDropdown = false;
+                }
+            }" 
+            @open-create-pickup-modal.window="showCreateModal = true; ticketPreview = null; packagePreview = null; clientSearchQuery = ''; selectedCustomerId = ''; isComplementary = false; folioSearchQuery = '';">
+            
+            <div x-show="showCreateModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" x-transition>
+                <div @click.away="showCreateModal = false" class="bg-aromas-secondary rounded-2xl border-2 border-sky-500/50 w-full max-w-4xl shadow-2xl relative max-h-[95vh] flex flex-col">
+                    
+                    {{-- Cabecera --}}
+                    <div class="p-5 border-b border-gray-700 flex justify-between items-center sticky top-0 bg-aromas-secondary z-20 rounded-t-2xl">
+                        <h3 class="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-3">
+                            <svg class="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                            Registrar Nuevo Resguardo
+                        </h3>
+                        <button @click="showCreateModal = false" class="text-gray-400 hover:text-white p-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                    </div>
+
+                    {{-- Formulario --}}
+                    <div class="p-6 overflow-y-auto custom-scrollbar">
+                        <form action="{{ route('recepcion.pickups.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                            @csrf
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {{-- COLUMNA 1: DATOS BÁSICOS --}}
+                                <div class="space-y-5">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Folio (Ticket) *</label>
+                                            <input type="text" name="ticket_folio" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg font-mono focus:ring-sky-500 shadow-inner">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Área Origen *</label>
+                                            <select name="department" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                                <option value="AROMAS">Aromas</option>
+                                                <option value="BELLAROMA">Bellaroma</option>
+                                                <option value="CALLCENTER">Call Center</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {{-- Buscador Cliente --}}
+                                    <div class="relative">
+                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Cliente Destino *</label>
+                                        <input type="text" name="client_name" x-model="clientSearchQuery" required autocomplete="off" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" placeholder="Buscar cliente..." class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner">
+                                        <input type="hidden" name="customer_id" x-model="selectedCustomerId">
+
+                                        <div x-show="showClientDropdown && clientSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                                            <template x-for="customer in clientSearchResults" :key="customer.id">
+                                                <div @click="selectCustomer(customer)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors">
+                                                    <div class="font-bold" x-text="customer.name"></div>
+                                                    <div class="text-xs text-gray-300" x-text="customer.customer_number ? '# ' + customer.customer_number : 'Registrado'"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Piezas (Perfumes) *</label>
+                                            <input type="number" name="pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Totales *</label>
+                                            <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                        </div>
+                                    </div>
+
+                                    {{-- Complementario --}}
+                                    <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mt-2">
+                                        <label class="flex items-center cursor-pointer mb-3">
+                                            <input type="checkbox" name="is_complementary" value="1" x-model="isComplementary" class="w-5 h-5 rounded border-gray-600 text-sky-500 focus:ring-sky-500 bg-gray-900">
+                                            <span class="ml-3 text-sm text-gray-200 font-bold uppercase tracking-wider">Es Paquete Complementario (- C)</span>
+                                        </label>
+                                        
+                                        <div x-show="isComplementary" x-transition class="relative">
+                                            <input type="text" name="parent_folio" x-model="folioSearchQuery" @input.debounce.300ms="searchFolios" @focus="showFolioDropdown = true" @click.away="showFolioDropdown = false" autocomplete="off" placeholder="Buscar folio original..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-sky-500 text-sm shadow-inner">
+                                            
+                                            <div x-show="showFolioDropdown && folioSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                                                <template x-for="pickup in folioSearchResults" :key="pickup.id">
+                                                    <div @click="selectFolio(pickup)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors flex justify-between items-center">
+                                                        <div class="font-bold font-mono text-sky-300" x-text="pickup.ticket_folio"></div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {{-- COLUMNA 2: FOTOS Y NOTAS --}}
+                                <div class="space-y-5">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        {{-- Foto Ticket --}}
+                                        <div>
+                                            <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">1. Foto del Ticket *</label>
+                                            <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.ticketInput.click()">
+                                                <div x-show="!ticketPreview" class="flex flex-col items-center justify-center p-4 text-center">
+                                                    <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                                    <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Ticket</p>
+                                                </div>
+                                                <template x-if="ticketPreview">
+                                                    <img :src="ticketPreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
+                                                </template>
+                                                <input x-ref="ticketInput" type="file" name="ticket_evidence" accept="image/*" capture="environment" class="hidden" required @change="const file = $refs.ticketInput.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { ticketPreview = e.target.result; }; reader.readAsDataURL(file); }">
+                                            </div>
+                                        </div>
+
+                                        {{-- Foto Bolsas --}}
+                                        <div>
+                                            <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">2. Foto del Paquete *</label>
+                                            <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.packageInput.click()">
+                                                <div x-show="!packagePreview" class="flex flex-col items-center justify-center p-4 text-center">
+                                                    <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                                                    <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Bolsas</p>
+                                                </div>
+                                                <template x-if="packagePreview">
+                                                    <img :src="packagePreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
+                                                </template>
+                                                <input x-ref="packageInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required @change="const file = $refs.packageInput.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { packagePreview = e.target.result; }; reader.readAsDataURL(file); }">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Observaciones</label>
+                                        <textarea name="notes" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner" placeholder="Opcional. Ej. La bolsa llegó rasgada..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pt-6 border-t border-gray-700 flex justify-end gap-4 sticky bottom-0 bg-aromas-secondary pb-2">
+                                <button type="button" @click="showCreateModal = false" class="py-4 px-8 text-gray-400 hover:text-white font-bold transition-colors uppercase tracking-widest">Cancelar</button>
+                                <button type="submit" class="py-4 px-10 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-transform active:scale-95 flex items-center gap-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Enviar a Auditoría
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
 <x-tablet-layout>
     {{-- Inicialización de Alpine con el nuevo path y configuración de rutas --}}
     <div x-data="deliveryApp({ 
@@ -62,13 +247,20 @@
         {{-- ========================================================== --}}
         {{-- SECCIÓN 2: PAQUETES EN RESGUARDO / EN CAMINO               --}}
         {{-- ========================================================== --}}
-        <div class="mb-4 flex items-center gap-3">
-            <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400 shadow-inner">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                </svg>
+        <div class="mb-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400 shadow-inner">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
             </div>
-            <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
+            
+            <button @click="$dispatch('open-create-pickup-modal')" class="bg-sky-500 hover:bg-sky-400 text-white font-black py-2.5 px-5 rounded-xl shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-transform active:scale-95 uppercase tracking-widest flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Nuevo Registro
+            </button>
         </div>
 
         {{-- NUEVA SECCIÓN: PAQUETES EN CAMINO (Auditados desde CEDIS) --}}
@@ -558,25 +750,44 @@
         clientSearchResults: [],
         selectedCustomerId: null,
         showClientDropdown: false,
+        isComplementary: false,
+        folioSearchQuery: '',
+        folioSearchResults: [],
+        showFolioDropdown: false,
 
         openModal(data) {
-            // Filtrar notas para mostrar SOLO las del Gerente (Ignorar lo que ya haya escrito el checador antes)
-            if (data.notes) {
-                data.manager_notes = data.notes.split('[Checador]:')[0].trim();
-            } else {
-                data.manager_notes = '';
-            }
+            if (data.notes) { data.manager_notes = data.notes.split('[Checador]:')[0].trim(); } 
+            else { data.manager_notes = ''; }
 
             this.pickupData = data;
             this.evidencePreview = null;
             this.clientSearchQuery = '';
             this.selectedCustomerId = null;
             
+            // Reset complementario
+            this.isComplementary = false;
+            this.folioSearchQuery = '';
+            this.folioSearchResults = [];
+            
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             this.pickupData.current_datetime = now.toISOString().slice(0,16);
 
             this.showCompleteModal = true;
+        },
+
+        async searchFolios() {
+            if (this.folioSearchQuery.length < 2) { this.folioSearchResults = []; return; }
+            try {
+                const response = await fetch(`/recepcion/pickups/search-folio?q=${this.folioSearchQuery}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                this.folioSearchResults = await response.json();
+                this.showFolioDropdown = true;
+            } catch (e) { console.error(e); }
+        },
+        
+        selectFolio(pickup) {
+            this.folioSearchQuery = pickup.ticket_folio;
+            this.showFolioDropdown = false;
         },
 
         async searchCustomers() {
@@ -658,22 +869,47 @@
                                 </div>
                             </div>
 
-                            {{-- FECHA Y HORA MANUAL --}}
+                             {{-- Quitar readonly a las piezas --}}
                             <div>
                                 <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Fecha y Hora de Recepción FÍSICA <span class="text-red-500">*</span></label>
-                                <input type="datetime-local" name="received_at" x-model="pickupData.current_datetime" required
-                                    class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500">
+                                <input type="datetime-local" name="received_at" x-model="pickupData.current_datetime" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
                                 <div class="grid grid-cols-2 gap-4 mt-4">
                                     <div>
-                                        <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Piezas Esp. <span class="text-red-500">*</span></label>
-                                        <input type="number" readonly :value="pickupData.pieces" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-400 cursor-not-allowed">
+                                        <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Perfumes (Piezas) <span class="text-red-500">*</span></label>
+                                        <input type="number" name="pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Recibidas <span class="text-red-500">*</span></label>
-                                        <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500">
+                                        <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Totales <span class="text-red-500">*</span></label>
+                                        <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
                                     </div>
                                 </div>
                             </div>
+
+                            {{-- NUEVO: SECCIÓN COMPLEMENTARIO PARA EL CHECADOR --}}
+                            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                                <label class="flex items-center cursor-pointer mb-3">
+                                    <input type="checkbox" name="is_complementary" value="1" x-model="isComplementary" class="w-5 h-5 rounded border-gray-600 text-sky-500 focus:ring-sky-500 bg-gray-900">
+                                    <span class="ml-3 text-sm text-gray-200 font-bold uppercase tracking-wider">Paquete Complementario (- C)</span>
+                                </label>
+
+                                <div x-show="isComplementary" x-transition class="relative">
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Buscar Folio Base Original</label>
+                                    <input type="text" name="parent_folio" x-model="folioSearchQuery" @input.debounce.300ms="searchFolios" @focus="showFolioDropdown = true" @click.away="showFolioDropdown = false" autocomplete="off" placeholder="Teclea el folio..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-sky-500 text-sm shadow-inner">
+
+                                    <div x-show="showFolioDropdown && folioSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                                        <template x-for="pickup in folioSearchResults" :key="pickup.id">
+                                            <div @click="selectFolio(pickup)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors flex justify-between items-center">
+                                                <div class="font-bold font-mono text-sky-300" x-text="pickup.ticket_folio"></div>
+                                                <div class="text-xs text-gray-300" x-text="pickup.client_name"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                           
+
+
 
                             {{-- ZONA DE CAPTURA DE FOTO DEL CHECADOR --}}
                             <div>
