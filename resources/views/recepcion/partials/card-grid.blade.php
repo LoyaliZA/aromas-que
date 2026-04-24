@@ -65,7 +65,7 @@
                     </div>
                     <div class="overflow-hidden">
                         <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold block truncate">No. Cliente</span>
-                        <span class="text-lg font-bold text-white leading-none truncate block">{{ $pickup->client_ref_id ?? 'N/A' }}</span>
+                        <span class="text-lg font-bold text-white leading-none truncate block">{{ $pickup->customer ? $pickup->customer->customer_number : ($pickup->client_ref_id ?? 'N/A') }}</span>
                     </div>
                 </div>
             </div>

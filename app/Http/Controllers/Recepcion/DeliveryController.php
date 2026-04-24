@@ -26,8 +26,8 @@ class DeliveryController extends Controller
         $pendingConfirmationId = PickupStatus::where('code', 'PENDING_CONFIRMATION')->value('id');
         $dispatchedId = PickupStatus::where('code', 'DISPATCHED')->value('id');
 
-        // 2. Consulta principal
-        $query = Pickup::visibleForChecker();
+        // 2. Consulta principal (Agregamos with('customer') para escalabilidad y limpieza)
+        $query = Pickup::visibleForChecker()->with('customer');
 
         if ($request->has('status') && $request->status !== 'ALL') {
             $statusId = PickupStatus::where('code', $request->status)->value('id');
