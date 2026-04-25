@@ -1,5 +1,5 @@
 {{-- MODAL NUEVO FLUJO: CHECADOR CREA RESGUARDO DESDE CERO --}}
-        <div x-data="{
+<div x-data="{
                 showCreateModal: false,
                 ticketPreview: null,
                 packagePreview: null,
@@ -44,145 +44,182 @@
                     this.folioSearchQuery = p.ticket_folio;
                     this.showFolioDropdown = false;
                 }
-            }" 
-            @open-create-pickup-modal.window="showCreateModal = true; ticketPreview = null; packagePreview = null; clientSearchQuery = ''; selectedCustomerId = ''; isComplementary = false; folioSearchQuery = '';">
-            
-            <div x-show="showCreateModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" x-transition>
-                <div @click.away="showCreateModal = false" class="bg-aromas-secondary rounded-2xl border-2 border-sky-500/50 w-full max-w-4xl shadow-2xl relative max-h-[95vh] flex flex-col">
-                    
-                    {{-- Cabecera --}}
-                    <div class="p-5 border-b border-gray-700 flex justify-between items-center sticky top-0 bg-aromas-secondary z-20 rounded-t-2xl">
-                        <h3 class="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-3">
-                            <svg class="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                            Registrar Nuevo Resguardo
-                        </h3>
-                        <button @click="showCreateModal = false" class="text-gray-400 hover:text-white p-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-                    </div>
+            }"
+    @open-create-pickup-modal.window="showCreateModal = true; ticketPreview = null; packagePreview = null; clientSearchQuery = ''; selectedCustomerId = ''; isComplementary = false; folioSearchQuery = '';">
 
-                    {{-- Formulario --}}
-                    <div class="p-6 overflow-y-auto custom-scrollbar">
-                        <form action="{{ route('recepcion.pickups.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
-                            @csrf
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {{-- COLUMNA 1: DATOS BÁSICOS --}}
-                                <div class="space-y-5">
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Folio (Ticket) *</label>
-                                            <input type="text" name="ticket_folio" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg font-mono focus:ring-sky-500 shadow-inner">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Área Origen *</label>
-                                            <select name="department" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
-                                                <option value="AROMAS">Aromas</option>
-                                                <option value="BELLAROMA">Bellaroma</option>
-                                                <option value="CALLCENTER">Call Center</option>
-                                            </select>
-                                        </div>
-                                    </div>
+    <div x-show="showCreateModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" x-transition>
+        <div @click.away="showCreateModal = false" class="bg-aromas-secondary rounded-2xl border-2 border-sky-500/50 w-full max-w-4xl shadow-2xl relative max-h-[95vh] flex flex-col">
 
-                                    {{-- Buscador Cliente --}}
-                                    <div class="relative">
-                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Cliente Destino *</label>
-                                        <input type="text" name="client_name" x-model="clientSearchQuery" required autocomplete="off" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" placeholder="Buscar cliente..." class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner">
-                                        <input type="hidden" name="customer_id" x-model="selectedCustomerId">
+            {{-- Cabecera --}}
+            <div class="p-5 border-b border-gray-700 flex justify-between items-center sticky top-0 bg-aromas-secondary z-20 rounded-t-2xl">
+                <h3 class="text-2xl font-black text-white uppercase tracking-wider flex items-center gap-3">
+                    <svg class="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    Registrar Nuevo Resguardo
+                </h3>
+                <button @click="showCreateModal = false" class="text-gray-400 hover:text-white p-2"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg></button>
+            </div>
 
-                                        <div x-show="showClientDropdown && clientSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
-                                            <template x-for="customer in clientSearchResults" :key="customer.id">
-                                                <div @click="selectCustomer(customer)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors">
-                                                    <div class="font-bold" x-text="customer.name"></div>
-                                                    <div class="text-xs text-gray-300" x-text="customer.customer_number ? '# ' + customer.customer_number : 'Registrado'"></div>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
+            {{-- Formulario --}}
+            <div class="p-6 overflow-y-auto custom-scrollbar">
+                <form action="{{ route('recepcion.pickups.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                    @csrf
 
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Piezas (Perfumes) *</label>
-                                            <input type="number" name="pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Totales *</label>
-                                            <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
-                                        </div>
-                                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {{-- COLUMNA 1: DATOS BÁSICOS --}}
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Folio (Ticket) *</label>
+                                    <input type="text" name="ticket_folio" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg font-mono focus:ring-sky-500 shadow-inner">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Área Origen *</label>
+                                    <select name="department" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                        <option value="AROMAS">Aromas</option>
+                                        <option value="BELLAROMA">Bellaroma</option>
+                                        <option value="CALLCENTER">Call Center</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                                    {{-- Complementario --}}
-                                    <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mt-2">
-                                        <label class="flex items-center cursor-pointer mb-3">
-                                            <input type="checkbox" name="is_complementary" value="1" x-model="isComplementary" class="w-5 h-5 rounded border-gray-600 text-sky-500 focus:ring-sky-500 bg-gray-900">
-                                            <span class="ml-3 text-sm text-gray-200 font-bold uppercase tracking-wider">Es Paquete Complementario (- C)</span>
-                                        </label>
-                                        
-                                        <div x-show="isComplementary" x-transition class="relative">
-                                            <input type="text" name="parent_folio" x-model="folioSearchQuery" @input.debounce.300ms="searchFolios" @focus="showFolioDropdown = true" @click.away="showFolioDropdown = false" autocomplete="off" placeholder="Buscar folio original..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-sky-500 text-sm shadow-inner">
-                                            
-                                            <div x-show="showFolioDropdown && folioSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
-                                                <template x-for="pickup in folioSearchResults" :key="pickup.id">
-                                                    <div @click="selectFolio(pickup)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors flex justify-between items-center">
-                                                        <div class="font-bold font-mono text-sky-300" x-text="pickup.ticket_folio"></div>
-                                                    </div>
-                                                </template>
+                            {{-- Buscador Cliente --}}
+                            <div class="relative">
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Cliente Destino *</label>
+                                <input type="text" name="client_name" x-model="clientSearchQuery" required autocomplete="off" @input.debounce.300ms="searchCustomers" @focus="showClientDropdown = true" @click.away="showClientDropdown = false" placeholder="Buscar cliente..." class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner">
+                                <input type="hidden" name="customer_id" x-model="selectedCustomerId">
+
+                                <div x-show="showClientDropdown && clientSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                                    <template x-for="customer in clientSearchResults" :key="customer.id">
+                                        <div @click="selectCustomer(customer)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors">
+                                            <div class="font-bold" x-text="customer.name"></div>
+                                            <div class="text-xs text-gray-300" x-text="customer.customer_number ? '# ' + customer.customer_number : 'Registrado'"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Piezas (Perfumes) *</label>
+                                    <input type="number" name="pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Totales *</label>
+                                    <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
+                                </div>
+                            </div>
+
+                            {{-- Complementario --}}
+                            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 mt-2">
+                                <label class="flex items-center cursor-pointer mb-3">
+                                    <input type="checkbox" name="is_complementary" value="1" x-model="isComplementary" class="w-5 h-5 rounded border-gray-600 text-sky-500 focus:ring-sky-500 bg-gray-900">
+                                    <span class="ml-3 text-sm text-gray-200 font-bold uppercase tracking-wider">Es Paquete Complementario (- C)</span>
+                                </label>
+
+                                <div x-show="isComplementary" x-transition class="relative">
+                                    <input type="text" name="parent_folio" x-model="folioSearchQuery" @input.debounce.300ms="searchFolios" @focus="showFolioDropdown = true" @click.away="showFolioDropdown = false" autocomplete="off" placeholder="Buscar folio original..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-sky-500 text-sm shadow-inner">
+
+                                    <div x-show="showFolioDropdown && folioSearchResults.length > 0" style="display: none;" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-48 overflow-y-auto">
+                                        <template x-for="pickup in folioSearchResults" :key="pickup.id">
+                                            <div @click="selectFolio(pickup)" class="px-4 py-3 hover:bg-sky-600 cursor-pointer border-b border-gray-700 text-white transition-colors flex justify-between items-center">
+                                                <div class="font-bold font-mono text-sky-300" x-text="pickup.ticket_folio"></div>
                                             </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- COLUMNA 2: FOTOS Y NOTAS --}}
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-2 gap-4">
+                                {{-- Foto Ticket --}}
+                                <div>
+                                    <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">1. Foto del Ticket *</label>
+                                    <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.ticketInput.click()">
+                                        <div x-show="!ticketPreview" class="flex flex-col items-center justify-center p-4 text-center">
+                                            <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                            </svg>
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Ticket</p>
                                         </div>
+                                        <template x-if="ticketPreview">
+                                            <img :src="ticketPreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
+                                        </template>
+                                        <input x-ref="ticketInput" type="file" name="ticket_evidence" accept="image/*" capture="environment" class="hidden" required 
+    @change="
+        const file = $event.target.files[0];
+        if(file) {
+            compressImage(file).then(compressedFile => {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(compressedFile);
+                $event.target.files = dataTransfer.files; // Reemplaza por el WebP ligero
+                const reader = new FileReader(); 
+                reader.onload = (e) => { ticketPreview = e.target.result; }; 
+                reader.readAsDataURL(compressedFile);
+            });
+        }
+    ">
                                     </div>
                                 </div>
 
-                                {{-- COLUMNA 2: FOTOS Y NOTAS --}}
-                                <div class="space-y-5">
-                                    <div class="grid grid-cols-2 gap-4">
-                                        {{-- Foto Ticket --}}
-                                        <div>
-                                            <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">1. Foto del Ticket *</label>
-                                            <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.ticketInput.click()">
-                                                <div x-show="!ticketPreview" class="flex flex-col items-center justify-center p-4 text-center">
-                                                    <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
-                                                    <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Ticket</p>
-                                                </div>
-                                                <template x-if="ticketPreview">
-                                                    <img :src="ticketPreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
-                                                </template>
-                                                <input x-ref="ticketInput" type="file" name="ticket_evidence" accept="image/*" capture="environment" class="hidden" required @change="const file = $refs.ticketInput.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { ticketPreview = e.target.result; }; reader.readAsDataURL(file); }">
-                                            </div>
+                                {{-- Foto Bolsas --}}
+                                <div>
+                                    <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">2. Foto del Paquete *</label>
+                                    <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.packageInput.click()">
+                                        <div x-show="!packagePreview" class="flex flex-col items-center justify-center p-4 text-center">
+                                            <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                            </svg>
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Bolsas</p>
                                         </div>
-
-                                        {{-- Foto Bolsas --}}
-                                        <div>
-                                            <label class="block text-[10px] text-center font-bold text-sky-400 uppercase tracking-widest mb-2">2. Foto del Paquete *</label>
-                                            <div class="relative flex flex-col items-center justify-center w-full h-40 border-2 border-gray-600 border-dashed rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-800 transition-all overflow-hidden group" @click="$refs.packageInput.click()">
-                                                <div x-show="!packagePreview" class="flex flex-col items-center justify-center p-4 text-center">
-                                                    <svg class="w-8 h-8 mb-2 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                                                    <p class="text-[10px] text-gray-400 uppercase font-bold">Capturar Bolsas</p>
-                                                </div>
-                                                <template x-if="packagePreview">
-                                                    <img :src="packagePreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
-                                                </template>
-                                                <input x-ref="packageInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required @change="const file = $refs.packageInput.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { packagePreview = e.target.result; }; reader.readAsDataURL(file); }">
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Observaciones</label>
-                                        <textarea name="notes" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner" placeholder="Opcional. Ej. La bolsa llegó rasgada..."></textarea>
+                                        <template x-if="packagePreview">
+                                            <img :src="packagePreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
+                                        </template>
+                                        <input x-ref="packageInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required 
+    @change="
+        const file = $refs.packageInput.files[0];
+        if(file) {
+            compressImage(file).then(compressedFile => {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(compressedFile);
+                $refs.packageInput.files = dataTransfer.files;
+                
+                const reader = new FileReader(); 
+                reader.onload = (e) => { packagePreview = e.target.result; }; 
+                reader.readAsDataURL(compressedFile);
+            });
+        }
+    ">
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="pt-6 border-t border-gray-700 flex justify-end gap-4 sticky bottom-0 bg-aromas-secondary pb-2">
-                                <button type="button" @click="showCreateModal = false" class="py-4 px-8 text-gray-400 hover:text-white font-bold transition-colors uppercase tracking-widest">Cancelar</button>
-                                <button type="submit" class="py-4 px-10 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-transform active:scale-95 flex items-center gap-3">
-                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Enviar a Auditoría
-                                </button>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Observaciones</label>
+                                <textarea name="notes" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:ring-sky-500 shadow-inner" placeholder="Opcional. Ej. La bolsa llegó rasgada..."></textarea>
                             </div>
-                        </form>
+                        </div>
                     </div>
-                </div>
+
+                    <div class="pt-6 border-t border-gray-700 flex justify-end gap-4 sticky bottom-0 bg-aromas-secondary pb-2">
+                        <button type="button" @click="showCreateModal = false" class="py-4 px-8 text-gray-400 hover:text-white font-bold transition-colors uppercase tracking-widest">Cancelar</button>
+                        <button type="submit" class="py-4 px-10 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-transform active:scale-95 flex items-center gap-3">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Enviar a Auditoría
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
+    </div>
+</div>
 <x-tablet-layout>
     {{-- Inicialización de Alpine con el nuevo path y configuración de rutas --}}
     <div x-data="deliveryApp({ 
@@ -256,9 +293,11 @@
                 </div>
                 <h2 class="text-xl font-black text-white uppercase tracking-widest">Paquetes en Resguardo</h2>
             </div>
-            
+
             <button @click="$dispatch('open-create-pickup-modal')" class="bg-sky-500 hover:bg-sky-400 text-white font-black py-2.5 px-5 rounded-xl shadow-[0_0_15px_rgba(14,165,233,0.4)] transition-transform active:scale-95 uppercase tracking-widest flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
                 Nuevo Registro
             </button>
         </div>
@@ -385,7 +424,21 @@
                         <div class="space-y-6">
                             <div class="bg-gray-900 border-2 border-dashed border-gray-600 hover:border-aromas-highlight/50 rounded-2xl p-6 transition-colors">
                                 <label class="block text-sm font-bold text-aromas-highlight uppercase tracking-wider mb-4 flex items-center gap-2">Evidencia Fotográfica *</label>
-                                <input type="file" name="evidence_file" id="evidence_file" accept="image/*" capture="environment" class="sr-only" @change="handleEvidenceChange">
+                                <input type="file" name="evidence_file" id="evidence_file" accept="image/*" capture="environment" class="sr-only" 
+    @change="
+        const file = $event.target.files[0];
+        if(file) {
+            compressImage(file).then(compressedFile => {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(compressedFile);
+                $event.target.files = dataTransfer.files;
+                
+                const reader = new FileReader(); 
+                reader.onload = (e) => { evidencePreview = e.target.result; }; 
+                reader.readAsDataURL(compressedFile);
+            });
+        }
+    ">
                                 <div class="relative">
                                     <label for="evidence_file" x-show="!evidencePreview" class="flex flex-col items-center justify-center gap-3 w-full h-32 bg-gray-800 rounded-xl border border-gray-700 cursor-pointer hover:bg-gray-700 transition-all group shadow-inner">
                                         <div class="p-3 bg-gray-900 rounded-full text-gray-400 group-hover:text-aromas-highlight group-hover:scale-110 transition-all">
@@ -869,7 +922,7 @@
                                 </div>
                             </div>
 
-                             {{-- Quitar readonly a las piezas --}}
+                            {{-- Quitar readonly a las piezas --}}
                             <div>
                                 <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Fecha y Hora de Recepción FÍSICA <span class="text-red-500">*</span></label>
                                 <input type="datetime-local" name="received_at" x-model="pickupData.current_datetime" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
@@ -907,7 +960,7 @@
                                 </div>
                             </div>
 
-                           
+
 
 
 
@@ -931,14 +984,20 @@
                                     </template>
 
                                     <input x-ref="evidenceInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required
-                                        @change="
-                                            const file = $refs.evidenceInput.files[0];
-                                            if(file) {
-                                                const reader = new FileReader(); 
-                                                reader.onload = (e) => { evidencePreview = e.target.result; }; 
-                                                reader.readAsDataURL(file);
-                                            }
-                                       ">
+    @change="
+        const file = $refs.evidenceInput.files[0];
+        if(file) {
+            compressImage(file).then(compressedFile => {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(compressedFile);
+                $refs.evidenceInput.files = dataTransfer.files;
+                
+                const reader = new FileReader(); 
+                reader.onload = (e) => { evidencePreview = e.target.result; }; 
+                reader.readAsDataURL(compressedFile);
+            });
+        }
+    ">
                                 </div>
                             </div>
 
@@ -967,7 +1026,7 @@
     {{-- SCRIPTS --}}
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
 
-    {{-- NUEVO: Store global y Función de Auto-Recorte --}}
+    {{-- NUEVO: Store global y Funciones de Optimización --}}
     <script>
         // Función para recortar el espacio vacío del Canvas
         function cropSignatureCanvas(canvas) {
@@ -1006,14 +1065,20 @@
 
             // Crear un canvas temporal solo con el tamaño de la firma
             const croppedCanvas = document.createElement('canvas');
-            croppedCanvas.width = maxX - minX;
-            croppedCanvas.height = maxY - minY;
+            croppedCanvas.width = (maxX - minX) + (padding * 2);
+            croppedCanvas.height = (maxY - minY) + (padding * 2);
             const croppedCtx = croppedCanvas.getContext('2d');
 
-            // Dibujar el área recortada en el nuevo canvas
-            croppedCtx.drawImage(canvas, minX, minY, croppedCanvas.width, croppedCanvas.height, 0, 0, croppedCanvas.width, croppedCanvas.height);
+            // --- NUEVO: PINTAR FONDO BLANCO ANTES DE PEGAR LA FIRMA ---
+            croppedCtx.fillStyle = "#ffffff";
+            croppedCtx.fillRect(0, 0, croppedCanvas.width, croppedCanvas.height);
+            // ----------------------------------------------------------
 
-            return croppedCanvas.toDataURL();
+            // Dibujar el área recortada en el nuevo canvas (con el padding aplicado)
+            croppedCtx.drawImage(canvas, minX, minY, maxX - minX, maxY - minY, padding, padding, maxX - minX, maxY - minY);
+
+            // Exportar como WebP ultraligero al 70% de calidad
+            return croppedCanvas.toDataURL('image/webp', 0.7);
         }
 
         document.addEventListener('alpine:init', () => {
@@ -1031,6 +1096,49 @@
             }
         }, false);
         history.pushState(null, null, window.location.pathname);
+
+        // Función asíncrona para comprimir imágenes (Bolsas/Tickets/Evidencia) a WebP
+        async function compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.7) {
+            if (!file.type.startsWith('image/')) return file;
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > maxWidth) {
+                                height = Math.round((height *= maxWidth / width));
+                                width = maxWidth;
+                            }
+                        } else {
+                            if (height > maxHeight) {
+                                width = Math.round((width *= maxHeight / height));
+                                height = maxHeight;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        canvas.toBlob((blob) => {
+                            const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                                type: 'image/webp',
+                                lastModified: Date.now()
+                            });
+                            resolve(newFile);
+                        }, 'image/webp', quality);
+                    };
+                };
+            });
+        }
     </script>
 
 

@@ -12,6 +12,14 @@
         date_start: '{{ request('date_start') }}',
         date_end: '{{ request('date_end') }}',
         isLoading: false,
+        showImageViewer: false,
+        imageViewerUrl: '',
+        
+        openImageViewer(url) {
+            if(!url) return;
+            this.imageViewerUrl = url;
+            this.showImageViewer = true;
+        },
         
         // MODAL DE DETALLES
         showDetailsModal: false,
@@ -151,7 +159,7 @@
                             <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Firma del Cliente</label>
                             <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
                                 <template x-if="detailsData.signature_url">
-                                    <img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48">
+                                    <img :src="detailsData.signature_url" alt="Firma Digital" class="w-full h-auto object-contain max-h-48 cursor-crosshair hover:scale-105 transition-transform" @mouseenter="openImageViewer(detailsData.signature_url)" @mouseleave="showImageViewer = false">
                                 </template>
                                 <template x-if="!detailsData.signature_url">
                                     <div class="text-gray-400 italic text-sm">Firma no disponible</div>
@@ -163,7 +171,7 @@
                             <label class="block text-xs text-aromas-tertiary uppercase tracking-wider font-bold mb-2">Foto de Evidencia</label>
                             <div class="bg-white rounded-lg p-2 border-2 border-gray-300 flex items-center justify-center min-h-[12rem]">
                                 <template x-if="detailsData.evidence_url">
-                                    <img :src="detailsData.evidence_url" alt="Evidencia" class="w-full h-auto object-contain max-h-48">
+                                    <img :src="detailsData.evidence_url" alt="Evidencia" class="w-full h-auto object-contain max-h-48 cursor-crosshair hover:scale-105 transition-transform" @mouseenter="openImageViewer(detailsData.evidence_url)" @mouseleave="showImageViewer = false">
                                 </template>
                             </div>
                         </div>
@@ -173,5 +181,13 @@
                 <div class="p-4 bg-black/20 border-t border-aromas-tertiary/20 flex justify-end"><button @click="showDetailsModal = false" class="px-6 py-2 bg-aromas-tertiary/20 border border-aromas-tertiary/30 rounded-lg text-white hover:bg-white/10 transition-colors">Cerrar</button></div>
             </div>
         </div>
+
+        {{-- VISOR DE IMÁGENES MOVIDO AQUÍ DENTRO DEL X-DATA --}}
+        <div x-show="showImageViewer" style="display: none;" class="fixed inset-0 z-[150] flex items-center justify-center pointer-events-none p-4 md:p-10" x-transition>
+            <div class="relative w-full h-full flex items-center justify-center bg-black/95 p-2 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-gray-700">
+                <img :src="imageViewerUrl" class="max-w-full max-h-full object-contain rounded-xl bg-white p-2">
+            </div>
+        </div>
+        
     </div>
 </x-gerencia-layout>

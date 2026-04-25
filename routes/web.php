@@ -136,6 +136,7 @@ Route::prefix('gerencia')
         Route::post('/pickups/{id}/approve', [PickupController::class, 'approveAudit'])->name('pickups.approveAudit');
         Route::post('/pickups/{id}/reject', [PickupController::class, 'rejectAudit'])->name('pickups.rejectAudit');
         Route::get('/pickups/search-folio', [PickupController::class, 'searchFolio'])->name('pickups.searchFolio');
+        Route::delete('/pickups/bulk-destroy', [PickupController::class, 'bulkDestroy'])->name('pickups.bulkDestroy');
 
         Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
         Route::post('/staff/toggle', [StaffController::class, 'toggleShift'])->name('staff.toggle');
@@ -144,6 +145,7 @@ Route::prefix('gerencia')
         Route::get('/calificacion-cliente', [ClientRatingController::class, 'index'])->name('calificacion.index');
         Route::get('/calificacion-cliente/recent', [ClientRatingController::class, 'getRecentSales'])->name('calificacion.recent');
         Route::post('/calificacion-cliente/store', [ClientRatingController::class, 'store'])->name('calificacion.store');
+        
     });
 
 /*

@@ -1,19 +1,17 @@
 <div class="mt-6">
 
-    {{-- ========================================== --}}
-    {{-- VISTA MÓVIL: TARJETAS DE AUDITORÍA RÁPIDA  --}}
-    {{-- ========================================== --}}
     <div class="grid grid-cols-1 gap-4 md:hidden">
         @forelse($todaysPickups as $pickup)
         <div class="bg-aromas-secondary rounded-2xl shadow-lg border border-aromas-tertiary/20 p-5 flex flex-col gap-4 relative {{ $pickup->currentStatus?->code === 'PENDING_CONFIRMATION' ? 'ring-1 ring-amber-500/30' : '' }}">
 
-            {{-- Encabezado: Selección y Folio --}}
             <div class="flex justify-between items-start">
                 <div class="flex items-center gap-3">
                     @if($pickup->currentStatus?->code === 'PENDING_CONFIRMATION')
                     <div class="flex items-center justify-center p-1">
-                        <input type="checkbox" value="{{ $pickup->id }}" x-model="selectedPickups"
-                            class="pickup-checkbox w-6 h-6 rounded border-gray-500 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer shadow-inner">
+                        <input type="checkbox" 
+                               value="{{ $pickup->id }}" 
+                               x-model="selectedPickups"
+                               class="pickup-checkbox w-6 h-6 rounded border-gray-500 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer shadow-inner">
                     </div>
                     @endif
                     <div>
@@ -26,7 +24,6 @@
                 </span>
             </div>
 
-            {{-- Cliente e Info --}}
             <div class="bg-black/20 rounded-xl p-3 border border-aromas-tertiary/10">
                 <p class="text-white font-bold text-sm leading-tight mb-2">{{ $pickup->client_name }}</p>
                 <div class="flex gap-4">
@@ -35,7 +32,6 @@
                 </div>
             </div>
 
-            {{-- Evidencias Táctiles (Zoom al tocar) --}}
             <div class="flex gap-3 justify-center">
                 @foreach(['initial_evidence_path' => 'Ticket', 'package_evidence_path' => 'Bolsas'] as $field => $label)
                 @if($pickup->$field)
@@ -49,7 +45,6 @@
                 @endforeach
             </div>
 
-            {{-- Acciones Rápidas --}}
             @if($pickup->currentStatus?->code === 'PENDING_CONFIRMATION')
             <div class="grid grid-cols-2 gap-3 pt-2">
                 <form action="/gerencia/pickups/{{ $pickup->id }}/approve" method="POST">
@@ -66,9 +61,6 @@
     </div>
 
 
-    {{-- ========================================== --}}
-    {{-- VISTA ESCRITORIO: TABLA VISUAL DE AUDITORIA --}}
-    {{-- ========================================== --}}
     <div class="hidden md:flex bg-aromas-secondary rounded-xl shadow-xl border border-aromas-tertiary/20 overflow-hidden flex-col">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
@@ -76,7 +68,9 @@
                     <tr class="bg-black/20 text-aromas-tertiary text-xs uppercase tracking-wider border-b border-aromas-tertiary/10">
                         <th class="px-4 py-3 font-semibold w-16 text-center">
                             <div class="flex flex-col items-center justify-center gap-1" title="Seleccionar Todos">
-                                <input type="checkbox" @change="toggleAll($event)" class="w-5 h-5 rounded border-gray-400 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer hover:scale-110 transition-transform shadow-inner">
+                                <input type="checkbox" 
+                                       @change="toggleAll($event)"
+                                       class="w-6 h-6 rounded border-gray-500 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer shadow-inner">
                                 <span class="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Todos</span>
                             </div>
                         </th>
@@ -94,8 +88,10 @@
                         <td class="px-4 py-3 text-center">
                             @if($pickup->currentStatus?->code === 'PENDING_CONFIRMATION')
                             <div class="flex items-center justify-center">
-                                <input type="checkbox" value="{{ $pickup->id }}" x-model="selectedPickups" 
-                                       class="pickup-checkbox w-5 h-5 rounded border-gray-500 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer hover:scale-110 transition-transform shadow-inner">
+                                <input type="checkbox" 
+                                       value="{{ $pickup->id }}" 
+                                       x-model="selectedPickups"
+                                       class="pickup-checkbox w-6 h-6 rounded border-gray-500 bg-black/40 text-green-500 focus:ring-green-500 cursor-pointer shadow-inner">
                             </div>
                             @endif
                         </td>

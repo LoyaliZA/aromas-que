@@ -3,53 +3,65 @@
             showEditModal: false, 
             showDetailsModal: false,
             showDeleteModal: false,
+            showRejectModal: false,
             isLoading: false,
             showImageViewer: false,
             imageViewerUrl: '',
-            openImageViewer(url) {
-                this.imageViewerUrl = url;
-                this.showImageViewer = true;
-            },
             search: '', status: 'ALL', department: 'ALL',
-
-            // Lógica de Confirmación Masiva (Con filtro anti-duplicados)
             selectedPickups: [],
-            
-            // NUEVO: Inicializador de Smart Polling
+            showBulkDeleteModal: false,
+
+            // Datos para los modales
+            detailsData: { parsedNotes: [] },
+            editData: {},
+            deleteId: null, deleteFolio: '',
+            rejectData: {},
+
             init() {
                 setInterval(() => {
-                    const isBusy = this.selectedPickups.length > 0 || 
-                                   this.showRejectModal || 
-                                   this.showEditModal || 
-                                   this.showDetailsModal || 
-                                   this.showDeleteModal || 
-                                   this.showImageViewer;
-                    
-                    if (!isBusy) {
-                        this.fetchResults(true); // true = actualización silenciosa
+                    if (!this.showEditModal && !this.showDetailsModal && !this.showDeleteModal && !this.showRejectModal && this.selectedPickups.length === 0) {
+                        this.fetchResults(true);
                     }
-                }, 15000); // 15000 milisegundos = 15 segundos
+                }, 15000);
             },
+
+            openDetailsModal(data) {
+                let rawNotes = data.notes || '';
+                let parsed = [];
+                rawNotes.split('\n').forEach((line, index) => {
+                    let text = line.trim();
+                    if(text !== '') {
+                        let isChecker = text.startsWith('[Checador]:');
+                        parsed.push({ id: index, isChecker: isChecker, author: isChecker ? 'Checador' : 'Gerencia', text: text.replace('[Checador]:', '').trim() });
+                    }
+                });
+                data.parsedNotes = parsed;
+                this.detailsData = data;
+                this.showDetailsModal = true;
+            },
+
+            openEditModal(data) { this.editData = data; this.showEditModal = true; },
+            openDeleteModal(id, folio) { this.deleteId = id; this.deleteFolio = folio; this.showDeleteModal = true; },
+            openRejectModal(id, folio) { this.rejectData = { id, ticket_folio: folio }; this.showRejectModal = true; },
+            openImageViewer(url) { this.imageViewerUrl = url; this.showImageViewer = true; },
 
             toggleAll(event) {
                 if (event.target.checked) {
                     let ids = new Set();
-                    document.querySelectorAll('.pickup-checkbox').forEach(cb => ids.add(cb.value));
+                    document.querySelectorAll('.pickup-checkbox').forEach(cb => {
+                        ids.add(String(cb.value));
+                    });
                     this.selectedPickups = Array.from(ids);
                 } else {
                     this.selectedPickups = [];
                 }
             },
 
-            // ... (deja tus modales openRejectModal, openEditModal, openDetailsModal igual) ...
-
-            // MODIFICADO: fetchResults ahora acepta modo silencioso
             async fetchResults(silent = false) {
                 if (!silent) this.isLoading = true;
                 const params = new URLSearchParams({ search: this.search, status: this.status, department: this.department });
-                const url = `/gerencia/daily?${params.toString()}`;
                 try {
-                    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                    const response = await fetch(`/gerencia/daily?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                     document.getElementById('table-container').innerHTML = await response.text();
                 } catch (e) { console.error(e); }
                 if (!silent) this.isLoading = false;
@@ -63,19 +75,27 @@
                 <p class="text-gray-400 text-sm mt-1">Auditoría visual de resguardos y control de entregas.</p>
             </div>
 
-            {{-- BOTÓN DE APROBACIÓN MASIVA --}}
-            <form action="{{ route('gerencia.pickups.bulkApprove') }}" method="POST" x-show="selectedPickups.length > 0" class="flex items-center" x-transition>
-                @csrf
-                <template x-for="id in selectedPickups" :key="id">
-                    <input type="hidden" name="pickup_ids[]" :value="id">
-                </template>
-                <button type="submit" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 px-6 rounded-lg shadow-lg transition-all flex items-center shadow-green-500/20 active:scale-95">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            {{-- BOTONES DE ACCIÓN MASIVA --}}
+            <div class="flex items-center gap-3" x-show="selectedPickups.length > 0" x-transition>
+                {{-- Aprobación Masiva --}}
+                <form action="{{ route('gerencia.pickups.bulkApprove') }}" method="POST">
+                    @csrf
+                    <template x-for="id in selectedPickups" :key="'app-'+id">
+                        <input type="hidden" name="pickup_ids[]" :value="id">
+                    </template>
+                    <button type="submit" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 px-4 rounded-lg shadow-lg transition-all flex items-center shadow-green-500/20 active:scale-95 text-xs">
+                        Confirmar (<span x-text="selectedPickups.length"></span>)
+                    </button>
+                </form>
+
+                {{-- NUEVO: Botón Borrado Masivo --}}
+                <button @click="showBulkDeleteModal = true" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-4 rounded-lg shadow-lg transition-all flex items-center shadow-red-500/20 active:scale-95 text-xs">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
-                    Confirmar Seleccionados (<span x-text="selectedPickups.length"></span>)
+                    Eliminar (<span x-text="selectedPickups.length"></span>)
                 </button>
-            </form>
+            </div>
         </div>
 
         {{-- BARRA DE BÚSQUEDA --}}
@@ -266,18 +286,23 @@
                     </svg>
                 </div>
                 <h3 class="text-xl font-bold text-white mb-2 uppercase tracking-widest">¿Eliminar Resguardo?</h3>
-                <p class="text-gray-400 text-sm mb-8">Estás a punto de borrar el folio <span class="text-white font-bold" x-text="deleteFolio"></span>. Esta acción no se puede deshacer.</p>
-                <form :action="'{{ url('/gerencia/destroy') }}/' + deleteId" method="POST" class="flex gap-3">
+                <p class="text-gray-400 text-sm mb-6">Estás a punto de borrar el folio <span class="text-white font-bold" x-text="deleteFolio"></span>. Ingresa tu contraseña para autorizar la acción.</p>
+                <form :action="'{{ url('/gerencia/destroy') }}/' + deleteId" method="POST" class="space-y-4">
                     @csrf @method('DELETE')
-                    <button type="button" @click="showDeleteModal = false" class="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-bold transition-colors uppercase tracking-widest text-xs">Cancelar</button>
-                    <button type="submit" class="flex-1 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition-colors shadow-lg shadow-red-600/20 uppercase tracking-widest text-xs">Eliminar</button>
+                    <div>
+                        <input type="password" name="password" required placeholder="Contraseña de Gerente" class="w-full bg-black/40 border border-gray-600 rounded-lg px-4 py-3 text-white text-center tracking-widest focus:ring-red-500 focus:border-red-500 transition-all">
+                    </div>
+                    <div class="flex gap-3">
+                        <button type="button" @click="showDeleteModal = false" class="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-bold transition-colors uppercase tracking-widest text-xs">Cancelar</button>
+                        <button type="submit" class="flex-1 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition-colors shadow-lg shadow-red-600/20 uppercase tracking-widest text-xs">Eliminar</button>
+                    </div>
                 </form>
             </div>
         </div>
 
-        {{-- VISOR DE IMÁGENES AL PASAR EL MOUSE O TOCAR (HOVER PREVIEW) --}}
+        {{-- VISOR DE IMÁGENES AL PASAR EL MOUSE O TOCAR (HOVER PREVIEW) CORREGIDO --}}
         <div x-show="showImageViewer" style="display: none;"
-            class="fixed inset-0 z-[150] flex items-center justify-center pointer-events-none p-4"
+            class="fixed inset-0 z-[150] flex items-center justify-center pointer-events-none p-4 md:p-10"
             x-transition:enter="transition ease-out duration-100"
             x-transition:enter-start="opacity-0 scale-95"
             x-transition:enter-end="opacity-100 scale-100"
@@ -285,8 +310,31 @@
             x-transition:leave-start="opacity-100 scale-100"
             x-transition:leave-end="opacity-0 scale-95">
 
-            <div class="relative max-w-4xl max-h-[85vh] bg-black/90 p-2 md:p-4 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-gray-700">
-                <img :src="imageViewerUrl" class="w-full h-full object-contain rounded-xl">
+            <div class="relative w-full h-full flex items-center justify-center bg-black/95 p-2 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-gray-700">
+                <img :src="imageViewerUrl" class="max-w-full max-h-full object-contain rounded-xl">
+            </div>
+        </div>
+
+        {{-- MODAL BORRADO MASIVO --}}
+        <div x-show="showBulkDeleteModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4" x-transition>
+            <div class="bg-aromas-secondary border border-red-500/30 rounded-xl p-6 max-w-md w-full text-center">
+                <h3 class="text-xl font-bold text-white mb-4">Confirmar Eliminación Masiva</h3>
+                <p class="text-gray-400 text-sm mb-6">Vas a eliminar <span class="text-white font-bold" x-text="selectedPickups.length"></span> resguardos. Esta acción no se puede deshacer. Por favor, ingresa tu contraseña de gerente. Recuerda que esta acción es irreversible y dejará un registro en el sistema.</p>
+
+                <form action="{{ route('gerencia.pickups.bulkDestroy') }}" method="POST" class="space-y-4">
+                    @csrf @method('DELETE')
+                    <template x-for="id in selectedPickups" :key="'del-'+id">
+                        <input type="hidden" name="pickup_ids[]" :value="id">
+                    </template>
+
+                    <input type="password" name="password" required placeholder="Contraseña de Gerente"
+                        class="w-full bg-black/40 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-red-500">
+
+                    <div class="flex gap-3">
+                        <button type="button" @click="showBulkDeleteModal = false" class="flex-1 bg-gray-700 text-white py-2 rounded-lg">Cancelar</button>
+                        <button type="submit" class="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold">Eliminar Todo</button>
+                    </div>
+                </form>
             </div>
         </div>
 

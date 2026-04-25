@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Employee;
 use App\Models\SalesQueue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Hash;
 
 class PickupController extends Controller
 {
@@ -235,21 +236,41 @@ class PickupController extends Controller
         return redirect()->route('gerencia.daily')->with('info', 'No se detectaron cambios.');
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id) // <-- AGREGAR Request $request
     {
+        $request->validate([
+            'password' => 'required|string'
+        ]);
+
+        // Verificar contraseña del gerente
+        if (!Hash::check($request->password, Auth::user()->password)) {
+            return redirect()->route('gerencia.daily')->with('error', 'Contraseña incorrecta. Eliminación cancelada.');
+        }
+
         $pickup = Pickup::findOrFail($id);
 
-        // Eliminamos las fotos del disco local si existen
-        if ($pickup->initial_evidence_path) {
-            Storage::disk('public')->delete($pickup->initial_evidence_path);
+        // Bloqueo: No eliminar entregados
+        if ($pickup->currentStatus?->code === 'DELIVERED') {
+            return redirect()->route('gerencia.daily')->with('error', 'No se pueden eliminar resguardos ya entregados.');
         }
-        if ($pickup->package_evidence_path) {
-            Storage::disk('public')->delete($pickup->package_evidence_path);
-        }
+
+        // Auditoría de borrado
+        DB::table('pickup_deleted_audits')->insert([
+            'original_pickup_id' => $pickup->id,
+            'ticket_folio' => $pickup->ticket_folio,
+            'deleted_by' => Auth::id(),
+            'pickup_data' => $pickup->toJson(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($pickup->initial_evidence_path) Storage::disk('public')->delete($pickup->initial_evidence_path);
+        if ($pickup->package_evidence_path) Storage::disk('public')->delete($pickup->package_evidence_path);
+        if ($pickup->evidence_path) Storage::disk('public')->delete($pickup->evidence_path);
 
         $pickup->delete();
 
-        return redirect()->route('gerencia.daily')->with('success', 'Resguardo eliminado permanentemente.');
+        return redirect()->route('gerencia.daily')->with('success', 'Resguardo eliminado y registrado en auditoría.');
     }
 
     /**
@@ -359,7 +380,7 @@ class PickupController extends Controller
         $inCustodyId = \App\Models\PickupStatus::where('code', 'IN_CUSTODY')->value('id');
 
         Pickup::whereIn('id', $request->pickup_ids)
-            ->whereHas('currentStatus', function($q) {
+            ->whereHas('currentStatus', function ($q) {
                 $q->where('code', 'PENDING_CONFIRMATION');
             })
             ->update([
@@ -368,5 +389,55 @@ class PickupController extends Controller
             ]);
 
         return redirect()->route('gerencia.daily')->with('success', 'Resguardos confirmados masivamente con éxito.');
+    }
+
+    /**
+     * ELIMINACIÓN MASIVA CON SEGURIDAD
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'pickup_ids' => 'required|array',
+            'pickup_ids.*' => 'exists:pickups,id',
+            'password' => 'required|string'
+        ]);
+
+        // 1. Validar contraseña del gerente
+        if (!Hash::check($request->password, Auth::user()->password)) {
+            return redirect()->route('gerencia.daily')->with('error', 'Contraseña incorrecta. Eliminación masiva cancelada.');
+        }
+
+        $pickups = Pickup::whereIn('id', $request->pickup_ids)->get();
+
+        // 2. Verificar que NINGUNO esté entregado
+        foreach ($pickups as $pickup) {
+            if ($pickup->currentStatus?->code === 'DELIVERED') {
+                return redirect()->route('gerencia.daily')->with('error', "El folio #{$pickup->ticket_folio} ya fue entregado y no puede borrarse. Se canceló toda la operación.");
+            }
+        }
+
+        // 3. Proceso de borrado y auditoría
+        DB::transaction(function () use ($pickups) {
+            foreach ($pickups as $pickup) {
+                DB::table('pickup_deleted_audits')->insert([
+                    'original_pickup_id' => $pickup->id,
+                    'ticket_folio' => $pickup->ticket_folio,
+                    'deleted_by' => Auth::id(),
+                    'pickup_data' => $pickup->toJson(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                // Limpieza de archivos
+                if ($pickup->initial_evidence_path) Storage::disk('public')->delete($pickup->initial_evidence_path);
+                if ($pickup->package_evidence_path) Storage::disk('public')->delete($pickup->package_evidence_path);
+                if ($pickup->evidence_path) Storage::disk('public')->delete($pickup->evidence_path);
+                if ($pickup->signature_path) Storage::disk('public')->delete($pickup->signature_path);
+
+                $pickup->delete();
+            }
+        });
+
+        return redirect()->route('gerencia.daily')->with('success', count($request->pickup_ids) . ' resguardos eliminados y auditados correctamente.');
     }
 }
