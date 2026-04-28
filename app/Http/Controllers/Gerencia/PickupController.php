@@ -43,9 +43,9 @@ class PickupController extends Controller
         return view('gerencia.dashboard', compact('queueMetrics', 'sellers', 'waitingClients'));
     }
 
-    /**
+   /**
      * OPERACIÓN DIARIA: Tabla de trabajo con Filtros y Modales.
-     * MODIFICADO: Ahora EXCLUYE los rezagados (>15 días). Esos van en su propia vista.
+     * MODIFICADO: Excluye rezagados (>15 días) e incluye folios pendientes de días anteriores.
      */
     public function daily(Request $request)
     {
@@ -57,7 +57,8 @@ class PickupController extends Controller
                 $q->whereDate('pickups.created_at', today())
                     ->orWhere(function ($subQ) {
                         $subQ->whereHas('currentStatus', function ($statusQ) {
-                            $statusQ->where('code', 'IN_CUSTODY');
+                            // Se agregan los estados pendientes para evitar que se queden atascados si no se procesan el mismo día
+                            $statusQ->whereIn('code', ['IN_CUSTODY', 'PENDING_CONFIRMATION', 'NEEDS_CORRECTION']);
                         })
                             ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
                     });
