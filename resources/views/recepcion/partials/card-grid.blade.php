@@ -95,7 +95,10 @@
             id: {{ $pickup->id }}, 
             ticket_folio: '{{ $pickup->ticket_folio }}', 
             pieces: {{ $pickup->pieces }},
+            bags: {{ $pickup->bags ?? 'null' }},
             department: '{{ $pickup->department }}',
+            client_name: '{{ addslashes($pickup->client_name) }}',
+            client_ref_id: {{ $pickup->client_ref_id ?? 'null' }},
             notes: '{{ addslashes(str_replace(["\r", "\n"], " ", (string)$pickup->notes)) }}',
             initial_evidence: '{{ $pickup->initial_evidence_path ? asset('storage/'.$pickup->initial_evidence_path) : '' }}'
         })"

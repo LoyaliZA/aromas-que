@@ -150,8 +150,8 @@
                                         <template x-if="ticketPreview">
                                             <img :src="ticketPreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
                                         </template>
-                                        <input x-ref="ticketInput" type="file" name="ticket_evidence" accept="image/*" capture="environment" class="hidden" required 
-    @change="
+                                        <input x-ref="ticketInput" type="file" name="ticket_evidence" accept="image/*" capture="environment" class="hidden" required
+                                            @change="
         const file = $event.target.files[0];
         if(file) {
             compressImage(file).then(compressedFile => {
@@ -180,8 +180,8 @@
                                         <template x-if="packagePreview">
                                             <img :src="packagePreview" class="absolute inset-0 w-full h-full object-contain bg-black/40 p-1">
                                         </template>
-                                        <input x-ref="packageInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required 
-    @change="
+                                        <input x-ref="packageInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required
+                                            @change="
         const file = $refs.packageInput.files[0];
         if(file) {
             compressImage(file).then(compressedFile => {
@@ -424,8 +424,8 @@
                         <div class="space-y-6">
                             <div class="bg-gray-900 border-2 border-dashed border-gray-600 hover:border-aromas-highlight/50 rounded-2xl p-6 transition-colors">
                                 <label class="block text-sm font-bold text-aromas-highlight uppercase tracking-wider mb-4 flex items-center gap-2">Evidencia Fotográfica *</label>
-                                <input type="file" name="evidence_file" id="evidence_file" accept="image/*" capture="environment" class="sr-only" 
-    @change="
+                                <input type="file" name="evidence_file" id="evidence_file" accept="image/*" capture="environment" class="sr-only"
+                                    @change="
         const file = $event.target.files[0];
         if(file) {
             compressImage(file).then(compressedFile => {
@@ -814,10 +814,11 @@
 
             this.pickupData = data;
             this.evidencePreview = null;
-            this.clientSearchQuery = '';
-            this.selectedCustomerId = null;
             
-            // Reset complementario
+            this.clientSearchQuery = (data.client_name && data.client_name !== 'Pendiente por Checador') ? data.client_name : '';
+            this.selectedCustomerId = data.client_ref_id || null;
+            
+            
             this.isComplementary = false;
             this.folioSearchQuery = '';
             this.folioSearchResults = [];
@@ -875,13 +876,21 @@
                     <form :action="'/recepcion/preliminar/' + pickupData.id + '/complete'" method="POST" enctype="multipart/form-data" class="space-y-6">
                         @csrf
 
-                        {{-- SECCIÓN 1: DATOS REGISTRADOS POR EL GERENTE (Solo Lectura) --}}
+                        {{-- SECCIÓN 1: DATOS REGISTRADOS POR EL GERENTE --}}
                         <div class="bg-gray-900 border border-gray-700 rounded-xl p-4">
                             <h4 class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Información de Gerencia</h4>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="space-y-3">
-                                    <div><span class="text-xs text-gray-400 block">Departamento Origen:</span> <span class="text-white font-bold" x-text="pickupData.department"></span></div>
-                                    <div><span class="text-xs text-gray-400 block">Piezas Esperadas:</span> <span class="text-white font-bold text-lg" x-text="pickupData.pieces"></span></div>
+                                <div class="space-y-4">
+                                    {{-- NUEVO: DEPARTAMENTO AHORA ES EDITABLE --}}
+                                    <div>
+                                        <span class="text-xs text-gray-400 block mb-1">Departamento Origen:</span>
+                                        <select name="department" x-model="pickupData.department" required class="w-full bg-black/40 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-sky-500 shadow-inner text-sm">
+                                            <option value="AROMAS">Aromas</option>
+                                            <option value="BELLAROMA">Bellaroma</option>
+                                            <option value="CALLCENTER">Call Center</option>
+                                        </select>
+                                    </div>
+                                    <div><span class="text-xs text-gray-400 block mb-1">Piezas Esperadas:</span> <span class="text-white font-bold text-lg" x-text="pickupData.pieces"></span></div>
                                     <div>
                                         <span class="text-xs text-gray-400 block mb-1">Notas de Gerencia:</span>
                                         <p class="text-sm text-gray-300 italic bg-black/30 p-2 rounded" x-text="pickupData.manager_notes || 'Ninguna'"></p>
@@ -929,11 +938,11 @@
                                 <div class="grid grid-cols-2 gap-4 mt-4">
                                     <div>
                                         <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Perfumes (Piezas) <span class="text-red-500">*</span></label>
-                                        <input type="number" name="pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
+                                        <input type="number" name="pieces" x-model="pickupData.pieces" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-bold text-gray-300 uppercase tracking-widest mb-2">Bolsas Totales <span class="text-red-500">*</span></label>
-                                        <input type="number" name="bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
+                                        <input type="number" name="bags" x-model="pickupData.bags" required min="1" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:ring-sky-500 shadow-inner">
                                     </div>
                                 </div>
                             </div>
@@ -984,7 +993,7 @@
                                     </template>
 
                                     <input x-ref="evidenceInput" type="file" name="package_evidence" accept="image/*" capture="environment" class="hidden" required
-    @change="
+                                        @change="
         const file = $refs.evidenceInput.files[0];
         if(file) {
             compressImage(file).then(compressedFile => {

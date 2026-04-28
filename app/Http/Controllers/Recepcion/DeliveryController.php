@@ -285,17 +285,15 @@ class DeliveryController extends Controller
 
         return response()->json(['success' => false, 'message' => 'No se pudo confirmar la recepción.'], 400);
     }
-    /**
-     * FASE 2: Checador completa la información del paquete
-     */
-    /**
-     * FASE 2: Checador completa la información del paquete
-     */
+    
     public function completePreliminar(Request $request, $id)
     {
         $pickup = Pickup::findOrFail($id);
 
+        // Agregamos department y pieces a la validación
         $request->validate([
+            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
+            'pieces' => 'required|integer|min:1',
             'client_name' => 'required|string|max:150',
             'customer_id' => 'nullable|exists:customers,id', // ID que viene del buscador
             'received_at' => 'required|date',
@@ -314,7 +312,10 @@ class DeliveryController extends Controller
             $finalNotes .= "\n[Checador]: " . $request->notes;
         }
 
+        // Actualizamos todos los datos, incluyendo el departamento y las piezas corregidas
         $pickup->update([
+            'department' => $request->department,
+            'pieces' => $request->pieces,
             'client_name' => $request->client_name,
             'client_ref_id' => $request->customer_id ?? $pickup->client_ref_id,
             'bags' => $request->bags,
@@ -322,7 +323,7 @@ class DeliveryController extends Controller
             'notes' => $finalNotes,
             'status_id' => $pendingStatusId,
             'correction_notes' => null,
-            'received_by_checker_at' => $request->received_at, // Fecha indicada por el checador
+            'received_by_checker_at' => $request->received_at, 
         ]);
 
         return redirect()->route('recepcion.dashboard')->with('success', 'Información completada. Enviado a Gerencia para confirmación.');
