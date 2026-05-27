@@ -42,4 +42,10 @@ class CustodyDurationFormatter
 
         return $prefix . implode(', ', $parts);
     }
+
+    /** Duración en cola sin prefijo (reportes, tablas). */
+    public static function inQueue(CarbonInterface|string $from, CarbonInterface|string|null $to = null): string
+    {
+        return self::label($from, $to, '');
+    }
 }

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use App\Support\CustodyDurationFormatter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -335,7 +336,7 @@ class PickupController extends Controller
 
             fputcsv($file, []);
             fputcsv($file, ['NO AUDITADOS AL CIERRE']);
-            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Días pendiente']);
+            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Tiempo en cola']);
 
             foreach ($unauditedPickups as $pickup) {
                 fputcsv($file, [
@@ -344,13 +345,13 @@ class PickupController extends Controller
                     $pickup->department,
                     $pickup->currentStatus->name ?? 'N/A',
                     $pickup->created_at->format('d/m/Y H:i'),
-                    $pickup->created_at->diffInDays(today()),
+                    CustodyDurationFormatter::inQueue($pickup->created_at),
                 ]);
             }
 
             fputcsv($file, []);
             fputcsv($file, ['EN RESGUARDO — DÍAS ANTERIORES']);
-            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Días en cola']);
+            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Tiempo en cola']);
 
             foreach ($priorDaysPickups as $pickup) {
                 fputcsv($file, [
@@ -359,7 +360,7 @@ class PickupController extends Controller
                     $pickup->department,
                     $pickup->currentStatus->name ?? 'N/A',
                     $pickup->created_at->format('d/m/Y H:i'),
-                    $pickup->created_at->diffInDays(today()),
+                    CustodyDurationFormatter::inQueue($pickup->created_at),
                 ]);
             }
 

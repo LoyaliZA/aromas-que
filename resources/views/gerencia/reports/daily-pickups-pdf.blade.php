@@ -97,7 +97,7 @@
                 <th>Área</th>
                 <th>Estatus</th>
                 <th>Fecha registro</th>
-                <th>Días pendiente</th>
+                <th>Tiempo en cola</th>
             </tr>
         </thead>
         <tbody>
@@ -108,7 +108,7 @@
                 <td>{{ $pickup->department }}</td>
                 <td>{{ $pickup->currentStatus->name ?? 'N/A' }}</td>
                 <td>{{ $pickup->created_at->format('d/m/Y H:i') }}</td>
-                <td>{{ $pickup->created_at->diffInDays(today()) }}</td>
+                <td>{{ \App\Support\CustodyDurationFormatter::inQueue($pickup->created_at) }}</td>
             </tr>
             @empty
             <tr><td colspan="6" style="text-align:center;color:#10b981;">No hay resguardos sin auditar al momento del reporte.</td></tr>
@@ -128,7 +128,7 @@
                 <th>Área</th>
                 <th>Estatus</th>
                 <th>Fecha registro</th>
-                <th>Días en cola</th>
+                <th>Tiempo en cola</th>
             </tr>
         </thead>
         <tbody>
@@ -139,7 +139,7 @@
                 <td>{{ $pickup->department }}</td>
                 <td>{{ $pickup->currentStatus->name ?? 'N/A' }}</td>
                 <td>{{ $pickup->created_at->format('d/m/Y H:i') }}</td>
-                <td>{{ $pickup->created_at->diffInDays(today()) }}</td>
+                <td>{{ \App\Support\CustodyDurationFormatter::inQueue($pickup->created_at) }}</td>
             </tr>
             @empty
             <tr><td colspan="6" style="text-align:center;color:#64748b;">Sin resguardos previos en cola operativa.</td></tr>
