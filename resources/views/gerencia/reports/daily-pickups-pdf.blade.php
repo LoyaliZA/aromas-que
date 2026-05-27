@@ -29,6 +29,7 @@
     <div class="meta">
         <strong>Total registrados el día:</strong> {{ $dayPickups->count() }} |
         <strong>No auditados al cierre:</strong> {{ $unauditedPickups->count() }} |
+        <strong>En resguardo (días anteriores):</strong> {{ $priorDaysPickups->count() }} |
         <strong>Emitido:</strong> {{ $generatedAt->format('d/m/Y H:i:s') }}
     </div>
 
@@ -110,7 +111,38 @@
                 <td>{{ $pickup->created_at->diffInDays(today()) }}</td>
             </tr>
             @empty
-            <tr><td colspan="6" style="text-align:center;color:#10b981;">Todos los resguardos en cola están auditados o en custodia procesada.</td></tr>
+            <tr><td colspan="6" style="text-align:center;color:#10b981;">No hay resguardos sin auditar al momento del reporte.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+
+    <div class="section-title">En resguardo — días anteriores</div>
+    <p style="font-size:8px;color:#64748b;margin:0 0 8px;">
+        Auditados y aún en bóveda, registrados antes del {{ $reportDate->format('d/m/Y') }} (incluye resguardos previos al despliegue).
+    </p>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Folio</th>
+                <th>Cliente</th>
+                <th>Área</th>
+                <th>Estatus</th>
+                <th>Fecha registro</th>
+                <th>Días en cola</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($priorDaysPickups as $pickup)
+            <tr>
+                <td>{{ $pickup->ticket_folio }}</td>
+                <td>{{ $pickup->client_name }}</td>
+                <td>{{ $pickup->department }}</td>
+                <td>{{ $pickup->currentStatus->name ?? 'N/A' }}</td>
+                <td>{{ $pickup->created_at->format('d/m/Y H:i') }}</td>
+                <td>{{ $pickup->created_at->diffInDays(today()) }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="6" style="text-align:center;color:#64748b;">Sin resguardos previos en cola operativa.</td></tr>
             @endforelse
         </tbody>
     </table>

@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'gerencia_daily_alerts_enabled';
 const SOUND_ENABLED_KEY = 'gerencia_daily_sound_enabled';
 const VOICE_ENABLED_KEY = 'gerencia_daily_voice_enabled';
+const VOICE_URI_KEY = 'gerencia_daily_voice_uri';
 const POLL_MS = 15000;
 const SUMMARY_MS = 300000;
 
@@ -12,21 +13,20 @@ const DailyAlerts = {
     voiceEnabled: true,
     activated: false,
     audio: null,
+    activeSoundUrl: null,
     pollTimer: null,
     summaryTimer: null,
     preferredSpanishVoice: null,
     voiceReady: false,
+    speechQueue: [],
+    isSpeaking: false,
 
     init() {
         this.soundEnabled = localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
         this.voiceEnabled = localStorage.getItem(VOICE_ENABLED_KEY) !== 'false';
         this.activated = localStorage.getItem(STORAGE_KEY) === 'true';
 
-        this.audio = new Audio('/sounds/nuevo_resguardo.mp3');
-        this.audio.volume = 0.85;
-        this.audio.addEventListener('error', () => {
-            this.audio = null;
-        });
+        this.initAudio();
 
         window.dailyAlertsBridge = {
             shouldPause: () => this.isPaused(),
@@ -41,63 +41,138 @@ const DailyAlerts = {
             this.hideActivationBanner();
             this.startTimers();
         }
+
+        window.dispatchEvent(new CustomEvent('daily-alerts-ready'));
+    },
+
+    getSoundUrls() {
+        const cfg = window.__dailyAlertsConfig?.soundUrls;
+        if (Array.isArray(cfg) && cfg.length > 0) return cfg;
+        return ['/sounds/nuevo_resguardo.mp3', '/audio/nuevo_resguardo.mp3'];
+    },
+
+    initAudio() {
+        const urls = this.getSoundUrls();
+        this.tryLoadSound(urls, 0);
+    },
+
+    tryLoadSound(urls, index) {
+        if (index >= urls.length) {
+            console.warn('[DailyAlerts] No se pudo cargar el sonido de alerta:', urls);
+            return;
+        }
+
+        const url = urls[index];
+        const audio = new Audio(url);
+        audio.preload = 'auto';
+        audio.volume = 0.9;
+
+        const onReady = () => {
+            this.audio = audio;
+            this.activeSoundUrl = url;
+        };
+
+        const onFail = () => {
+            audio.removeEventListener('canplaythrough', onReady);
+            audio.removeEventListener('error', onFail);
+            this.tryLoadSound(urls, index + 1);
+        };
+
+        audio.addEventListener('canplaythrough', onReady, { once: true });
+        audio.addEventListener('error', onFail, { once: true });
+        audio.load();
     },
 
     prepareVoices() {
         if (!('speechSynthesis' in window)) return;
 
         const load = () => {
-            const voice = this.selectBestSpanishVoice(speechSynthesis.getVoices());
-            if (voice) {
-                this.preferredSpanishVoice = voice;
+            const savedUri = localStorage.getItem(VOICE_URI_KEY);
+            const voices = speechSynthesis.getVoices();
+            if (savedUri) {
+                const saved = voices.find((v) => v.voiceURI === savedUri);
+                if (saved) {
+                    this.preferredSpanishVoice = saved;
+                    this.voiceReady = true;
+                    return;
+                }
+            }
+            const best = this.selectBestSpanishVoice(voices);
+            if (best) {
+                this.preferredSpanishVoice = best;
                 this.voiceReady = true;
             }
         };
 
         load();
         speechSynthesis.addEventListener('voiceschanged', load);
-        setTimeout(load, 300);
-        setTimeout(load, 1000);
+        setTimeout(load, 200);
+        setTimeout(load, 800);
+        setTimeout(load, 2000);
+    },
+
+    getSpanishVoices() {
+        return speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
+    },
+
+    getVoiceOptions() {
+        return this.getSpanishVoices()
+            .map((v) => ({
+                uri: v.voiceURI,
+                label: `${v.name} (${v.lang})`,
+                score: this.scoreVoice(v),
+            }))
+            .sort((a, b) => b.score - a.score);
+    },
+
+    setPreferredVoiceUri(uri) {
+        if (!uri) {
+            localStorage.removeItem(VOICE_URI_KEY);
+            this.preferredSpanishVoice = this.selectBestSpanishVoice(speechSynthesis.getVoices());
+            return;
+        }
+        const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === uri);
+        if (voice) {
+            localStorage.setItem(VOICE_URI_KEY, uri);
+            this.preferredSpanishVoice = voice;
+        }
     },
 
     selectBestSpanishVoice(voices) {
         const spanish = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
         if (!spanish.length) return null;
+        return [...spanish].sort((a, b) => this.scoreVoice(b) - this.scoreVoice(a))[0];
+    },
 
-        const scoreVoice = (v) => {
-            let score = 0;
-            const name = (v.name || '').toLowerCase();
-            const lang = (v.lang || '').toLowerCase();
+    scoreVoice(v) {
+        let score = 0;
+        const name = (v.name || '').toLowerCase();
+        const lang = (v.lang || '').toLowerCase();
 
-            if (lang.includes('es-mx')) score += 45;
-            else if (lang.includes('es-us')) score += 40;
-            else if (lang.startsWith('es')) score += 25;
+        if (lang.includes('es-mx')) score += 45;
+        else if (lang.includes('es-us')) score += 40;
+        else if (lang.startsWith('es')) score += 25;
 
-            if (/natural|neural|premium|enhanced|online/i.test(name)) score += 55;
-            if (/google/i.test(name)) score += 50;
-            if (/microsoft/i.test(name) && /natural|sabina|helena|laura|raul|raúl|dalia|jorge/i.test(name)) {
-                score += 48;
-            }
-            if (/sabina|helena|laura|monica|mónica|paulina|jorge|diego|mexico|méxico/i.test(name)) {
-                score += 35;
-            }
+        if (/natural|neural|premium|enhanced|online/i.test(name)) score += 55;
+        if (/google/i.test(name)) score += 50;
+        if (/microsoft/i.test(name) && /natural|sabina|helena|laura|raul|raúl|dalia|jorge/i.test(name)) {
+            score += 48;
+        }
+        if (/sabina|helena|laura|monica|mónica|paulina|jorge|diego/i.test(name)) {
+            score += 35;
+        }
 
-            if (!v.localService) score += 12;
+        if (!v.localService) score += 12;
 
-            if (/espeak|mbrola|compact|robot|android.*speech|system\s*voice/i.test(name)) {
-                score -= 40;
-            }
-            if (v.default && !/google|microsoft|natural|neural/i.test(name)) score -= 15;
+        if (/espeak|mbrola|compact|robot|android.*speech/i.test(name)) score -= 40;
+        if (v.default && !/google|microsoft|natural|neural/i.test(name)) score -= 15;
 
-            return score;
-        };
-
-        return [...spanish].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
+        return score;
     },
 
     isPaused() {
-        const bridge = window.dailyAlertsBridge?._alpine;
         if (window.dailyAlertsBridge?.deliveryModalOpen) return true;
+        const bridge = window.dailyAlertsBridge?._alpine;
         if (!bridge) return false;
         if (typeof bridge.isRefreshPaused === 'function') {
             return bridge.isRefreshPaused();
@@ -132,15 +207,11 @@ const DailyAlerts = {
 
     unlockAudio() {
         if (this.audio) {
-            this.audio.play().then(() => {
-                this.audio.pause();
-                this.audio.currentTime = 0;
-            }).catch(() => {});
+            const clone = this.audio.cloneNode();
+            clone.volume = 0.01;
+            clone.play().then(() => clone.pause()).catch(() => {});
         }
         if ('speechSynthesis' in window) {
-            const u = new SpeechSynthesisUtterance('');
-            u.volume = 0;
-            speechSynthesis.speak(u);
             speechSynthesis.cancel();
         }
     },
@@ -148,7 +219,6 @@ const DailyAlerts = {
     startTimers() {
         this.stopTimers();
         this.fetchStats();
-        // La tabla en daily.blade ya hace refresh + fetchStats cada 15s; aquí solo el resumen de voz.
         this.summaryTimer = setInterval(() => this.speakPeriodicSummary(), SUMMARY_MS);
     },
 
@@ -187,7 +257,6 @@ const DailyAlerts = {
         }
     },
 
-    /** @deprecated alias */
     pollStats() {
         return this.fetchStats();
     },
@@ -264,50 +333,68 @@ const DailyAlerts = {
 
     playSound() {
         if (!this.soundEnabled) return;
-        if (this.audio) {
-            this.audio.currentTime = 0;
-            this.audio.play().catch(() => this.playBeep());
-        } else {
-            this.playBeep();
-        }
-    },
 
-    playBeep() {
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 880;
-            gain.gain.value = 0.15;
-            osc.start();
-            osc.stop(ctx.currentTime + 0.25);
-        } catch (_) {}
-    },
-
-    speak(text) {
-        if (!this.voiceEnabled || !('speechSynthesis' in window)) return;
-
-        if (!this.preferredSpanishVoice) {
-            this.preferredSpanishVoice = this.selectBestSpanishVoice(speechSynthesis.getVoices());
+        if (!this.audio) {
+            this.initAudio();
+            setTimeout(() => this.playSound(), 400);
+            return;
         }
 
-        speechSynthesis.cancel();
+        const sound = this.audio;
+        sound.currentTime = 0;
+        sound.play().catch((err) => {
+            console.warn('[DailyAlerts] Error al reproducir:', this.activeSoundUrl, err);
+            this.initAudio();
+        });
+    },
+
+    enqueueSpeech(text) {
+        this.speechQueue.push(text);
+        this.processSpeechQueue();
+    },
+
+    processSpeechQueue() {
+        if (this.isSpeaking || !this.speechQueue.length) return;
+        if (!this.voiceEnabled || !('speechSynthesis' in window)) {
+            this.speechQueue = [];
+            return;
+        }
+
+        const text = this.speechQueue.shift();
+        this.isSpeaking = true;
+
+        const voices = speechSynthesis.getVoices();
+        if (!this.preferredSpanishVoice && voices.length) {
+            const savedUri = localStorage.getItem(VOICE_URI_KEY);
+            this.preferredSpanishVoice = savedUri
+                ? voices.find((v) => v.voiceURI === savedUri) || this.selectBestSpanishVoice(voices)
+                : this.selectBestSpanishVoice(voices);
+        }
 
         const utterance = new SpeechSynthesisUtterance(text);
         const voice = this.preferredSpanishVoice;
 
         utterance.lang = voice?.lang || 'es-MX';
-        utterance.rate = 0.88;
+        utterance.rate = 0.92;
         utterance.pitch = 1;
         utterance.volume = 1;
+        if (voice) utterance.voice = voice;
 
-        if (voice) {
-            utterance.voice = voice;
-        }
+        utterance.onend = () => {
+            this.isSpeaking = false;
+            this.processSpeechQueue();
+        };
+        utterance.onerror = () => {
+            this.isSpeaking = false;
+            this.processSpeechQueue();
+        };
 
         speechSynthesis.speak(utterance);
+    },
+
+    speak(text) {
+        if (!this.voiceEnabled || !('speechSynthesis' in window)) return;
+        this.enqueueSpeech(text);
     },
 
     setSoundEnabled(enabled) {
@@ -318,11 +405,15 @@ const DailyAlerts = {
     setVoiceEnabled(enabled) {
         this.voiceEnabled = enabled;
         localStorage.setItem(VOICE_ENABLED_KEY, enabled ? 'true' : 'false');
+        if (!enabled) {
+            speechSynthesis.cancel();
+            this.speechQueue = [];
+            this.isSpeaking = false;
+        }
     },
 
     async test() {
         this.unlockAudio();
-
         this.playSound();
 
         let message =
@@ -362,16 +453,29 @@ const DailyAlerts = {
                 }
 
                 message = parts.join(' ');
-                window.dailyAlertsBridge?.onStatsUpdate?.(counts);
+                window.dailyAlertsBridge?.onStatsUpdate?.({
+                    ...counts,
+                    widgets: data.widgets || {},
+                });
             }
         } catch (e) {
             console.error('daily alerts test', e);
         }
 
-        setTimeout(() => this.speak(message), 450);
+        setTimeout(() => this.speak(message), 500);
     },
 };
 
-document.addEventListener('DOMContentLoaded', () => DailyAlerts.init());
-
 window.DailyAlerts = DailyAlerts;
+
+function bootDailyAlerts() {
+    if (window.__dailyAlertsBooted) return;
+    window.__dailyAlertsBooted = true;
+    DailyAlerts.init();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootDailyAlerts);
+} else {
+    bootDailyAlerts();
+}

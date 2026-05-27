@@ -107,6 +107,13 @@ class PickupController extends Controller
     /**
      * Reporte diario de resguardos (PDF o CSV).
      */
+    /** Estatus que aún no pasan auditoría de gerencia. */
+    private const UNAUDITED_STATUS_CODES = [
+        'PENDING_CONFIRMATION',
+        'NEEDS_CORRECTION',
+        'PRE_REGISTERED',
+    ];
+
     public function dailyReport(Request $request)
     {
         $format = $request->input('format', 'pdf');
@@ -116,30 +123,18 @@ class PickupController extends Controller
 
         $reportDate = Carbon::parse($request->input('date', today()->toDateString()))->startOfDay();
 
-        $dayQuery = Pickup::query()
-            ->select('pickups.*')
-            ->with('currentStatus')
-            ->whereDate('pickups.created_at', $reportDate);
+        $dayPickups = $this->getReportPickupsOrdered(
+            $this->getDayPickupsForReport($request, $reportDate),
+            'desc'
+        );
 
-        $this->applyDailyFilters($dayQuery, $request);
+        $unauditedPickups = $this->getReportPickupsOrdered(
+            $this->getUnauditedPickupsForReport($request)
+        );
 
-        $dayPickups = $dayQuery
-            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
-            ->orderBy('pickup_statuses.sort_order', 'asc')
-            ->orderBy('pickups.created_at', 'desc')
-            ->get();
-
-        $unauditedQuery = $this->buildDailyBaseQuery();
-        $this->applyDailyFilters($unauditedQuery, $request);
-        $unauditedQuery->whereHas('currentStatus', function ($q) {
-            $q->whereIn('code', ['PENDING_CONFIRMATION', 'NEEDS_CORRECTION']);
-        });
-
-        $unauditedPickups = $unauditedQuery
-            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
-            ->orderBy('pickup_statuses.sort_order', 'asc')
-            ->orderBy('pickups.created_at', 'asc')
-            ->get();
+        $priorDaysPickups = $this->getReportPickupsOrdered(
+            $this->getPriorDaysOperationalPickupsForReport($request, $reportDate)
+        );
 
         $statusSummary = $dayPickups
             ->groupBy(fn (Pickup $p) => $p->currentStatus->name ?? 'Sin estatus')
@@ -154,6 +149,7 @@ class PickupController extends Controller
                 'dayPickups' => $dayPickups,
                 'statusSummary' => $statusSummary,
                 'unauditedPickups' => $unauditedPickups,
+                'priorDaysPickups' => $priorDaysPickups,
                 'generatedAt' => now(),
                 'managerName' => Auth::user()->name,
             ]);
@@ -161,7 +157,64 @@ class PickupController extends Controller
             return $pdf->download($fileName . '.pdf');
         }
 
-        return $this->streamDailyReportCsv($fileName, $reportDate, $dayPickups, $statusSummary, $unauditedPickups);
+        return $this->streamDailyReportCsv(
+            $fileName,
+            $reportDate,
+            $dayPickups,
+            $statusSummary,
+            $unauditedPickups,
+            $priorDaysPickups
+        );
+    }
+
+    private function getDayPickupsForReport(Request $request, Carbon $reportDate): Builder
+    {
+        $query = Pickup::query()
+            ->select('pickups.*')
+            ->with('currentStatus')
+            ->whereDate('pickups.created_at', $reportDate);
+
+        return $this->applyDailyReportFilters($query, $request);
+    }
+
+    /**
+     * Sin auditar al cierre: incluye pendientes de días anteriores (sin límite de 15 días).
+     */
+    private function getUnauditedPickupsForReport(Request $request): Builder
+    {
+        $query = Pickup::query()
+            ->select('pickups.*')
+            ->with('currentStatus')
+            ->whereHas('currentStatus', function ($q) {
+                $q->whereIn('code', self::UNAUDITED_STATUS_CODES);
+            });
+
+        return $this->applyDailyReportFilters($query, $request);
+    }
+
+    /**
+     * En resguardo registrados antes del día del reporte (incluye existentes en producción).
+     */
+    private function getPriorDaysOperationalPickupsForReport(Request $request, Carbon $reportDate): Builder
+    {
+        $query = Pickup::query()
+            ->select('pickups.*')
+            ->with('currentStatus')
+            ->whereDate('pickups.created_at', '<', $reportDate)
+            ->whereHas('currentStatus', function ($q) {
+                $q->where('code', 'IN_CUSTODY');
+            });
+
+        return $this->applyDailyReportFilters($query, $request);
+    }
+
+    private function getReportPickupsOrdered(Builder $query, string $createdAtDirection = 'asc')
+    {
+        return $query
+            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
+            ->orderBy('pickup_statuses.sort_order', 'asc')
+            ->orderBy('pickups.created_at', $createdAtDirection)
+            ->get();
     }
 
     private function buildDailyBaseQuery(): Builder
@@ -171,9 +224,12 @@ class PickupController extends Controller
             ->with('currentStatus')
             ->where(function ($q) {
                 $q->whereDate('pickups.created_at', today())
+                    ->orWhereHas('currentStatus', function ($statusQ) {
+                        $statusQ->whereIn('code', self::UNAUDITED_STATUS_CODES);
+                    })
                     ->orWhere(function ($subQ) {
                         $subQ->whereHas('currentStatus', function ($statusQ) {
-                            $statusQ->whereIn('code', ['IN_CUSTODY', 'PENDING_CONFIRMATION', 'NEEDS_CORRECTION']);
+                            $statusQ->where('code', 'IN_CUSTODY');
                         })
                             ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
                     });
@@ -185,6 +241,14 @@ class PickupController extends Controller
         return $query
             ->search($request->search)
             ->byStatus($request->status)
+            ->byDepartment($request->department);
+    }
+
+    /** Filtros del reporte: búsqueda y área (no el estatus activo en la tabla). */
+    private function applyDailyReportFilters(Builder $query, Request $request): Builder
+    {
+        return $query
+            ->search($request->search)
             ->byDepartment($request->department);
     }
 
@@ -234,9 +298,10 @@ class PickupController extends Controller
         Carbon $reportDate,
         $dayPickups,
         $statusSummary,
-        $unauditedPickups
+        $unauditedPickups,
+        $priorDaysPickups
     ): StreamedResponse {
-        $callback = function () use ($reportDate, $dayPickups, $statusSummary, $unauditedPickups) {
+        $callback = function () use ($reportDate, $dayPickups, $statusSummary, $unauditedPickups, $priorDaysPickups) {
             $file = fopen('php://output', 'w');
             fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
@@ -273,6 +338,21 @@ class PickupController extends Controller
             fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Días pendiente']);
 
             foreach ($unauditedPickups as $pickup) {
+                fputcsv($file, [
+                    $pickup->ticket_folio,
+                    $pickup->client_name,
+                    $pickup->department,
+                    $pickup->currentStatus->name ?? 'N/A',
+                    $pickup->created_at->format('d/m/Y H:i'),
+                    $pickup->created_at->diffInDays(today()),
+                ]);
+            }
+
+            fputcsv($file, []);
+            fputcsv($file, ['EN RESGUARDO — DÍAS ANTERIORES']);
+            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Días en cola']);
+
+            foreach ($priorDaysPickups as $pickup) {
                 fputcsv($file, [
                     $pickup->ticket_folio,
                     $pickup->client_name,

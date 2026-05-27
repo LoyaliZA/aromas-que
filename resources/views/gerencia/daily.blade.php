@@ -1,4 +1,6 @@
 <x-gerencia-layout>
+    @include('gerencia.partials.daily-alerts-boot')
+
     <div x-data="{ 
             showEditModal: false, 
             showDetailsModal: false,
@@ -16,6 +18,8 @@
             soundEnabled: true,
             voiceEnabled: true,
             showReportMenu: false,
+            voiceOptions: [],
+            selectedVoiceUri: localStorage.getItem('gerencia_daily_voice_uri') || '',
 
             isRefreshPaused() {
                 return this.showEditModal || this.showDetailsModal || this.showDeleteModal
@@ -33,11 +37,26 @@
             init() {
                 this.soundEnabled = localStorage.getItem('gerencia_daily_sound_enabled') !== 'false';
                 this.voiceEnabled = localStorage.getItem('gerencia_daily_voice_enabled') !== 'false';
+                this.selectedVoiceUri = localStorage.getItem('gerencia_daily_voice_uri') || '';
 
-                if (window.DailyAlerts) {
+                const connectAlerts = () => {
+                    if (!window.DailyAlerts) return false;
                     window.DailyAlerts.bindAlpine(this);
                     window.DailyAlerts.setSoundEnabled(this.soundEnabled);
                     window.DailyAlerts.setVoiceEnabled(this.voiceEnabled);
+                    this.refreshVoiceOptions();
+                    if (this.selectedVoiceUri) {
+                        window.DailyAlerts.setPreferredVoiceUri(this.selectedVoiceUri);
+                    }
+                    return true;
+                };
+
+                if (!connectAlerts()) {
+                    window.addEventListener('daily-alerts-ready', () => connectAlerts(), { once: true });
+                    let tries = 0;
+                    const retry = setInterval(() => {
+                        if (connectAlerts() || ++tries > 40) clearInterval(retry);
+                    }, 100);
                 }
 
                 window.addEventListener('daily-stats-update', (e) => {
@@ -48,6 +67,10 @@
                     }
                 });
 
+                if ('speechSynthesis' in window) {
+                    speechSynthesis.addEventListener('voiceschanged', () => this.refreshVoiceOptions());
+                }
+
                 const refresh = () => {
                     if (this.isRefreshPaused()) return;
                     this.fetchResults(true);
@@ -55,6 +78,19 @@
 
                 refresh();
                 setInterval(refresh, 15000);
+            },
+
+            refreshVoiceOptions() {
+                if (!window.DailyAlerts?.getVoiceOptions) return;
+                this.voiceOptions = window.DailyAlerts.getVoiceOptions();
+            },
+
+            onVoiceSelectChange(event) {
+                const uri = event.target.value;
+                this.selectedVoiceUri = uri;
+                if (window.DailyAlerts) {
+                    window.DailyAlerts.setPreferredVoiceUri(uri);
+                }
             },
 
             filterByWidget(statusCode) {
@@ -86,7 +122,6 @@
                     format,
                     date: new Date().toISOString().slice(0, 10),
                     search: this.search,
-                    status: this.status,
                     department: this.department,
                 });
                 return '{{ url('/gerencia/daily/report') }}?' + params.toString();
@@ -207,6 +242,15 @@
                     <input type="checkbox" :checked="voiceEnabled" @change="toggleVoice()" class="rounded border-gray-600 bg-black/40 text-amber-500 focus:ring-amber-500">
                     Voz
                 </label>
+
+                <select x-show="voiceEnabled && voiceOptions.length" @change="onVoiceSelectChange($event)" x-model="selectedVoiceUri"
+                    class="max-w-[200px] bg-black/40 border border-gray-600 rounded-lg px-2 py-2 text-white text-[10px] focus:ring-amber-500 focus:border-amber-500"
+                    title="Elija una voz en español (Chrome/Edge: Google o Microsoft Natural)">
+                    <option value="">Voz automática (mejor disponible)</option>
+                    <template x-for="opt in voiceOptions" :key="opt.uri">
+                        <option :value="opt.uri" x-text="opt.label"></option>
+                    </template>
+                </select>
 
                 <button type="button" @click="testAlerts()" title="Reproduce sonido y mensaje de prueba"
                     class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-widest border border-gray-500 flex items-center gap-2">
@@ -498,8 +542,4 @@
 
     @include('gerencia.partials.pickup-delivery-modal')
     @include('gerencia.partials.delivery-scripts', ['deliveryRedirectTo' => route('gerencia.daily')])
-
-    @push('scripts')
-    @vite(['resources/js/gerencia/daily-alerts.js'])
-    @endpush
 </x-gerencia-layout>
