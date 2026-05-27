@@ -14,6 +14,8 @@ const DailyAlerts = {
     audio: null,
     pollTimer: null,
     summaryTimer: null,
+    preferredSpanishVoice: null,
+    voiceReady: false,
 
     init() {
         this.soundEnabled = localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
@@ -33,10 +35,64 @@ const DailyAlerts = {
             },
         };
 
+        this.prepareVoices();
+
         if (this.activated) {
             this.hideActivationBanner();
             this.startTimers();
         }
+    },
+
+    prepareVoices() {
+        if (!('speechSynthesis' in window)) return;
+
+        const load = () => {
+            const voice = this.selectBestSpanishVoice(speechSynthesis.getVoices());
+            if (voice) {
+                this.preferredSpanishVoice = voice;
+                this.voiceReady = true;
+            }
+        };
+
+        load();
+        speechSynthesis.addEventListener('voiceschanged', load);
+        setTimeout(load, 300);
+        setTimeout(load, 1000);
+    },
+
+    selectBestSpanishVoice(voices) {
+        const spanish = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
+        if (!spanish.length) return null;
+
+        const scoreVoice = (v) => {
+            let score = 0;
+            const name = (v.name || '').toLowerCase();
+            const lang = (v.lang || '').toLowerCase();
+
+            if (lang.includes('es-mx')) score += 45;
+            else if (lang.includes('es-us')) score += 40;
+            else if (lang.startsWith('es')) score += 25;
+
+            if (/natural|neural|premium|enhanced|online/i.test(name)) score += 55;
+            if (/google/i.test(name)) score += 50;
+            if (/microsoft/i.test(name) && /natural|sabina|helena|laura|raul|raúl|dalia|jorge/i.test(name)) {
+                score += 48;
+            }
+            if (/sabina|helena|laura|monica|mónica|paulina|jorge|diego|mexico|méxico/i.test(name)) {
+                score += 35;
+            }
+
+            if (!v.localService) score += 12;
+
+            if (/espeak|mbrola|compact|robot|android.*speech|system\s*voice/i.test(name)) {
+                score -= 40;
+            }
+            if (v.default && !/google|microsoft|natural|neural/i.test(name)) score -= 15;
+
+            return score;
+        };
+
+        return [...spanish].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
     },
 
     isPaused() {
@@ -232,13 +288,25 @@ const DailyAlerts = {
 
     speak(text) {
         if (!this.voiceEnabled || !('speechSynthesis' in window)) return;
+
+        if (!this.preferredSpanishVoice) {
+            this.preferredSpanishVoice = this.selectBestSpanishVoice(speechSynthesis.getVoices());
+        }
+
         speechSynthesis.cancel();
+
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'es-MX';
-        utterance.rate = 0.95;
-        const voices = speechSynthesis.getVoices();
-        const spanish = voices.find((v) => v.lang.startsWith('es'));
-        if (spanish) utterance.voice = spanish;
+        const voice = this.preferredSpanishVoice;
+
+        utterance.lang = voice?.lang || 'es-MX';
+        utterance.rate = 0.88;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        if (voice) {
+            utterance.voice = voice;
+        }
+
         speechSynthesis.speak(utterance);
     },
 
@@ -303,10 +371,6 @@ const DailyAlerts = {
         setTimeout(() => this.speak(message), 450);
     },
 };
-
-if ('speechSynthesis' in window) {
-    speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
-}
 
 document.addEventListener('DOMContentLoaded', () => DailyAlerts.init());
 

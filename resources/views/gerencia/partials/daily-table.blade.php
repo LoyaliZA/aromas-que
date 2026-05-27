@@ -53,19 +53,12 @@
                 </form>
                 <button @click="openRejectModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full py-3 bg-red-600/20 text-red-400 border border-red-500/30 font-black rounded-xl text-xs uppercase tracking-widest active:scale-95 transition-all">Corregir</button>
             </div>
-            @elseif($pickup->currentStatus?->code === 'IN_CUSTODY')
-            <button type="button"
-                @click="$dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
-                    'id' => $pickup->id,
-                    'ticket_folio' => $pickup->ticket_folio,
-                    'client_name' => $pickup->client_name,
-                    'client_ref_id' => $pickup->client_ref_id,
-                    'is_third_party' => (bool) $pickup->is_third_party,
-                    'receiver_name' => $pickup->receiver_name,
-                ]) }})"
-                class="w-full py-3 bg-aromas-highlight text-aromas-main font-black rounded-xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">
-                Entregar paquete
-            </button>
+            @else
+            <div class="text-center pt-2">
+                <span class="inline-block px-3 py-1.5 text-[10px] font-bold uppercase rounded-full bg-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/20 text-{{ $pickup->currentStatus?->color ?? 'gray' }}-400 border border-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/30">
+                    {{ $pickup->currentStatus->name ?? 'Capturado' }}
+                </span>
+            </div>
             @endif
         </div>
         @empty
@@ -152,21 +145,10 @@
                                 </form>
                                 <button @click="openRejectModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full py-1.5 bg-red-600/10 text-red-400 border border-red-500/30 rounded text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-colors">Corregir</button>
                             </div>
-                            @elseif($pickup->currentStatus?->code === 'IN_CUSTODY')
-                            <button type="button"
-                                @click="$dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
-                                    'id' => $pickup->id,
-                                    'ticket_folio' => $pickup->ticket_folio,
-                                    'client_name' => $pickup->client_name,
-                                    'client_ref_id' => $pickup->client_ref_id,
-                                    'is_third_party' => (bool) $pickup->is_third_party,
-                                    'receiver_name' => $pickup->receiver_name,
-                                ]) }})"
-                                class="w-full py-2 bg-aromas-highlight text-aromas-main border border-aromas-highlight rounded text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 transition-colors shadow-lg">
-                                Entregar
-                            </button>
                             @else
-                            <span class="text-gray-600 text-xs italic">Auditado</span>
+                            <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase rounded-full bg-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/20 text-{{ $pickup->currentStatus?->color ?? 'gray' }}-400 border border-{{ $pickup->currentStatus?->color ?? 'gray' }}-500/30">
+                                {{ $pickup->currentStatus->name ?? 'Capturado' }}
+                            </span>
                             @endif
                         </td>
 
@@ -178,6 +160,16 @@
                                     </svg>
                                 </button>
                                 <div x-show="openDropdown" x-transition style="display: none; position: fixed;" :style="{ top: menuTop, left: menuLeft }" class="w-40 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-[9999] text-sm overflow-hidden">
+                                    @if($pickup->currentStatus?->code === 'IN_CUSTODY')
+                                    <button type="button" @click="openDropdown = false; $dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
+                                        'id' => $pickup->id,
+                                        'ticket_folio' => $pickup->ticket_folio,
+                                        'client_name' => $pickup->client_name,
+                                        'client_ref_id' => $pickup->client_ref_id,
+                                        'is_third_party' => (bool) $pickup->is_third_party,
+                                        'receiver_name' => $pickup->receiver_name,
+                                    ]) }})" class="w-full text-left px-4 py-3 text-aromas-highlight hover:bg-white/5 border-b border-gray-700 font-bold">Entregar paquete</button>
+                                    @endif
                                     <button @click="openDropdown = false; openDetailsModal({ ticket_folio: '{{ $pickup->ticket_folio }}', client_name: {{ json_encode($pickup->client_name) }}, pieces: {{ $pickup->pieces }}, status_name: '{{ $pickup->currentStatus->name ?? 'Capturado' }}', department: '{{ $pickup->department }}', notes: {{ json_encode($pickup->notes ?? '') }}, initial_evidence_url: {{ json_encode($pickup->initial_evidence_path ? asset('storage/'.$pickup->initial_evidence_path) : '') }}, package_evidence_url: {{ json_encode($pickup->package_evidence_path ? asset('storage/'.$pickup->package_evidence_path) : '') }}, evidence_url: {{ json_encode($pickup->evidence_path ? asset('storage/'.$pickup->evidence_path) : '') }} })" class="w-full text-left px-4 py-3 text-blue-400 hover:bg-white/5 border-b border-gray-700">Ver Detalles</button>
                                     <button @click="openDropdown = false; openEditModal({ id: {{ $pickup->id }}, ticket_folio: '{{ $pickup->ticket_folio }}', department: '{{ $pickup->department }}', pieces: {{ $pickup->pieces }}, notes: {{ json_encode($pickup->notes ?? '') }} })" class="w-full text-left px-4 py-3 text-aromas-highlight hover:bg-white/5 border-b border-gray-700">Editar</button>
                                     <button @click="openDropdown = false; openDeleteModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full text-left px-4 py-3 text-red-400 hover:bg-red-500/10">Eliminar</button>
