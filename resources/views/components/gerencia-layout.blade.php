@@ -127,5 +127,7 @@
     </div>
 
     <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 z-30 bg-black/80 backdrop-blur-sm lg:hidden transition-opacity"></div>
+
+    @stack('scripts')
 </body>
 </html>

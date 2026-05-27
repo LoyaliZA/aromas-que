@@ -10,6 +10,19 @@
             search: '', status: 'ALL', department: 'ALL',
             selectedPickups: [],
             showBulkDeleteModal: false,
+            pendingCount: 0,
+            stalePendingCount: 0,
+            widgets: @js($widgetCounts),
+            soundEnabled: true,
+            voiceEnabled: true,
+            showReportMenu: false,
+
+            isRefreshPaused() {
+                return this.showEditModal || this.showDetailsModal || this.showDeleteModal
+                    || this.showRejectModal || this.showBulkDeleteModal || this.showImageViewer
+                    || this.selectedPickups.length > 0
+                    || (window.dailyAlertsBridge?.deliveryModalOpen === true);
+            },
 
             // Datos para los modales
             detailsData: { parsedNotes: [] },
@@ -18,11 +31,65 @@
             rejectData: {},
 
             init() {
-                setInterval(() => {
-                    if (!this.showEditModal && !this.showDetailsModal && !this.showDeleteModal && !this.showRejectModal && this.selectedPickups.length === 0) {
-                        this.fetchResults(true);
+                this.soundEnabled = localStorage.getItem('gerencia_daily_sound_enabled') !== 'false';
+                this.voiceEnabled = localStorage.getItem('gerencia_daily_voice_enabled') !== 'false';
+
+                if (window.DailyAlerts) {
+                    window.DailyAlerts.bindAlpine(this);
+                    window.DailyAlerts.setSoundEnabled(this.soundEnabled);
+                    window.DailyAlerts.setVoiceEnabled(this.voiceEnabled);
+                }
+
+                window.addEventListener('daily-stats-update', (e) => {
+                    this.pendingCount = e.detail.pending ?? 0;
+                    this.stalePendingCount = e.detail.stale_pending ?? 0;
+                    if (e.detail.widgets) {
+                        this.widgets = e.detail.widgets;
                     }
-                }, 15000);
+                });
+
+                const refresh = () => {
+                    if (this.isRefreshPaused()) return;
+                    this.fetchResults(true);
+                };
+
+                refresh();
+                setInterval(refresh, 15000);
+            },
+
+            filterByWidget(statusCode) {
+                this.status = statusCode;
+                this.fetchResults();
+                window.DailyAlerts?.fetchStats();
+            },
+
+            activateAlerts() {
+                window.DailyAlerts?.activate();
+            },
+
+            toggleSound() {
+                this.soundEnabled = !this.soundEnabled;
+                window.DailyAlerts?.setSoundEnabled(this.soundEnabled);
+            },
+
+            toggleVoice() {
+                this.voiceEnabled = !this.voiceEnabled;
+                window.DailyAlerts?.setVoiceEnabled(this.voiceEnabled);
+            },
+
+            testAlerts() {
+                window.DailyAlerts?.test();
+            },
+
+            reportUrl(format) {
+                const params = new URLSearchParams({
+                    format,
+                    date: new Date().toISOString().slice(0, 10),
+                    search: this.search,
+                    status: this.status,
+                    department: this.department,
+                });
+                return '{{ url('/gerencia/daily/report') }}?' + params.toString();
             },
 
             openDetailsModal(data) {
@@ -63,16 +130,100 @@
                 try {
                     const response = await fetch(`/gerencia/daily?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                     document.getElementById('table-container').innerHTML = await response.text();
+                    window.DailyAlerts?.fetchStats();
                 } catch (e) { console.error(e); }
                 if (!silent) this.isLoading = false;
             }
         }" class="pb-20">
+
+        {{-- ACTIVAR ALERTAS --}}
+        <div id="daily-alerts-activation"
+            x-init="if (localStorage.getItem('gerencia_daily_alerts_enabled') === 'true') $el.classList.add('hidden')"
+            class="mb-4 bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+                <p class="text-amber-300 font-bold text-sm uppercase tracking-widest">Alertas de resguardos</p>
+                <p class="text-gray-400 text-xs mt-1">Activa sonido y voz para avisos de nuevos folios y recordatorios cada 5 minutos.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 shrink-0">
+                <button type="button" @click="activateAlerts()" class="bg-amber-500 hover:bg-amber-400 text-black font-black py-2.5 px-5 rounded-lg text-xs uppercase tracking-widest">
+                    Activar alertas
+                </button>
+                <button type="button" @click="testAlerts()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-5 rounded-lg text-xs uppercase tracking-widest border border-gray-500">
+                    Probar alertas
+                </button>
+            </div>
+        </div>
+
+        {{-- WIDGETS CONTADORES --}}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <button type="button" @click="filterByWidget('PENDING_CONFIRMATION')"
+                class="text-left bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl p-4 transition-all group"
+                :class="status === 'PENDING_CONFIRMATION' ? 'ring-2 ring-amber-500' : ''">
+                <p class="text-[10px] font-black uppercase tracking-widest text-amber-400/80 mb-1">Por aprobar</p>
+                <p class="text-3xl font-black text-amber-300" x-text="widgets.pending_approval">0</p>
+                <p x-show="stalePendingCount > 0" class="text-[10px] text-red-400 font-bold mt-1">
+                    <span x-text="stalePendingCount"></span> de días anteriores
+                </p>
+            </button>
+
+            <button type="button" @click="filterByWidget('IN_CUSTODY')"
+                class="text-left bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl p-4 transition-all"
+                :class="status === 'IN_CUSTODY' ? 'ring-2 ring-emerald-500' : ''">
+                <p class="text-[10px] font-black uppercase tracking-widest text-emerald-400/80 mb-1">Auditados</p>
+                <p class="text-3xl font-black text-emerald-300" x-text="widgets.audited">0</p>
+                <p class="text-[10px] text-gray-500 mt-1">En custodia oficial</p>
+            </button>
+
+            <button type="button" @click="filterByWidget('DELIVERED')"
+                class="text-left bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-xl p-4 transition-all"
+                :class="status === 'DELIVERED' ? 'ring-2 ring-green-500' : ''">
+                <p class="text-[10px] font-black uppercase tracking-widest text-green-400/80 mb-1">Entregados</p>
+                <p class="text-3xl font-black text-green-300" x-text="widgets.delivered">0</p>
+                <p class="text-[10px] text-gray-500 mt-1">Entrega al cliente</p>
+            </button>
+
+            <button type="button" @click="filterByWidget('NEEDS_CORRECTION')"
+                class="text-left bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-xl p-4 transition-all"
+                :class="status === 'NEEDS_CORRECTION' ? 'ring-2 ring-sky-500' : ''">
+                <p class="text-[10px] font-black uppercase tracking-widest text-sky-400/80 mb-1">Pendientes</p>
+                <p class="text-3xl font-black text-sky-300" x-text="widgets.pending">0</p>
+                <p class="text-[10px] text-gray-500 mt-1">Corrección / checador</p>
+            </button>
+        </div>
 
         {{-- CABECERA --}}
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-white tracking-tight">Operación Diaria</h1>
                 <p class="text-gray-400 text-sm mt-1">Auditoría visual de resguardos y control de entregas.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-400">
+                    <input type="checkbox" :checked="soundEnabled" @change="toggleSound()" class="rounded border-gray-600 bg-black/40 text-amber-500 focus:ring-amber-500">
+                    Sonido
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-400">
+                    <input type="checkbox" :checked="voiceEnabled" @change="toggleVoice()" class="rounded border-gray-600 bg-black/40 text-amber-500 focus:ring-amber-500">
+                    Voz
+                </label>
+
+                <button type="button" @click="testAlerts()" title="Reproduce sonido y mensaje de prueba"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-widest border border-gray-500 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                    Probar
+                </button>
+
+                <div class="relative" @click.away="showReportMenu = false">
+                    <button type="button" @click="showReportMenu = !showReportMenu" class="bg-aromas-highlight hover:bg-yellow-600 text-black font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-widest flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Reporte del día
+                    </button>
+                    <div x-show="showReportMenu" x-transition class="absolute right-0 mt-2 w-44 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 overflow-hidden">
+                        <a :href="reportUrl('pdf')" class="block px-4 py-3 text-sm text-white hover:bg-white/10 border-b border-gray-700">Descargar PDF</a>
+                        <a :href="reportUrl('csv')" class="block px-4 py-3 text-sm text-white hover:bg-white/10">Descargar CSV</a>
+                    </div>
+                </div>
             </div>
 
             {{-- BOTONES DE ACCIÓN MASIVA --}}
@@ -117,7 +268,12 @@
                 <option value="PENDING_CONFIRMATION">Por Confirmar</option>
                 <option value="IN_CUSTODY">En Custodia</option>
                 <option value="DELIVERED">Entregados</option>
+                <option value="NEEDS_CORRECTION">En Corrección</option>
             </select>
+            <button type="button" x-show="status !== 'ALL'" @click="filterByWidget('ALL')"
+                class="text-xs text-gray-400 hover:text-white underline whitespace-nowrap">
+                Quitar filtro
+            </button>
         </div>
 
         {{-- BOTÓN "SELECCIONAR TODOS" EXCLUSIVO PARA MÓVIL --}}
@@ -339,4 +495,11 @@
         </div>
 
     </div>
+
+    @include('gerencia.partials.pickup-delivery-modal')
+    @include('gerencia.partials.delivery-scripts', ['deliveryRedirectTo' => route('gerencia.daily')])
+
+    @push('scripts')
+    @vite(['resources/js/gerencia/daily-alerts.js'])
+    @endpush
 </x-gerencia-layout>

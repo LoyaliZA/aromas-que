@@ -121,6 +121,8 @@ Route::prefix('gerencia')
     ->group(function () {
         Route::get('/dashboard', [PickupController::class, 'index'])->name('dashboard');
         Route::get('/daily', [PickupController::class, 'daily'])->name('daily');
+        Route::get('/daily/stats', [PickupController::class, 'dailyStats'])->name('daily.stats');
+        Route::get('/daily/report', [PickupController::class, 'dailyReport'])->name('daily.report');
         Route::post('/store', [PickupController::class, 'store'])->name('store');
         Route::put('/update/{id}', [PickupController::class, 'update'])->name('update');
         Route::delete('/destroy/{id}', [PickupController::class, 'destroy'])->name('destroy');
@@ -129,6 +131,8 @@ Route::prefix('gerencia')
         // --- RUTAS: REZAGADOS ---
         Route::get('/rezagados', [PickupController::class, 'rezagados'])->name('rezagados.index');
         Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
+        Route::put('/pickups/{id}/deliver', [PickupController::class, 'deliver'])->name('pickups.deliver');
+        Route::get('/customers/search', [PickupController::class, 'searchCustomers'])->name('customers.search');
         // --- Resguardos --
         Route::post('/pickups/preliminar', [PickupController::class, 'storePreliminar'])->name('pickups.storePreliminar');
         Route::post('/pickups/bulk-approve', [PickupController::class, 'bulkApprove'])->name('pickups.bulkApprove');

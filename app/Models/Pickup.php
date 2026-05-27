@@ -112,6 +112,11 @@ class Pickup extends Model
         return !is_null($this->received_by_checker_at);
     }
 
+    public function custodyDurationLabel(string $prefix = 'Hace '): string
+    {
+        return \App\Support\CustodyDurationFormatter::label($this->created_at, null, $prefix);
+    }
+
     public function markAsDelivered(string $receiverName, bool $isThirdParty, string $signaturePath, ?string $evidencePath = null, ?string $notes = null): void
     {
         // Buscamos el ID del estatus mediante el código

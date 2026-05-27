@@ -9,6 +9,8 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/js/admin/reports.js',
                 'resources/js/recepcion/recepcion-app.js',
+                'resources/js/gerencia/daily-alerts.js',
+                'resources/js/gerencia/pickup-delivery.js',
             ],
             refresh: true,
         }),

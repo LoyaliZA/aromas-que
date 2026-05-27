@@ -10,9 +10,14 @@ use App\Models\PickupStatus;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Employee;
+use App\Models\Customer;
 use App\Models\SalesQueue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\Builder;
+use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PickupController extends Controller
 {
@@ -49,37 +54,242 @@ class PickupController extends Controller
      */
     public function daily(Request $request)
     {
-        // 1. Iniciamos consulta BASE seleccionando explicitamente la tabla
-        $query = Pickup::query()
+        $todaysPickups = $this->getOrderedDailyPickups($request);
+        $widgetCounts = $this->computeWidgetCounts(
+            $this->getDailyPickupsForWidgets($request)
+        );
+
+        if ($request->ajax()) {
+            return view('gerencia.partials.daily-table', compact('todaysPickups'))->render();
+        }
+
+        return view('gerencia.daily', compact('todaysPickups', 'widgetCounts'));
+    }
+
+    /**
+     * Métricas JSON para alertas sonoras/TTS en Operación Diaria.
+     */
+    public function dailyStats(Request $request)
+    {
+        $pickups = $this->getOrderedDailyPickups($request);
+        $widgetPickups = $this->getDailyPickupsForWidgets($request);
+        $todayStart = today()->startOfDay();
+
+        $pending = $pickups->filter(
+            fn (Pickup $p) => $p->currentStatus?->code === 'PENDING_CONFIRMATION'
+        );
+
+        $canManageRezagados = Auth::user()->canManageRezagados();
+        $rezagadosCount = $canManageRezagados ? Pickup::rezagados()->count() : 0;
+
+        $stalePending = $pending->filter(
+            fn (Pickup $p) => $p->created_at->lt($todayStart)
+        );
+
+        return response()->json([
+            'pending' => $pending->map(fn (Pickup $p) => [
+                'id' => $p->id,
+                'folio' => $p->ticket_folio,
+                'department' => $p->department,
+                'is_stale' => $p->created_at->lt($todayStart),
+            ])->values(),
+            'counts' => [
+                'pending' => $pending->count(),
+                'stale_pending' => $stalePending->count(),
+                'rezagados' => $rezagadosCount,
+            ],
+            'widgets' => $this->computeWidgetCounts($widgetPickups),
+            'can_manage_rezagados' => $canManageRezagados,
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Reporte diario de resguardos (PDF o CSV).
+     */
+    public function dailyReport(Request $request)
+    {
+        $format = $request->input('format', 'pdf');
+        if (!in_array($format, ['pdf', 'csv'], true)) {
+            $format = 'pdf';
+        }
+
+        $reportDate = Carbon::parse($request->input('date', today()->toDateString()))->startOfDay();
+
+        $dayQuery = Pickup::query()
+            ->select('pickups.*')
+            ->with('currentStatus')
+            ->whereDate('pickups.created_at', $reportDate);
+
+        $this->applyDailyFilters($dayQuery, $request);
+
+        $dayPickups = $dayQuery
+            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
+            ->orderBy('pickup_statuses.sort_order', 'asc')
+            ->orderBy('pickups.created_at', 'desc')
+            ->get();
+
+        $unauditedQuery = $this->buildDailyBaseQuery();
+        $this->applyDailyFilters($unauditedQuery, $request);
+        $unauditedQuery->whereHas('currentStatus', function ($q) {
+            $q->whereIn('code', ['PENDING_CONFIRMATION', 'NEEDS_CORRECTION']);
+        });
+
+        $unauditedPickups = $unauditedQuery
+            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
+            ->orderBy('pickup_statuses.sort_order', 'asc')
+            ->orderBy('pickups.created_at', 'asc')
+            ->get();
+
+        $statusSummary = $dayPickups
+            ->groupBy(fn (Pickup $p) => $p->currentStatus->name ?? 'Sin estatus')
+            ->map(fn ($group) => $group->count())
+            ->sortKeys();
+
+        $fileName = 'Reporte_Resguardos_' . $reportDate->format('Ymd') . '_' . now()->format('His');
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('gerencia.reports.daily-pickups-pdf', [
+                'reportDate' => $reportDate,
+                'dayPickups' => $dayPickups,
+                'statusSummary' => $statusSummary,
+                'unauditedPickups' => $unauditedPickups,
+                'generatedAt' => now(),
+                'managerName' => Auth::user()->name,
+            ]);
+
+            return $pdf->download($fileName . '.pdf');
+        }
+
+        return $this->streamDailyReportCsv($fileName, $reportDate, $dayPickups, $statusSummary, $unauditedPickups);
+    }
+
+    private function buildDailyBaseQuery(): Builder
+    {
+        return Pickup::query()
             ->select('pickups.*')
             ->with('currentStatus')
             ->where(function ($q) {
                 $q->whereDate('pickups.created_at', today())
                     ->orWhere(function ($subQ) {
                         $subQ->whereHas('currentStatus', function ($statusQ) {
-                            // Se agregan los estados pendientes para evitar que se queden atascados si no se procesan el mismo día
                             $statusQ->whereIn('code', ['IN_CUSTODY', 'PENDING_CONFIRMATION', 'NEEDS_CORRECTION']);
                         })
                             ->where('pickups.created_at', '>=', now()->subDays(15)->startOfDay());
                     });
             });
+    }
 
-        // 2. Aplicamos Filtros (Buscador, Estatus, Depto)
-        $query->search($request->search)
+    private function applyDailyFilters(Builder $query, Request $request): Builder
+    {
+        return $query
+            ->search($request->search)
             ->byStatus($request->status)
             ->byDepartment($request->department);
+    }
 
-        // 3. Obtenemos resultados ordenados aprovechando el sort_order del catálogo
-        $todaysPickups = $query->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
+    private function getOrderedDailyPickups(Request $request)
+    {
+        $query = $this->buildDailyBaseQuery();
+        $this->applyDailyFilters($query, $request);
+
+        return $query
+            ->join('pickup_statuses', 'pickups.status_id', '=', 'pickup_statuses.id')
             ->orderBy('pickup_statuses.sort_order', 'asc')
             ->orderBy('pickups.created_at', 'desc')
             ->get();
+    }
 
-        if ($request->ajax()) {
-            return view('gerencia.partials.daily-table', compact('todaysPickups'))->render();
-        }
+    /**
+     * Colección para widgets (sin filtro de estatus de la tabla).
+     */
+    private function getDailyPickupsForWidgets(Request $request)
+    {
+        $query = $this->buildDailyBaseQuery();
+        $query->search($request->search)->byDepartment($request->department);
 
-        return view('gerencia.daily', compact('todaysPickups'));
+        return $query->get();
+    }
+
+    private function computeWidgetCounts($pickups): array
+    {
+        return [
+            'pending_approval' => $pickups->filter(
+                fn (Pickup $p) => $p->currentStatus?->code === 'PENDING_CONFIRMATION'
+            )->count(),
+            'audited' => $pickups->filter(
+                fn (Pickup $p) => $p->currentStatus?->code === 'IN_CUSTODY'
+            )->count(),
+            'delivered' => $pickups->filter(
+                fn (Pickup $p) => $p->currentStatus?->code === 'DELIVERED'
+            )->count(),
+            'pending' => $pickups->filter(
+                fn (Pickup $p) => in_array($p->currentStatus?->code, ['NEEDS_CORRECTION', 'PRE_REGISTERED'], true)
+            )->count(),
+        ];
+    }
+
+    private function streamDailyReportCsv(
+        string $fileName,
+        Carbon $reportDate,
+        $dayPickups,
+        $statusSummary,
+        $unauditedPickups
+    ): StreamedResponse {
+        $callback = function () use ($reportDate, $dayPickups, $statusSummary, $unauditedPickups) {
+            $file = fopen('php://output', 'w');
+            fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($file, ['REPORTE DIARIO DE RESGUARDOS - AROMAS']);
+            fputcsv($file, ['Fecha del reporte', $reportDate->format('d/m/Y')]);
+            fputcsv($file, ['Generado', now()->format('d/m/Y H:i:s')]);
+            fputcsv($file, []);
+
+            fputcsv($file, ['RESGUARDOS DEL DÍA']);
+            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Piezas', 'Bolsas', 'Estatus', 'Hora', 'Auditado']);
+
+            foreach ($dayPickups as $pickup) {
+                fputcsv($file, [
+                    $pickup->ticket_folio,
+                    $pickup->client_name,
+                    $pickup->department,
+                    $pickup->pieces,
+                    $pickup->bags ?? 0,
+                    $pickup->currentStatus->name ?? 'N/A',
+                    $pickup->created_at->format('d/m/Y H:i'),
+                    $pickup->currentStatus?->code === 'PENDING_CONFIRMATION' ? 'No' : 'Sí',
+                ]);
+            }
+
+            fputcsv($file, []);
+            fputcsv($file, ['RESUMEN POR ESTATUS']);
+            fputcsv($file, ['Estatus', 'Cantidad']);
+            foreach ($statusSummary as $statusName => $count) {
+                fputcsv($file, [$statusName, $count]);
+            }
+
+            fputcsv($file, []);
+            fputcsv($file, ['NO AUDITADOS AL CIERRE']);
+            fputcsv($file, ['Folio', 'Cliente', 'Área', 'Estatus', 'Fecha registro', 'Días pendiente']);
+
+            foreach ($unauditedPickups as $pickup) {
+                fputcsv($file, [
+                    $pickup->ticket_folio,
+                    $pickup->client_name,
+                    $pickup->department,
+                    $pickup->currentStatus->name ?? 'N/A',
+                    $pickup->created_at->format('d/m/Y H:i'),
+                    $pickup->created_at->diffInDays(today()),
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename={$fileName}.csv",
+        ]);
     }
 
     /**
@@ -122,40 +332,147 @@ class PickupController extends Controller
     }
 
     /**
-     * ENTREGAR REZAGADO (Acción exclusiva)
+     * ENTREGAR REZAGADO (redirige al flujo unificado de entrega)
      */
     public function entregarRezagado(Request $request, $id)
     {
-        if (!Auth::user()->can_manage_rezagados) {
-            return redirect()->route('gerencia.dashboard')->with('error', 'No tienes permisos para entregar paquetes rezagados.');
+        return $this->deliver($request, $id);
+    }
+
+    /**
+     * Confirmar entrega de resguardo (firma, evidencia, titular o tercero).
+     */
+    public function deliver(Request $request, $id)
+    {
+        $pickup = Pickup::with('currentStatus')->findOrFail($id);
+
+        if ($pickup->currentStatus?->code !== 'IN_CUSTODY') {
+            return redirect()->back()->with('error', 'Solo se pueden entregar resguardos en custodia oficial.');
         }
 
-        $pickup = Pickup::rezagados()->findOrFail($id);
+        $isRezagado = $pickup->created_at->lt(now()->subDays(15)->startOfDay());
+        if ($isRezagado && !Auth::user()->canManageRezagados()) {
+            return redirect()->back()->with('error', 'No tienes permisos para entregar resguardos rezagados.');
+        }
 
         $request->validate([
-            'receiver_name' => 'required|string|max:150',
+            'signature' => 'required|string',
+            'is_third_party' => 'nullable|boolean',
+            'receiver_name' => 'required_if:is_third_party,1|nullable|string|max:255',
+            'customer_id' => 'nullable|exists:customers,id',
+            'evidence_file' => 'required|image|max:5120',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        DB::transaction(function () use ($pickup, $request) {
-            $deliveredStatus = \App\Models\PickupStatus::where('code', 'DELIVERED')->first();
+        $signaturePath = $this->storeSignatureImage($request->signature);
+        if (!$signaturePath) {
+            return redirect()->back()->with('error', 'La firma no pudo guardarse. Intenta de nuevo.');
+        }
 
-            $pickup->update([
-                'status_id' => $deliveredStatus->id,
-                'receiver_name' => $request->receiver_name,
-                'notes' => $request->notes ? "ENTREGA DE REZAGO. Notas: " . $request->notes : "ENTREGA DE REZAGO.",
-                'delivered_at' => now(),
-            ]);
+        $evidencePath = $request->file('evidence_file')->store('pickups/delivery_evidence', 'public');
+        $deliveredStatusId = PickupStatus::where('code', 'DELIVERED')->value('id');
+        $isThirdParty = $request->boolean('is_third_party');
+
+        $receiverName = $isThirdParty
+            ? $request->receiver_name
+            : ($request->input('receiver_name') ?: $pickup->client_name);
+
+        $updateData = [
+            'status_id' => $deliveredStatusId,
+            'delivered_at' => now(),
+            'signature_path' => $signaturePath,
+            'is_third_party' => $isThirdParty,
+            'receiver_name' => $receiverName,
+            'evidence_path' => $evidencePath,
+        ];
+
+        if (!$isThirdParty && $request->filled('customer_id')) {
+            $customer = Customer::find($request->customer_id);
+            if ($customer) {
+                $updateData['client_ref_id'] = (string) $customer->id;
+                $updateData['client_name'] = $customer->name;
+                $receiverName = $customer->name;
+                $updateData['receiver_name'] = $receiverName;
+            }
+        }
+
+        $notes = $pickup->notes ?? '';
+        if ($request->filled('notes')) {
+            $label = $isRezagado ? '[Gerencia entrega rezago]' : '[Gerencia entrega]';
+            $notes = trim($notes . "\n{$label}: " . $request->notes);
+            $updateData['notes'] = $notes;
+        }
+
+        DB::transaction(function () use ($pickup, $updateData, $isRezagado) {
+            $pickup->update($updateData);
 
             PickupEdit::create([
                 'pickup_id' => $pickup->id,
                 'user_id' => Auth::id(),
                 'changes' => json_encode(['status' => ['old' => 'IN_CUSTODY', 'new' => 'DELIVERED']]),
-                'reason' => 'Entrega especial de resguardo rezagado gestionada por: ' . Auth::user()->name
+                'reason' => ($isRezagado ? 'Entrega de rezago' : 'Entrega de resguardo') . ' por: ' . Auth::user()->name,
             ]);
         });
 
-        return redirect()->route('gerencia.rezagados.index')->with('success', 'El paquete rezagado ha sido entregado de forma segura.');
+        $allowedRedirects = [
+            route('gerencia.daily'),
+            route('gerencia.rezagados.index'),
+        ];
+        $redirect = in_array($request->input('redirect_to'), $allowedRedirects, true)
+            ? $request->input('redirect_to')
+            : route('gerencia.daily');
+
+        return redirect($redirect)->with('success', 'Resguardo entregado correctamente.');
+    }
+
+    /**
+     * Búsqueda de clientes para vincular titular en entrega.
+     */
+    public function searchCustomers(Request $request)
+    {
+        if (!$request->ajax() && !$request->wantsJson()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $search = trim($request->get('q', ''));
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        if (!is_numeric($search) && strlen($search) < 2) {
+            return response()->json([]);
+        }
+
+        $query = Customer::select('id', 'name', 'customer_number', 'client_type');
+
+        if (is_numeric($search) || preg_match('/^[A-Za-z0-9]+$/', $search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('customer_number', 'LIKE', "{$search}%")
+                    ->orWhere('name', 'LIKE', "%{$search}%");
+            });
+        } else {
+            $query->where('name', 'LIKE', "%{$search}%");
+        }
+
+        return response()->json($query->limit(15)->get());
+    }
+
+    private function storeSignatureImage(string $signature): ?string
+    {
+        if (!preg_match('/^data:image\/(\w+);base64,/', $signature)) {
+            return null;
+        }
+
+        $data = substr($signature, strpos($signature, ',') + 1);
+        $data = base64_decode($data);
+        if ($data === false) {
+            return null;
+        }
+
+        $fileName = 'signatures/' . uniqid() . '.png';
+        Storage::disk('public')->put($fileName, $data);
+
+        return $fileName;
     }
 
     /**

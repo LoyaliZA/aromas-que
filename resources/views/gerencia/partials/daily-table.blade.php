@@ -53,6 +53,19 @@
                 </form>
                 <button @click="openRejectModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full py-3 bg-red-600/20 text-red-400 border border-red-500/30 font-black rounded-xl text-xs uppercase tracking-widest active:scale-95 transition-all">Corregir</button>
             </div>
+            @elseif($pickup->currentStatus?->code === 'IN_CUSTODY')
+            <button type="button"
+                @click="$dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
+                    'id' => $pickup->id,
+                    'ticket_folio' => $pickup->ticket_folio,
+                    'client_name' => $pickup->client_name,
+                    'client_ref_id' => $pickup->client_ref_id,
+                    'is_third_party' => (bool) $pickup->is_third_party,
+                    'receiver_name' => $pickup->receiver_name,
+                ]) }})"
+                class="w-full py-3 bg-aromas-highlight text-aromas-main font-black rounded-xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                Entregar paquete
+            </button>
             @endif
         </div>
         @empty
@@ -139,6 +152,19 @@
                                 </form>
                                 <button @click="openRejectModal({{ $pickup->id }}, '{{ $pickup->ticket_folio }}')" class="w-full py-1.5 bg-red-600/10 text-red-400 border border-red-500/30 rounded text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-colors">Corregir</button>
                             </div>
+                            @elseif($pickup->currentStatus?->code === 'IN_CUSTODY')
+                            <button type="button"
+                                @click="$dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
+                                    'id' => $pickup->id,
+                                    'ticket_folio' => $pickup->ticket_folio,
+                                    'client_name' => $pickup->client_name,
+                                    'client_ref_id' => $pickup->client_ref_id,
+                                    'is_third_party' => (bool) $pickup->is_third_party,
+                                    'receiver_name' => $pickup->receiver_name,
+                                ]) }})"
+                                class="w-full py-2 bg-aromas-highlight text-aromas-main border border-aromas-highlight rounded text-[10px] font-black uppercase tracking-widest hover:bg-yellow-500 transition-colors shadow-lg">
+                                Entregar
+                            </button>
                             @else
                             <span class="text-gray-600 text-xs italic">Auditado</span>
                             @endif
