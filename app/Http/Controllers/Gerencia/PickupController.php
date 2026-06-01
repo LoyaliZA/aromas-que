@@ -117,6 +117,10 @@ class PickupController extends Controller
 
     public function dailyReport(Request $request)
     {
+        if ($request->input('report_type') === 'custom') {
+            return $this->generateCustomReport($request);
+        }
+
         $format = $request->input('format', 'pdf');
         if (!in_array($format, ['pdf', 'csv'], true)) {
             $format = 'pdf';
@@ -361,6 +365,165 @@ class PickupController extends Controller
                     $pickup->currentStatus->name ?? 'N/A',
                     $pickup->created_at->format('d/m/Y H:i'),
                     CustodyDurationFormatter::inQueue($pickup->created_at),
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename={$fileName}.csv",
+        ]);
+    }
+
+    /**
+     * Generar reporte personalizado con filtros dinámicos (PDF o CSV)
+     */
+    private function generateCustomReport(Request $request)
+    {
+        $format = $request->input('format', 'pdf');
+        if (!in_array($format, ['pdf', 'csv'], true)) {
+            $format = 'pdf';
+        }
+
+        $query = Pickup::query()
+            ->with(['currentStatus', 'seller', 'boxType']);
+
+        // 1. Filtro por Departamento
+        if ($request->filled('department') && $request->department !== 'ALL') {
+            $query->where('department', $request->department);
+        }
+
+        // 2. Filtro por Estado
+        if ($request->filled('status') && $request->status !== 'ALL') {
+            $query->whereHas('currentStatus', function ($q) use ($request) {
+                $q->where('code', $request->status);
+            });
+        }
+
+        // 3. Filtro por Periodo de Tiempo
+        $period = $request->input('period', 'all');
+        $dateLabel = 'Todos';
+        
+        switch ($period) {
+            case 'today':
+                $query->whereDate('created_at', today());
+                $dateLabel = today()->format('d/m/Y');
+                break;
+            case 'week':
+                $start = now()->startOfWeek()->startOfDay();
+                $end = now()->endOfWeek()->endOfDay();
+                $query->whereBetween('created_at', [$start, $end]);
+                $dateLabel = $start->format('d/m/Y') . ' al ' . $end->format('d/m/Y');
+                break;
+            case 'month':
+                $start = now()->startOfMonth()->startOfDay();
+                $end = now()->endOfMonth()->endOfDay();
+                $query->whereBetween('created_at', [$start, $end]);
+                $dateLabel = $start->format('d/m/Y') . ' al ' . $end->format('d/m/Y');
+                break;
+            case 'active':
+                $query->whereHas('currentStatus', function ($q) {
+                    $q->whereNotIn('code', ['DELIVERED', 'CANCELLED']);
+                });
+                $dateLabel = 'Todos los actuales (activos)';
+                break;
+            case 'custom':
+                $startStr = '';
+                $endStr = '';
+                if ($request->filled('date_start')) {
+                    $start = Carbon::parse($request->date_start)->startOfDay();
+                    $query->where('created_at', '>=', $start);
+                    $startStr = $start->format('d/m/Y');
+                }
+                if ($request->filled('date_end')) {
+                    $end = Carbon::parse($request->date_end)->endOfDay();
+                    $query->where('created_at', '<=', $end);
+                    $endStr = $end->format('d/m/Y');
+                }
+                $dateLabel = ($startStr || $endStr) ? ($startStr . ' al ' . $endStr) : 'Personalizado';
+                break;
+            case 'all':
+            default:
+                $dateLabel = 'Histórico Completo';
+                break;
+        }
+
+        // 4. Filtro por Búsqueda (Folio o Cliente)
+        if ($request->filled('search')) {
+            $query->search($request->search);
+        }
+
+        $pickups = $query->orderBy('created_at', 'desc')->get();
+
+        // 5. Métricas de Resumen
+        $totalCount = $pickups->count();
+        $totalPieces = $pickups->sum('pieces');
+        $totalBags = $pickups->sum('bags');
+
+        $statusCounts = $pickups->groupBy(fn (Pickup $p) => $p->currentStatus->name ?? 'Sin estatus')
+            ->map(fn ($group) => $group->count())
+            ->sortKeys();
+
+        $fileName = 'Reporte_Personalizado_' . now()->format('Ymd_His');
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('gerencia.reports.custom-pickups-pdf', [
+                'pickups' => $pickups,
+                'totalCount' => $totalCount,
+                'totalPieces' => $totalPieces,
+                'totalBags' => $totalBags,
+                'statusCounts' => $statusCounts,
+                'dateLabel' => $dateLabel,
+                'filters' => [
+                    'status' => $request->input('status', 'ALL'),
+                    'department' => $request->input('department', 'ALL'),
+                    'period' => $period,
+                ],
+                'generatedAt' => now(),
+                'managerName' => Auth::user()->name,
+            ]);
+
+            return $pdf->download($fileName . '.pdf');
+        }
+
+        // Exportar CSV
+        return $this->streamCustomReportCsv($fileName, $pickups);
+    }
+
+    /**
+     * Flujo para exportación CSV personalizada
+     */
+    private function streamCustomReportCsv(string $fileName, $pickups): StreamedResponse
+    {
+        $callback = function () use ($pickups) {
+            $file = fopen('php://output', 'w');
+            fputs($file, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
+
+            fputcsv($file, ['REPORTE PERSONALIZADO DE RESGUARDOS - AROMAS']);
+            fputcsv($file, ['Generado', now()->format('d/m/Y H:i:s')]);
+            fputcsv($file, ['Usuario', Auth::user()->name]);
+            fputcsv($file, []);
+
+            fputcsv($file, ['#', 'Folio', 'Cliente', 'Referencia Cliente', 'Área/Depto', 'Piezas', 'Bolsas', 'Estatus', 'Fecha Registro', 'Fecha Entrega', 'Quien Recibió', 'Firma', 'Notas']);
+
+            $counter = 1;
+            foreach ($pickups as $pickup) {
+                fputcsv($file, [
+                    $counter++,
+                    $pickup->ticket_folio,
+                    $pickup->client_name,
+                    $pickup->client_ref_id,
+                    $pickup->department,
+                    $pickup->pieces,
+                    $pickup->bags ?? 0,
+                    $pickup->currentStatus->name ?? 'N/A',
+                    $pickup->created_at->format('d/m/Y H:i'),
+                    $pickup->delivered_at ? $pickup->delivered_at->format('d/m/Y H:i') : 'N/A',
+                    $pickup->receiver_name ?? 'N/A',
+                    $pickup->signature_path ? 'Sí' : 'No',
+                    $pickup->notes ?? '',
                 ]);
             }
 

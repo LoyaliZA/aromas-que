@@ -18,14 +18,39 @@
             soundEnabled: true,
             voiceEnabled: true,
             showReportMenu: false,
+            showCustomReportModal: false,
+            reportFilters: {
+                status: 'ALL',
+                department: 'ALL',
+                period: 'today',
+                date_start: '',
+                date_end: '',
+                format: 'pdf'
+            },
             voiceOptions: [],
             selectedVoiceUri: localStorage.getItem('gerencia_daily_voice_uri') || '',
 
             isRefreshPaused() {
                 return this.showEditModal || this.showDetailsModal || this.showDeleteModal
                     || this.showRejectModal || this.showBulkDeleteModal || this.showImageViewer
+                    || this.showCustomReportModal
                     || this.selectedPickups.length > 0
                     || (window.dailyAlertsBridge?.deliveryModalOpen === true);
+            },
+
+            downloadCustomReport() {
+                const params = new URLSearchParams({
+                    report_type: 'custom',
+                    status: this.reportFilters.status,
+                    department: this.reportFilters.department,
+                    period: this.reportFilters.period,
+                    date_start: this.reportFilters.date_start,
+                    date_end: this.reportFilters.date_end,
+                    format: this.reportFilters.format,
+                    search: this.search,
+                });
+                window.location.href = '{{ url('/gerencia/daily/report') }}?' + params.toString();
+                this.showCustomReportModal = false;
             },
 
             // Datos para los modales
@@ -261,11 +286,12 @@
                 <div class="relative" @click.away="showReportMenu = false">
                     <button type="button" @click="showReportMenu = !showReportMenu" class="bg-aromas-highlight hover:bg-yellow-600 text-black font-bold py-2.5 px-4 rounded-lg text-xs uppercase tracking-widest flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        Reporte del día
+                        Reportes
                     </button>
-                    <div x-show="showReportMenu" x-transition class="absolute right-0 mt-2 w-44 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 overflow-hidden">
-                        <a :href="reportUrl('pdf')" class="block px-4 py-3 text-sm text-white hover:bg-white/10 border-b border-gray-700">Descargar PDF</a>
-                        <a :href="reportUrl('csv')" class="block px-4 py-3 text-sm text-white hover:bg-white/10">Descargar CSV</a>
+                    <div x-show="showReportMenu" x-transition class="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl z-50 overflow-hidden">
+                        <a :href="reportUrl('pdf')" class="block px-4 py-3 text-[10px] text-white hover:bg-white/10 border-b border-gray-700 font-bold tracking-wider uppercase">Cierre de Hoy (PDF)</a>
+                        <a :href="reportUrl('csv')" class="block px-4 py-3 text-[10px] text-white hover:bg-white/10 border-b border-gray-700 font-bold tracking-wider uppercase">Cierre de Hoy (CSV)</a>
+                        <button type="button" @click="showCustomReportModal = true; showReportMenu = false" class="w-full text-left block px-4 py-3 text-[10px] text-aromas-highlight hover:bg-white/10 font-bold tracking-wider uppercase">Reporte Personalizado...</button>
                     </div>
                 </div>
             </div>
@@ -535,6 +561,92 @@
                         <button type="submit" class="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold">Eliminar Todo</button>
                     </div>
                 </form>
+            </div>
+        </div>
+        {{-- MODAL DE REPORTE PERSONALIZADO --}}
+        <div x-show="showCustomReportModal" style="display: none;" class="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" x-transition>
+            <div @click.away="showCustomReportModal = false" class="bg-aromas-secondary rounded-2xl shadow-2xl border border-aromas-tertiary/30 w-full max-w-lg overflow-hidden transform transition-all">
+                <div class="p-6 border-b border-aromas-tertiary/30 flex justify-between items-center bg-black/25">
+                    <h3 class="text-xl font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-5 h-5 text-aromas-highlight" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Generador de Reportes
+                    </h3>
+                    <button @click="showCustomReportModal = false" class="text-gray-400 hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    {{-- Filtro de Estatus --}}
+                    <div>
+                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1.5">Estatus de Paquete</label>
+                        <select x-model="reportFilters.status" class="w-full bg-black/40 border border-aromas-tertiary/50 rounded-lg px-3 py-2.5 text-white focus:ring-1 focus:ring-aromas-highlight focus:border-aromas-highlight transition-all cursor-pointer">
+                            <option value="ALL">Todos los Estatus</option>
+                            <option value="IN_CUSTODY">En Custodia (Bóveda)</option>
+                            <option value="DELIVERED">Entregados</option>
+                            <option value="PENDING_CONFIRMATION">Por Confirmar / Auditar</option>
+                            <option value="NEEDS_CORRECTION">En Corrección (Rechazado)</option>
+                            <option value="PRE_REGISTERED">Prerregistrados</option>
+                        </select>
+                    </div>
+
+                    {{-- Filtro de Departamento/Área --}}
+                    <div>
+                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1.5">Área / Departamento</label>
+                        <select x-model="reportFilters.department" class="w-full bg-black/40 border border-aromas-tertiary/50 rounded-lg px-3 py-2.5 text-white focus:ring-1 focus:ring-aromas-highlight focus:border-aromas-highlight transition-all cursor-pointer">
+                            <option value="ALL">Todas las Áreas</option>
+                            <option value="AROMAS">Aromas</option>
+                            <option value="BELLAROMA">Bellaroma</option>
+                            <option value="CALLCENTER">Call Center</option>
+                        </select>
+                    </div>
+
+                    {{-- Filtro de Periodo --}}
+                    <div>
+                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1.5">Periodo de Tiempo</label>
+                        <select x-model="reportFilters.period" class="w-full bg-black/40 border border-aromas-tertiary/50 rounded-lg px-3 py-2.5 text-white focus:ring-1 focus:ring-aromas-highlight focus:border-aromas-highlight transition-all cursor-pointer">
+                            <option value="today">Hoy</option>
+                            <option value="week">Esta Semana</option>
+                            <option value="month">Este Mes</option>
+                            <option value="active">Todos los actuales (activos)</option>
+                            <option value="all">Histórico completo</option>
+                            <option value="custom">Rango personalizado</option>
+                        </select>
+                    </div>
+
+                    {{-- Rango de fechas dinámico (solo si period == custom) --}}
+                    <div x-show="reportFilters.period === 'custom'" x-transition class="grid grid-cols-2 gap-4 border-t border-aromas-tertiary/20 pt-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Desde</label>
+                            <input type="date" x-model="reportFilters.date_start" class="w-full bg-black/40 border border-aromas-tertiary/50 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-aromas-highlight focus:border-aromas-highlight transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Hasta</label>
+                            <input type="date" x-model="reportFilters.date_end" class="w-full bg-black/40 border border-aromas-tertiary/50 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-aromas-highlight focus:border-aromas-highlight transition-all">
+                        </div>
+                    </div>
+
+                    {{-- Formato de Descarga --}}
+                    <div>
+                        <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1.5">Formato del Reporte</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                                <input type="radio" x-model="reportFilters.format" value="pdf" class="bg-black/40 border-gray-600 text-aromas-highlight focus:ring-aromas-highlight">
+                                PDF Documento
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                                <input type="radio" x-model="reportFilters.format" value="csv" class="bg-black/40 border-gray-600 text-aromas-highlight focus:ring-aromas-highlight">
+                                CSV Excel
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6 bg-black/20 border-t border-aromas-tertiary/30 flex justify-end gap-3">
+                    <button type="button" @click="showCustomReportModal = false" class="py-2.5 px-5 text-gray-400 hover:text-white font-bold transition-colors uppercase tracking-widest text-[10px]">Cancelar</button>
+                    <button type="button" @click="downloadCustomReport()" class="bg-aromas-highlight hover:bg-yellow-600 text-black font-black py-2.5 px-6 rounded-lg uppercase tracking-widest text-[10px] transition-colors shadow-lg shadow-aromas-highlight/10 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Descargar Reporte
+                    </button>
+                </div>
             </div>
         </div>
 
