@@ -379,11 +379,14 @@ function performancePdf(config) {
             return diff > 7;
         },
 
+        consecutiveErrors: 0,
+
         openModal() {
             this.state = 'idle';
             this.progress = 0;
             this.errorMessage = '';
             this.currentToken = null;
+            this.consecutiveErrors = 0;
             this.modalOpen = true;
         },
 
@@ -399,6 +402,7 @@ function performancePdf(config) {
             this.state    = 'generating';
             this.progress = 5;
             this.errorMessage = '';
+            this.consecutiveErrors = 0;
 
             const body = new URLSearchParams();
             body.append('_token',      this.csrfToken);
@@ -456,7 +460,12 @@ function performancePdf(config) {
                 const res  = await fetch(this.statusUrlBase + this.currentToken, {
                     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                 });
+                if (!res.ok) {
+                    const json = await res.json().catch(() => ({}));
+                    throw new Error(json.message || 'Error al consultar el estado.');
+                }
                 const data = await res.json();
+                this.consecutiveErrors = 0;
 
                 this.progress = data.progress ?? this.progress;
 
@@ -469,7 +478,14 @@ function performancePdf(config) {
                     this.state        = 'failed';
                     this.errorMessage = data.message || 'El proceso falló inesperadamente.';
                 }
-            } catch (_) {}
+            } catch (err) {
+                this.consecutiveErrors++;
+                if (this.consecutiveErrors >= 5) {
+                    clearInterval(this.pollingTimer);
+                    this.state = 'failed';
+                    this.errorMessage = err.message || 'No se pudo conectar con el servidor para verificar el estado del reporte.';
+                }
+            }
         },
     };
 }

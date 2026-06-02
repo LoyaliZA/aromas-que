@@ -54,6 +54,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
 
     public function handle(): void
     {
+        ini_set('memory_limit', '512M');
         $this->updateStatus('processing', 5);
 
         try {
@@ -66,17 +67,16 @@ class GenerateEmployeePdfJob implements ShouldQueue
                 return;
             }
 
-            // ─── KPIs ─────────────────────────────────────────────────────────
+            // ─── Análisis de Pausas (se hace una sola vez) ─────────────────────
             $this->updateStatus('processing', 15);
+            $breakAnalysis = $this->calculateBreaks($employee->id, $startDate, $endDate);
 
-            $kpis = $this->buildKpis($employee->id, $startDate, $endDate);
-
-            // ─── Pausas por día ───────────────────────────────────────────────
+            // ─── KPIs ─────────────────────────────────────────────────────────
             $this->updateStatus('processing', 35);
-
-            $breakAnalysis = in_array('breaks', $this->sections)
-                ? $this->calculateBreaks($employee->id, $startDate, $endDate)
-                : ['daily_breaks' => [], 'break_totals' => [], 'timeline' => [], 'total_formatted' => '00:00', 'total_available_formatted' => '00:00'];
+            $kpis = [];
+            if (in_array('kpis', $this->sections)) {
+                $kpis = $this->buildKpis($employee->id, $startDate, $endDate, $breakAnalysis);
+            }
 
             // ─── Historial de clientes ────────────────────────────────────────
             $this->updateStatus('processing', 55);
@@ -90,7 +90,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
             $this->updateStatus('processing', 75);
 
             $ratingsHistory = [];
-            if (in_array('ratings', $this->sections)) {
+            if (in_array('ratings', $this->sections) && ! in_array('clients', $this->sections)) {
                 $ratingsHistory = $this->buildRatingsHistory($employee->id, $startDate, $endDate);
             }
 
@@ -128,30 +128,31 @@ class GenerateEmployeePdfJob implements ShouldQueue
     // Helpers privados
     // ──────────────────────────────────────────────────────────────────────────
 
-    private function buildKpis(int $empId, Carbon $start, Carbon $end): array
+    private function buildKpis(int $empId, Carbon $start, Carbon $end, array $breakAnalysis): array
     {
-        $salesQuery = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
+        $stats = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
             ->whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED');
+            ->where('status', 'COMPLETED')
+            ->selectRaw('COUNT(*) as served, AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
+            ->first();
 
-        $served = (clone $salesQuery)->count();
-
-        $avgSeconds = (clone $salesQuery)
-            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
-            ->value('avg_time') ?? 0;
+        $served = $stats->served ?? 0;
+        $avgSeconds = $stats->avg_time ?? 0;
 
         $avgStarsRaw = SaleRating::where('rater_type', 'CLIENT')
-            ->whereIn('sales_queue_id', (clone $salesQuery)->select('id'))
+            ->whereIn('sales_queue_id', SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
+                ->whereBetween('completed_at', [$start, $end])
+                ->where('status', 'COMPLETED')
+                ->select('id')
+            )
             ->avg('stars');
-
-        $breakAnalysisForKpis = $this->calculateBreaks($empId, $start, $end);
 
         return [
             'served'           => $served,
             'avg_time'         => $this->formatSeconds($avgSeconds),
             'avg_stars'        => $avgStarsRaw ? round($avgStarsRaw, 1) : 0,
-            'total_break'      => $breakAnalysisForKpis['total_formatted'],
-            'total_available'  => $breakAnalysisForKpis['total_available_formatted'],
+            'total_break'      => $breakAnalysis['total_formatted'],
+            'total_available'  => $breakAnalysis['total_available_formatted'],
         ];
     }
 
@@ -160,13 +161,24 @@ class GenerateEmployeePdfJob implements ShouldQueue
         $rows = [];
         $includeRatings = in_array('ratings', $this->sections);
 
+        $totalSales = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
+            ->whereBetween('completed_at', [$start, $end])
+            ->where('status', 'COMPLETED')
+            ->count();
+
+        if ($totalSales === 0) {
+            return [];
+        }
+
+        $processedCount = 0;
+
         // Procesamos en bloques de 200 para no saturar memoria
         SalesQueue::with($includeRatings ? ['ratings', 'customer'] : ['customer'])
             ->whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
             ->whereBetween('completed_at', [$start, $end])
             ->where('status', 'COMPLETED')
             ->orderBy('completed_at', 'desc')
-            ->chunk(200, function ($chunk) use (&$rows, $includeRatings) {
+            ->chunk(200, function ($chunk) use (&$rows, $includeRatings, &$processedCount, $totalSales) {
                 foreach ($chunk as $sale) {
                     $wait  = $this->formatSeconds(
                         $sale->queued_at && $sale->started_serving_at
@@ -213,6 +225,11 @@ class GenerateEmployeePdfJob implements ShouldQueue
 
                     $rows[] = $row;
                 }
+
+                $processedCount += count($chunk);
+                $prog = 55 + (int)(($processedCount / $totalSales) * 20);
+                if ($prog > 75) $prog = 75;
+                $this->updateStatus('processing', $prog);
             });
 
         return $rows;
@@ -251,6 +268,19 @@ class GenerateEmployeePdfJob implements ShouldQueue
         $totalAvailableSeconds = 0;
         $dailySeconds         = [];
         $timeline             = [];
+
+        $servingSecondsByShift = [];
+        $shiftIds = $shifts->pluck('id')->toArray();
+        if (! empty($shiftIds)) {
+            $servingSecondsByShift = SalesQueue::whereIn('assigned_shift_id', $shiftIds)
+                ->where('status', 'COMPLETED')
+                ->whereNotNull('started_serving_at')
+                ->whereNotNull('completed_at')
+                ->groupBy('assigned_shift_id')
+                ->selectRaw('assigned_shift_id, SUM(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as total_seconds')
+                ->pluck('total_seconds', 'assigned_shift_id')
+                ->toArray();
+        }
 
         foreach ($shifts as $shift) {
             $breakStart    = null;
@@ -324,15 +354,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
                 }
             }
 
-            $servingSeconds = SalesQueue::where('assigned_shift_id', $shift->id)
-                ->where('status', 'COMPLETED')
-                ->whereNotNull('started_serving_at')
-                ->whereNotNull('completed_at')
-                ->get()
-                ->reduce(fn ($carry, $s) =>
-                    $carry + Carbon::parse($s->started_serving_at)->diffInSeconds(Carbon::parse($s->completed_at)),
-                    0
-                );
+            $servingSeconds = $servingSecondsByShift[$shift->id] ?? 0;
 
             $dailySeconds[$dateStr]['AVAILABLE'] -= $servingSeconds;
             if ($dailySeconds[$dateStr]['AVAILABLE'] < 0) {

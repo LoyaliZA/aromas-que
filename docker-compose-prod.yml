@@ -8,8 +8,8 @@ services:
       args:
         user: laravel
         uid: 1000
-    image: aromas-app-prod
-    container_name: aromas_app_prod
+    image: tera-app-prod
+    container_name: tera_app_prod
     restart: unless-stopped
     working_dir: /var/www
     environment:
@@ -18,7 +18,7 @@ services:
       - ./:/var/www
       - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
-      - aromas-network-prod
+      - tera-network-prod
 
   scheduler:
     build:
@@ -27,8 +27,8 @@ services:
       args:
         user: laravel
         uid: 1000
-    image: aromas-app-prod
-    container_name: aromas_scheduler_prod
+    image: tera-app-prod
+    container_name: tera_scheduler_prod
     restart: unless-stopped
     working_dir: /var/www
     command: php artisan schedule:work
@@ -38,14 +38,37 @@ services:
       - ./:/var/www
       - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
     networks:
-      - aromas-network-prod
+      - tera-network-prod
+    depends_on:
+      - app
+      - db
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        user: laravel
+        uid: 1000
+    image: tera-app-prod
+    container_name: tera_queue_prod
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan queue:work --queue=default --tries=1 --timeout=300
+    environment:
+      - TZ=America/Mexico_City
+    volumes:
+      - ./:/var/www
+      - ./php-local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - tera-network-prod
     depends_on:
       - app
       - db
 
   web:
     image: nginx:alpine
-    container_name: aromas_web_prod
+    container_name: tera_web_prod
     restart: unless-stopped
     environment:
       - TZ=America/Mexico_City
@@ -55,11 +78,11 @@ services:
     depends_on:
       - app
     networks:
-      - aromas-network-prod
+      - tera-network-prod
 
   db:
     image: mysql:8.0
-    container_name: aromas_db_prod
+    container_name: tera_db_prod
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -70,21 +93,21 @@ services:
     volumes:
       - dbdata_prod:/var/lib/mysql
     networks:
-      - aromas-network-prod
+      - tera-network-prod
     command: --default-authentication-plugin=mysql_native_password
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: aromas_tunnel_prod
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiZGI3MTQwY2I2NTA1MjU3MmZhYjgwMmQ2MGY0ODU2MjkiLCJ0IjoiMjUyZWMwYjItNGQzYS00YjA5LTkwZTAtMGE5NmJhMmMxMzc0IiwicyI6Ik1UZGpabU5tTlRNdE5qVXdaQzAwWmpjekxUbGxOR0l0TWpRMVltTm1ZakEyTURNNCJ9
-    networks:
-      - aromas-network-prod
-    depends_on:
-      - web
+     image: cloudflare/cloudflared:latest
+     container_name: tera_tunnel_prod
+     restart: unless-stopped
+     command: tunnel --no-autoupdate run --token apideeejmploparamayorseguridad
+     networks:
+       - tera-network-prod
+     depends_on:
+       - web
 
 networks:
-  aromas-network-prod:
+  tera-network-prod:
     driver: bridge
 
 volumes:

@@ -278,6 +278,7 @@ class ReportController extends Controller
      */
     public function generatePdf(Request $request)
     {
+        ini_set('memory_limit', '512M');
         $request->validate([
             'employee_id' => 'required|integer|exists:employees,id',
             'start_date'  => 'required|date',
@@ -342,7 +343,7 @@ class ReportController extends Controller
         $jsonPath = 'temp_reports/' . $token . '.json';
 
         if (! Storage::exists($jsonPath)) {
-            return response()->json(['status' => 'pending', 'progress' => 0]);
+            return response()->json(['status' => 'failed', 'message' => 'El reporte no existe o fue eliminado.'], 404);
         }
 
         $data = json_decode(Storage::get($jsonPath), true);
@@ -631,6 +632,19 @@ class ReportController extends Controller
         $dailySeconds = [];
         $timeline = [];
 
+        $servingSecondsByShift = [];
+        $shiftIds = $shifts->pluck('id')->toArray();
+        if (! empty($shiftIds)) {
+            $servingSecondsByShift = \App\Models\SalesQueue::whereIn('assigned_shift_id', $shiftIds)
+                ->where('status', 'COMPLETED')
+                ->whereNotNull('started_serving_at')
+                ->whereNotNull('completed_at')
+                ->groupBy('assigned_shift_id')
+                ->selectRaw('assigned_shift_id, SUM(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as total_seconds')
+                ->pluck('total_seconds', 'assigned_shift_id')
+                ->toArray();
+        }
+
         foreach ($shifts as $shift) {
             $breakStart = null;
             $onlineStart = null;
@@ -708,14 +722,7 @@ class ReportController extends Controller
             }
 
             // --- 3. Restar el tiempo "Atendiendo" del tiempo Disponible ---
-            $servingSeconds = \App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
-                ->where('status', 'COMPLETED')
-                ->whereNotNull('started_serving_at')
-                ->whereNotNull('completed_at')
-                ->get()
-                ->reduce(function ($carry, $sale) {
-                    return $carry + Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at));
-                }, 0);
+            $servingSeconds = $servingSecondsByShift[$shift->id] ?? 0;
 
             $dailySeconds[$dateStr]['AVAILABLE'] -= $servingSeconds;
             if ($dailySeconds[$dateStr]['AVAILABLE'] < 0) $dailySeconds[$dateStr]['AVAILABLE'] = 0;
