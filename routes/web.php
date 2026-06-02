@@ -84,9 +84,14 @@ Route::prefix('admin')
 
         // --- RUTAS: REPORTES Y AUDITORÍA ---
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
-        Route::get('/reports/real-time', [ReportController::class, 'realTimeData'])->name('reports.realtime'); // <-- NUEVA RUTA
+        Route::get('/reports/real-time', [ReportController::class, 'realTimeData'])->name('reports.realtime');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/audit', [ReportController::class, 'audit'])->name('reports.audit');
+
+        // --- RUTAS: PDF VENDEDOR PERSONALIZADO (Síncrono / Asíncrono) ---
+        Route::post('/reports/pdf/generate', [ReportController::class, 'generatePdf'])->name('reports.pdf.generate');
+        Route::get('/reports/pdf/status/{token}', [ReportController::class, 'pdfStatus'])->name('reports.pdf.status');
+        Route::get('/reports/pdf/download/{token}', [ReportController::class, 'downloadPdf'])->name('reports.pdf.download');
 
         // --- PUBLICIDAD TV ---
         Route::get('/tv-ads', [TvAdController::class, 'index'])->name('tv_ads.index');

@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateEmployeePdfJob;
+use App\Models\DailyShift;
+use App\Models\Employee;
+use App\Models\SaleRating;
+use App\Models\SalesQueue;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use App\Models\SalesQueue;
-use App\Models\Employee;
-use App\Models\DailyShift;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ReportController extends Controller
 {
@@ -264,6 +268,237 @@ class ReportController extends Controller
         ]);
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // PDF VENDEDOR — GENERACIÓN PERSONALIZADA (SÍNCRONA O ASÍNCRONA)
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Punto de entrada POST: decide si genera el PDF directo o lanza un Job.
+     * Criterio: periodo <= 7 días → síncrono, > 7 días → asíncrono.
+     */
+    public function generatePdf(Request $request)
+    {
+        $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
+            'sections'    => 'required|array|min:1',
+            'sections.*'  => 'in:kpis,breaks,timeline,clients,ratings',
+        ]);
+
+        $empId    = (int) $request->input('employee_id');
+        $start    = Carbon::parse($request->input('start_date'))->startOfDay();
+        $end      = Carbon::parse($request->input('end_date'))->endOfDay();
+        $sections = $request->input('sections');
+        $days     = $start->diffInDays($end);
+
+        // ── MODO SÍNCRONO (periodo corto) ─────────────────────────────────
+        if ($days <= 7) {
+            $data     = $this->buildEmployeePdfData($empId, $start, $end, $sections);
+            $employee = Employee::find($empId);
+            $pdf      = Pdf::loadView('admin.reports.pdf_employee', array_merge($data, [
+                'employee'    => $employee,
+                'sections'    => $sections,
+                'start'       => $start,
+                'end'         => $end,
+                'generatedAt' => now()->format('d/m/Y H:i:s'),
+            ]))->setPaper('a4', 'portrait');
+
+            $fileName = 'Reporte_Vendedor_' . Str::slug($employee->full_name ?? $empId) . '_' . now()->format('Ymd_His') . '.pdf';
+            return $pdf->download($fileName);
+        }
+
+        // ── MODO ASÍNCRONO (periodo largo) ────────────────────────────────
+        $token = Str::uuid()->toString();
+
+        // Crear archivo de estado inicial
+        Storage::put('temp_reports/' . $token . '.json', json_encode([
+            'status'   => 'queued',
+            'progress' => 0,
+            'message'  => '',
+        ]));
+
+        GenerateEmployeePdfJob::dispatch(
+            $token,
+            $empId,
+            $start->toDateString(),
+            $end->toDateString(),
+            $sections
+        );
+
+        return response()->json(['token' => $token]);
+    }
+
+    /**
+     * Devuelve el estado actual del job de generación de PDF.
+     */
+    public function pdfStatus(string $token)
+    {
+        // Validar que el token tenga formato UUID para evitar path traversal
+        if (! preg_match('/^[0-9a-f\-]{36}$/', $token)) {
+            return response()->json(['status' => 'failed', 'message' => 'Token inválido.'], 400);
+        }
+
+        $jsonPath = 'temp_reports/' . $token . '.json';
+
+        if (! Storage::exists($jsonPath)) {
+            return response()->json(['status' => 'pending', 'progress' => 0]);
+        }
+
+        $data = json_decode(Storage::get($jsonPath), true);
+        return response()->json($data);
+    }
+
+    /**
+     * Descarga el PDF generado y limpia los archivos temporales.
+     */
+    public function downloadPdf(string $token)
+    {
+        // Validar token formato UUID
+        if (! preg_match('/^[0-9a-f\-]{36}$/', $token)) {
+            abort(400, 'Token inválido.');
+        }
+
+        $pdfPath  = 'temp_reports/' . $token . '.pdf';
+        $jsonPath = 'temp_reports/' . $token . '.json';
+
+        if (! Storage::exists($pdfPath)) {
+            abort(404, 'El archivo no está disponible. Es posible que ya haya sido descargado.');
+        }
+
+        $content  = Storage::get($pdfPath);
+        $fileName = 'Reporte_Vendedor_' . now()->format('Ymd_His') . '.pdf';
+
+        // Limpiar archivos temporales después de preparar la respuesta
+        Storage::delete([$pdfPath, $jsonPath]);
+
+        return response($content, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ]);
+    }
+
+    /**
+     * Construye el array de datos para el PDF (modo síncrono).
+     */
+    private function buildEmployeePdfData(int $empId, Carbon $start, Carbon $end, array $sections): array
+    {
+        $kpis        = [];
+        $dailyBreaks = [];
+        $breakTotals = [];
+        $timeline    = [];
+        $clientRows     = [];
+        $ratingsHistory = [];
+
+        // KPIs siempre se incluyen si está la sección 'kpis'
+        if (in_array('kpis', $sections)) {
+            $salesQuery = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
+                ->whereBetween('completed_at', [$start, $end])
+                ->where('status', 'COMPLETED');
+
+            $served     = (clone $salesQuery)->count();
+            $avgSeconds = (clone $salesQuery)
+                ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
+                ->value('avg_time') ?? 0;
+
+            $avgStarsRaw = SaleRating::where('rater_type', 'CLIENT')
+                ->whereIn('sales_queue_id', (clone $salesQuery)->select('id'))
+                ->avg('stars');
+
+            $breakInfo = $this->calculateEmployeeBreaks($empId, $start, $end);
+
+            $kpis = [
+                'served'          => $served,
+                'avg_time'        => $this->formatSeconds($avgSeconds),
+                'avg_stars'       => $avgStarsRaw ? round($avgStarsRaw, 1) : 0,
+                'total_break'     => $breakInfo['total_formatted'],
+                'total_available' => $breakInfo['total_available_formatted'],
+            ];
+
+            if (in_array('breaks', $sections)) {
+                $dailyBreaks = $breakInfo['daily_breaks'];
+                $breakTotals = $breakInfo['break_totals'] ?? [];
+            }
+            if (in_array('timeline', $sections)) {
+                $timeline = array_reverse($breakInfo['timeline']);
+            }
+        } else {
+            // Si no se piden KPIs, aún podemos necesitar pausas/timeline
+            if (in_array('breaks', $sections) || in_array('timeline', $sections)) {
+                $breakInfo = $this->calculateEmployeeBreaks($empId, $start, $end);
+                if (in_array('breaks', $sections)) {
+                    $dailyBreaks = $breakInfo['daily_breaks'];
+                    $breakTotals = $breakInfo['break_totals'] ?? [];
+                }
+                if (in_array('timeline', $sections))  $timeline = array_reverse($breakInfo['timeline']);
+            }
+        }
+
+        if (in_array('clients', $sections)) {
+            $includeRatings = in_array('ratings', $sections);
+            $data = SalesQueue::with($includeRatings ? ['ratings', 'customer'] : ['customer'])
+                ->whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
+                ->whereBetween('completed_at', [$start, $end])
+                ->where('status', 'COMPLETED')
+                ->orderBy('completed_at', 'desc')
+                ->get();
+
+            foreach ($data as $sale) {
+                $row = [
+                    'turn'       => $sale->turn_number,
+                    'client'     => $sale->client_name,
+                    'type'       => $sale->client_type,
+                    'no_cliente' => $sale->customer->customer_number ?? 'N/A',
+                    'wait'       => $this->formatSeconds($sale->queued_at && $sale->started_serving_at
+                        ? Carbon::parse($sale->queued_at)->diffInSeconds(Carbon::parse($sale->started_serving_at))
+                        : 0),
+                    'serve'      => $this->formatSeconds($sale->started_serving_at && $sale->completed_at
+                        ? Carbon::parse($sale->started_serving_at)->diffInSeconds(Carbon::parse($sale->completed_at))
+                        : 0),
+                    'status'     => str_ends_with($sale->turn_number, '-R') ? 'RE-ATENDIDO' : 'NORMAL',
+                    'date'       => Carbon::parse($sale->completed_at)->format('d/m/Y H:i'),
+                    'cr_stars'   => null, 'cr_tags' => [], 'cr_comment' => null,
+                    'sr_stars'   => null, 'sr_tags' => [], 'sr_comment' => null,
+                ];
+
+                if ($includeRatings && $sale->ratings) {
+                    $cr = $sale->ratings->where('rater_type', 'CLIENT')->first();
+                    $sr = $sale->ratings->where('rater_type', 'SELLER')->first();
+                    if ($cr) { $row['cr_stars'] = $cr->stars; $row['cr_tags'] = $cr->tags ?? []; $row['cr_comment'] = $cr->comments; }
+                    if ($sr) { $row['sr_stars'] = $sr->stars; $row['sr_tags'] = $sr->tags ?? []; $row['sr_comment'] = $sr->comments; }
+                }
+                $clientRows[] = $row;
+            }
+        }
+
+        if (in_array('ratings', $sections) && ! in_array('clients', $sections)) {
+            // Solo historial de calificaciones sin tabla de clientes
+            $ratingsHistory = SaleRating::with('salesQueue.customer')
+                ->where('rater_type', 'CLIENT')
+                ->whereHas('salesQueue', function ($q) use ($empId, $start, $end) {
+                    $q->whereHas('assignedShift', fn ($s) => $s->where('employee_id', $empId))
+                      ->whereBetween('completed_at', [$start, $end])
+                      ->where('status', 'COMPLETED');
+                })
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(fn ($r) => [
+                    'stars'       => $r->stars,
+                    'tags'        => $r->tags ?? [],
+                    'comment'     => $r->comments,
+                    'turn'        => $r->salesQueue->turn_number ?? 'N/A',
+                    'client_name' => $r->salesQueue->customer->name ?? $r->salesQueue->client_name ?? 'Desconocido',
+                    'date'        => $r->created_at->format('d/m/Y H:i'),
+                ])->toArray();
+        }
+
+        return compact('kpis', 'dailyBreaks', 'breakTotals', 'timeline', 'clientRows', 'ratingsHistory');
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // EXPORTACIÓN CLÁSICA (CSV / PDF antiguo) — Sin cambios
+    // ──────────────────────────────────────────────────────────────────────
+
     public function export(Request $request)
     {
         $type = $request->input('type', 'clients');
@@ -503,11 +738,26 @@ class ReportController extends Controller
             }
         }
 
+        // --- TOTALES POR TIPO DE PAUSA (suma de todos los días) ---
+        $totalsByReason = ['LUNCH' => 0, 'BATHROOM' => 0, 'ERRAND' => 0, 'PACKAGING' => 0, 'GENERAL' => 0, 'AVAILABLE' => 0];
+        foreach ($dailySeconds as $dayData) {
+            foreach ($dayData as $reason => $secs) {
+                if (isset($totalsByReason[$reason])) {
+                    $totalsByReason[$reason] += $secs;
+                }
+            }
+        }
+        $formattedBreakTotals = ['Tiempo Disponible' => $this->formatSeconds($totalsByReason['AVAILABLE'])];
+        foreach (['LUNCH', 'BATHROOM', 'ERRAND', 'PACKAGING', 'GENERAL'] as $r) {
+            $formattedBreakTotals[$this->reasonsDict[$r] ?? $r] = $this->formatSeconds($totalsByReason[$r]);
+        }
+
         return [
-            'total_formatted' => $this->formatSeconds($totalBreakSeconds),
-            'total_available_formatted' => $this->formatSeconds($totalAvailableSeconds), // <-- Nuevo KPI Global
-            'daily_breaks' => $formattedDailyBreaks,
-            'timeline' => $timeline
+            'total_formatted'           => $this->formatSeconds($totalBreakSeconds),
+            'total_available_formatted' => $this->formatSeconds($totalAvailableSeconds),
+            'daily_breaks'              => $formattedDailyBreaks,
+            'break_totals'              => $formattedBreakTotals,
+            'timeline'                  => $timeline
         ];
     }
 
