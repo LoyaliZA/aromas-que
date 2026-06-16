@@ -18,7 +18,7 @@ class ClientRatingController extends Controller
     {
         // Traemos las ventas completadas en las últimas 2 horas para que el gerente elija
         $sales = SalesQueue::with('assignedShift.employee')
-            ->where('status', 'COMPLETED')
+            ->withStatusCode('COMPLETED')
             ->where('completed_at', '>=', now()->subHours(2))
             // NUEVO FILTRO: Excluir las ventas que ya tengan una calificación registrada por un CLIENTE
             ->whereNotIn('id', function ($query) {

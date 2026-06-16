@@ -33,11 +33,12 @@
                             </td>
                             <td class="p-4 text-gray-300 font-mono">{{ $employee->employee_code }}</td>
                             <td class="p-4">
+                                @php $positionName = $employee->resolveJobPositionName(); @endphp
                                 <span class="px-2 py-1 rounded text-xs font-bold
-                                    {{ $employee->job_position === 'ADMIN' ? 'bg-red-500/20 text-red-400' : 
-                                      ($employee->job_position === 'MANAGER' ? 'bg-purple-500/20 text-purple-400' : 
-                                      ($employee->job_position === 'SELLER' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400')) }}">
-                                    {{ $employee->job_position }}
+                                    {{ $positionName === 'ADMIN' ? 'bg-red-500/20 text-red-400' : 
+                                      ($positionName === 'MANAGER' ? 'bg-purple-500/20 text-purple-400' : 
+                                      ($positionName === 'SELLER' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400')) }}">
+                                    {{ config('catalog_labels.job_positions.' . $positionName, $positionName) }}
                                 </span>
                                 {{-- INDICADOR DE VENTAS (NUEVO) --}}
                                 @if($employee->appears_in_sales_queue)
@@ -87,7 +88,7 @@
                         <div class="flex justify-between items-center">
                             <span class="text-gray-500 text-sm">Puesto</span>
                             <div>
-                                <span class="font-medium text-gray-300 text-sm">{{ $employee->job_position }}</span>
+                                <span class="font-medium text-gray-300 text-sm">{{ config('catalog_labels.job_positions.' . $employee->resolveJobPositionName(), $employee->resolveJobPositionName()) }}</span>
                                 @if($employee->appears_in_sales_queue)
                                     <span class="ml-1 text-aromas-highlight text-xs">🛒</span>
                                 @endif

@@ -407,7 +407,7 @@
                     <td>{{ $row['client'] }}</td>
                     <td>{{ $row['no_cliente'] }}</td>
                     <td class="center">
-                        @if($row['type'] === 'VIP') <span class="badge-vip">VIP</span>
+                        @if(!empty($row['use_premium_alert'])) <span class="badge-vip">{{ $row['type'] }}</span>
                         @else NORMAL @endif
                     </td>
                     <td class="center text-warn">{{ $row['wait'] }}</td>
@@ -462,7 +462,7 @@
                     <td>{{ $row['client'] }}</td>
                     <td>{{ $row['no_cliente'] }}</td>
                     <td class="center">
-                        @if($row['type'] === 'VIP') <span class="badge-vip">VIP</span>
+                        @if(!empty($row['use_premium_alert'])) <span class="badge-vip">{{ $row['type'] }}</span>
                         @else NORMAL @endif
                     </td>
                     <td class="center text-warn">{{ $row['wait'] }}</td>

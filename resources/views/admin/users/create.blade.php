@@ -52,11 +52,9 @@
                         <label class="block text-sm font-medium text-gray-300 mb-2">Puesto de Trabajo</label>
                         <select name="job_position" required x-model="role"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
-                            <option value="SELLER">Vendedor (Piso)</option>
-                            <option value="MANAGER">Gerente</option>
-                            <option value="CHECKER">Checador (Recepción)</option>
-                            <option value="ADMIN">Administrador</option>
-                            <option value="AUXILIAR">Auxiliar (Anuncios TV)</option>
+                            @foreach($jobPositions as $position)
+                                <option value="{{ $position->name }}">{{ $jobPositionLabels[$position->name] ?? $position->name }}</option>
+                            @endforeach
                         </select>
                     </div>
 
@@ -64,11 +62,9 @@
                         <label class="block text-sm font-medium text-gray-300 mb-2">Departamento / Área</label>
                         <select name="department" required x-model="dept"
                             class="w-full bg-aromas-main border border-aromas-tertiary/50 rounded-lg text-white focus:ring-aromas-highlight focus:border-aromas-highlight p-3">
-                            <option value="NONE">Sin Área Específica</option>
-                            <option value="AROMAS">Aromas</option>
-                            <option value="BELLAROMA">Logística Bellaroma</option>
-                            <option value="CALLCENTER">Call Center</option>
-                            <option value="CEDIS">CEDIS (Centro de Distribución)</option>
+                            @foreach($departments as $department)
+                                <option value="{{ $department->name }}">{{ $departmentLabels[$department->name] ?? $department->name }}</option>
+                            @endforeach
                         </select>
                     </div>
 

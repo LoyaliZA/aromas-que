@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateEmployeePdfJob;
-use App\Models\DailyShift;
+use App\Models\BreakReason;
 use App\Models\Employee;
 use App\Models\SaleRating;
 use App\Models\SalesQueue;
@@ -18,14 +18,6 @@ use Illuminate\Support\Str;
 class ReportController extends Controller
 {
     // Diccionarios de traducción estáticos
-    private $reasonsDict = [
-        'LUNCH' => 'Comida',
-        'BATHROOM' => 'Baño',
-        'ERRAND' => 'Mandado',
-        'PACKAGING' => 'Empaque',
-        'GENERAL' => 'General / Otros'
-    ];
-
     private $statusDict = [
         'ONLINE' => 'DISPONIBLE',
         'BREAK' => 'PAUSA',
@@ -62,8 +54,10 @@ class ReportController extends Controller
         $isSingleDay = $start->isSameDay($end);
 
         // --- MÉTRICAS GLOBALES ---
-        $totalServed = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->count();
-        $totalAbandoned = SalesQueue::whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->count();
+        $totalServed = SalesQueue::whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED')->count();
+        $totalAbandoned = SalesQueue::whereBetween('queued_at', [$start, $end])->where(function ($q) {
+            $q->withStatusCode('ABANDONED')->orWhere(fn ($q2) => $q2->withStatusCode('CANCELED'));
+        })->count();
         $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])->whereNotNull('started_serving_at')->whereNotNull('completed_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
         $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])->whereNotNull('queued_at')->whereNotNull('started_serving_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')->value('avg_time');
 
@@ -73,7 +67,7 @@ class ReportController extends Controller
             $sales = SalesQueue::with('ratings')
                 ->whereHas('assignedShift', function ($query) use ($employee) {
                     $query->where('employee_id', $employee->id);
-                })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->get();
+                })->whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED')->get();
 
             $servedCount = $sales->count();
             $avgEmpServiceSeconds = $servedCount > 0 ? ($sales->reduce(function ($carry, $sale) {
@@ -97,14 +91,14 @@ class ReportController extends Controller
         $chartTitle = $isSingleDay ? 'Flujo de Atención por Hora' : 'Flujo de Atención por Día';
         $chartData = ['labels' => [], 'data' => []];
         if ($isSingleDay) {
-            $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')->groupBy('hour')->pluck('count', 'hour')->toArray();
+            $salesByHour = SalesQueue::whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED')->selectRaw('HOUR(completed_at) as hour, COUNT(*) as count')->groupBy('hour')->pluck('count', 'hour')->toArray();
             // Límite ajustado de 9 a 19 (7 PM)
             for ($i = 9; $i <= 19; $i++) {
                 $chartData['labels'][] = str_pad($i, 2, '0', STR_PAD_LEFT) . ':00';
                 $chartData['data'][] = $salesByHour[$i] ?? 0;
             }
         } else {
-            $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->selectRaw('DATE(completed_at) as date, COUNT(*) as count')->groupBy('date')->pluck('count', 'date')->toArray();
+            $salesByDate = SalesQueue::whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED')->selectRaw('DATE(completed_at) as date, COUNT(*) as count')->groupBy('date')->pluck('count', 'date')->toArray();
             $currentDate = $start->copy();
             while ($currentDate->lte($end)) {
                 $chartData['labels'][] = $currentDate->format('d/m');
@@ -120,7 +114,7 @@ class ReportController extends Controller
 
         $clientsQuery = SalesQueue::with(['assignedShift.employee', 'ratings', 'customer'])
             ->whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED');
+            ->withStatusCode('COMPLETED');
 
         // Filtro de búsqueda general (Turno, Nombre o Número de Cliente)
         if (!empty($searchClient)) {
@@ -135,7 +129,7 @@ class ReportController extends Controller
 
         // Filtro por Tipo de Cliente (ej. VIP)
         if (!empty($filterType)) {
-            $clientsQuery->where('client_type', $filterType);
+            $clientsQuery->byClientType($filterType);
         }
 
         // Filtro por Vendedor
@@ -145,7 +139,7 @@ class ReportController extends Controller
             });
         }
 
-        $detailedClients = $clientsQuery->orderBy('completed_at', 'desc')
+        $detailedClients = $clientsQuery->with('catalogClientType')->orderBy('completed_at', 'desc')
             ->paginate(15, ['*'], 'clients_page')
             ->appends(request()->query());
 
@@ -155,7 +149,9 @@ class ReportController extends Controller
             return $client;
         });
 
-        $detailedAbandoned = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->paginate(15, ['*'], 'abandoned_page')->appends(request()->query());
+        $detailedAbandoned = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->where(function ($q) {
+            $q->withStatusCode('ABANDONED')->orWhere(fn ($q2) => $q2->withStatusCode('CANCELED'));
+        })->orderBy('queued_at', 'desc')->paginate(15, ['*'], 'abandoned_page')->appends(request()->query());
 
         // --- NUEVAS PESTAÑAS: DIRECTORIOS HISTÓRICOS (CRM) ---
         $customersDirectory = null;
@@ -172,7 +168,7 @@ class ReportController extends Controller
             }
 
             // Paginamos a los clientes (porque son más de 5000)
-            $customersDirectory = $q->paginate(15, ['*'], 'cd_page')->appends(request()->query());
+            $customersDirectory = $q->with('catalogClientType')->paginate(15, ['*'], 'cd_page')->appends(request()->query());
 
             // Para cada cliente paginado, traemos TODO su historial de calificaciones (Dadas por VENDEDORES)
             $customersDirectory->getCollection()->transform(function ($customer) {
@@ -209,7 +205,7 @@ class ReportController extends Controller
         if ($selectedEmployeeId && $activeTab === 'performance') {
             $empSalesQuery = SalesQueue::with('ratings')->whereHas('assignedShift', function ($q) use ($selectedEmployeeId) {
                 $q->where('employee_id', $selectedEmployeeId);
-            })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED');
+            })->whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED');
 
             $empServed = (clone $empSalesQuery)->count();
             $empAvgSeconds = (clone $empSalesQuery)->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
@@ -259,6 +255,7 @@ class ReportController extends Controller
             'detailedClients' => $detailedClients,
             'detailedAbandoned' => $detailedAbandoned,
             'employeesList' => $employeesList,
+            'clientTypes' => \App\Models\ClientType::active()->orderBy('sort_order')->get(),
             'selectedEmployeeId' => $selectedEmployeeId,
             'empData' => $empData,
 
@@ -395,7 +392,7 @@ class ReportController extends Controller
         if (in_array('kpis', $sections)) {
             $salesQuery = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
                 ->whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED');
+                ->withStatusCode('COMPLETED');
 
             $served     = (clone $salesQuery)->count();
             $avgSeconds = (clone $salesQuery)
@@ -440,15 +437,18 @@ class ReportController extends Controller
             $data = SalesQueue::with($includeRatings ? ['ratings', 'customer'] : ['customer'])
                 ->whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
                 ->whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED')
+                ->withStatusCode('COMPLETED')
                 ->orderBy('completed_at', 'desc')
                 ->get();
 
             foreach ($data as $sale) {
+                $sale->loadMissing('catalogClientType');
                 $row = [
                     'turn'       => $sale->turn_number,
                     'client'     => $sale->client_name,
-                    'type'       => $sale->client_type,
+                    'type'       => $sale->resolveClientTypeLabel(),
+                    'type_code'  => $sale->resolveClientTypeCode(),
+                    'use_premium_alert' => $sale->catalogClientType?->usesPremiumAlert() ?? false,
                     'no_cliente' => $sale->customer->customer_number ?? 'N/A',
                     'wait'       => $this->formatSeconds($sale->queued_at && $sale->started_serving_at
                         ? Carbon::parse($sale->queued_at)->diffInSeconds(Carbon::parse($sale->started_serving_at))
@@ -479,7 +479,7 @@ class ReportController extends Controller
                 ->whereHas('salesQueue', function ($q) use ($empId, $start, $end) {
                     $q->whereHas('assignedShift', fn ($s) => $s->where('employee_id', $empId))
                       ->whereBetween('completed_at', [$start, $end])
-                      ->where('status', 'COMPLETED');
+                      ->withStatusCode('COMPLETED');
                 })
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -526,7 +526,7 @@ class ReportController extends Controller
             
             $query = SalesQueue::with(['assignedShift.employee', 'customer'])
                 ->whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED');
+                ->withStatusCode('COMPLETED');
 
             // Aplicamos los mismos filtros de la vista
             if (!empty($searchClient)) {
@@ -540,7 +540,7 @@ class ReportController extends Controller
             }
 
             if (!empty($filterType)) {
-                $query->where('client_type', $filterType);
+                $query->byClientType($filterType);
             }
 
             if (!empty($filterSeller)) {
@@ -560,7 +560,7 @@ class ReportController extends Controller
                     $d->turn_number, 
                     $d->customer->customer_number ?? 'N/A', 
                     $d->client_name, 
-                    $d->client_type, 
+                    $d->resolveClientTypeName(), 
                     $d->assignedShift->employee->full_name ?? 'N/A', 
                     $wait, 
                     $serve, 
@@ -570,17 +570,19 @@ class ReportController extends Controller
             }
         } elseif ($type === 'abandoned') {
             $headers = ['Turno', 'Cliente', 'Tipo', 'Fecha/Hora', 'Motivo de Abandono'];
-            $data = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->whereIn('status', ['ABANDONED', 'CANCELED'])->orderBy('queued_at', 'desc')->get();
+            $data = SalesQueue::with('abandonmentReason')->whereBetween('queued_at', [$start, $end])->where(function ($q) {
+                $q->withStatusCode('ABANDONED')->orWhere(fn ($q2) => $q2->withStatusCode('CANCELED'));
+            })->orderBy('queued_at', 'desc')->get();
             foreach ($data as $d) {
                 $motivo = !empty($d->custom_abandonment_reason) ? $d->custom_abandonment_reason : ($d->abandonment_reason_id ? $d->abandonmentReason->reason : 'Inactividad');
-                $rows[] = [$d->turn_number, $d->client_name, $d->client_type, Carbon::parse($d->queued_at)->format('d/m/Y H:i:s'), $motivo];
+                $rows[] = [$d->turn_number, $d->client_name, $d->resolveClientTypeName(), Carbon::parse($d->queued_at)->format('d/m/Y H:i:s'), $motivo];
             }
         } elseif ($type === 'employee' && $empId) {
             $employee = Employee::find($empId);
             $headers = ['Turno', 'Cliente', 'Tipo Cliente', 'Tiempo Atención', 'Estado', 'Fecha/Hora'];
             $data = SalesQueue::whereHas('assignedShift', function ($q) use ($empId) {
                 $q->where('employee_id', $empId);
-            })->whereBetween('completed_at', [$start, $end])->where('status', 'COMPLETED')->orderBy('completed_at', 'desc')->get();
+            })->whereBetween('completed_at', [$start, $end])->withStatusCode('COMPLETED')->orderBy('completed_at', 'desc')->get();
 
             $servedCount = $data->count();
             $avgEmpServiceSeconds = $servedCount > 0 ? ($data->reduce(function ($carry, $sale) {
@@ -594,7 +596,7 @@ class ReportController extends Controller
 
             foreach ($data as $d) {
                 $serve = $this->formatSeconds(Carbon::parse($d->started_serving_at)->diffInSeconds(Carbon::parse($d->completed_at)));
-                $rows[] = [$d->turn_number, $d->client_name, $d->client_type, $serve, str_ends_with($d->turn_number, '-R') ? 'RE-ATENDIDO' : 'NORMAL', Carbon::parse($d->completed_at)->format('d/m/Y H:i:s')];
+                $rows[] = [$d->turn_number, $d->client_name, $d->resolveClientTypeName(), $serve, str_ends_with($d->turn_number, '-R') ? 'RE-ATENDIDO' : 'NORMAL', Carbon::parse($d->completed_at)->format('d/m/Y H:i:s')];
             }
         }
 
@@ -623,7 +625,7 @@ class ReportController extends Controller
         $shifts = DailyShift::where('employee_id', $employeeId)
             ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->with(['statusLogs' => function ($q) {
-                $q->orderBy('changed_at', 'asc');
+                $q->with('catalogBreakReason')->orderBy('changed_at', 'asc');
             }])
             ->get();
 
@@ -636,7 +638,7 @@ class ReportController extends Controller
         $shiftIds = $shifts->pluck('id')->toArray();
         if (! empty($shiftIds)) {
             $servingSecondsByShift = \App\Models\SalesQueue::whereIn('assigned_shift_id', $shiftIds)
-                ->where('status', 'COMPLETED')
+                ->withStatusCode('COMPLETED')
                 ->whereNotNull('started_serving_at')
                 ->whereNotNull('completed_at')
                 ->groupBy('assigned_shift_id')
@@ -663,7 +665,7 @@ class ReportController extends Controller
                 if ($log->new_status === 'BREAK' || $log->previous_status === 'BREAK') {
                     $statusLabel = $transStatus;
                     if ($log->new_status === 'BREAK') {
-                        $reasonTrans = $this->reasonsDict[$log->reason] ?? ($log->reason ?? 'General');
+                        $reasonTrans = $this->breakReasonLabels()[$log->resolveReasonCode()] ?? $log->resolveReasonLabel();
                         $statusLabel .= ' (' . $reasonTrans . ')';
                     }
 
@@ -680,7 +682,7 @@ class ReportController extends Controller
 
                 if ($log->new_status === 'BREAK') {
                     $breakStart = $logTime;
-                    $currentReason = $log->reason ?? 'GENERAL';
+                    $currentReason = $log->resolveReasonCode() ?? 'GENERAL';
                     // Si estaba online, sumamos ese bloque al tiempo disponible
                     if ($onlineStart) {
                         $dailySeconds[$dateStr]['AVAILABLE'] += $onlineStart->diffInSeconds($logTime);
@@ -739,7 +741,7 @@ class ReportController extends Controller
                     // Colocamos "Tiempo Disponible" al inicio del arreglo visual
                     $formattedDailyBreaks[$date] = ['Tiempo Disponible' => $this->formatSeconds($secs)] + $formattedDailyBreaks[$date];
                 } else {
-                    $reasonName = $this->reasonsDict[$reason] ?? $reason;
+                    $reasonName = $this->breakReasonLabels()[$reason] ?? $reason;
                     $formattedDailyBreaks[$date][$reasonName] = $this->formatSeconds($secs);
                 }
             }
@@ -756,7 +758,7 @@ class ReportController extends Controller
         }
         $formattedBreakTotals = ['Tiempo Disponible' => $this->formatSeconds($totalsByReason['AVAILABLE'])];
         foreach (['LUNCH', 'BATHROOM', 'ERRAND', 'PACKAGING', 'GENERAL'] as $r) {
-            $formattedBreakTotals[$this->reasonsDict[$r] ?? $r] = $this->formatSeconds($totalsByReason[$r]);
+            $formattedBreakTotals[$this->breakReasonLabels()[$r] ?? $r] = $this->formatSeconds($totalsByReason[$r]);
         }
 
         return [
@@ -773,9 +775,10 @@ class ReportController extends Controller
         $sellers = DailyShift::with([
             'employee',
             'servedCustomers' => function ($q) {
-                $q->where('status', 'SERVING');
+                $q->serving();
             }
         ])
+            ->with(['catalogBreakReason'])
             ->whereDate('work_date', today())
             ->get()
             ->map(function ($shift) {
@@ -792,13 +795,13 @@ class ReportController extends Controller
                 } elseif ($shift->current_status === 'BREAK' && $shift->last_status_change_at) {
                     $state = 'BREAK';
                     $stateStartedAt = Carbon::parse($shift->last_status_change_at)->timestamp * 1000;
-                    $breakReason = $this->reasonsDict[$shift->break_reason] ?? ($shift->break_reason ?? 'General');
+                    $breakReason = $shift->resolveBreakReasonLabel();
                 } elseif ($shift->current_status === 'ONLINE' && $shift->last_status_change_at) {
                     $state = 'ONLINE';
 
                     // Buscar a qué hora terminó su última venta de hoy
                     $lastSale = \App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
-                        ->where('status', 'COMPLETED')
+                        ->withStatusCode('COMPLETED')
                         ->latest('completed_at')
                         ->first();
 
@@ -829,6 +832,11 @@ class ReportController extends Controller
             });
 
         return response()->json(['sellers' => $sellers]);
+    }
+
+    private function breakReasonLabels(): array
+    {
+        return BreakReason::labelsByCode();
     }
 
     private function formatSeconds($totalSeconds)

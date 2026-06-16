@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Role;
 use Laravel\Sanctum\HasApiTokens; // <-- Importar el trait de Sanctum
 
 class User extends Authenticatable
@@ -22,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'role_id',
         'is_active',
         'can_manage_rezagados',
         'can_manage_shifts',
@@ -56,44 +59,63 @@ class User extends Authenticatable
     | Métodos para verificar roles de manera limpia en controladores y vistas.
     */
 
+    public function catalogRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    public function resolveRoleName(): ?string
+    {
+        $this->loadMissing('catalogRole');
+
+        return $this->catalogRole?->name ?? ($this->attributes['role'] ?? null);
+    }
+
+    public function hasRole(string ...$roles): bool
+    {
+        $current = $this->resolveRoleName();
+
+        return $current !== null && in_array($current, $roles, true);
+    }
+
     public function isAdmin(): bool
     {
-        return $this->role === 'ADMIN';
+        return $this->resolveRoleName() === 'ADMIN';
     }
 
     public function isManager(): bool
     {
-        return $this->role === 'MANAGER';
+        return $this->resolveRoleName() === 'MANAGER';
     }
 
     public function isChecker(): bool
     {
-        return $this->role === 'CHECKER';
+        return $this->resolveRoleName() === 'CHECKER';
     }
 
     public function isSeller(): bool
     {
-        return $this->role === 'SELLER';
+        return $this->resolveRoleName() === 'SELLER';
     }
 
     public function isAuxiliar(): bool
     {
-        return $this->role === 'AUXILIAR';
+        return $this->resolveRoleName() === 'AUXILIAR';
     }
 
     public function isBellaroma(): bool
     {
-        return $this->role === 'BELLAROMA';
+        return $this->resolveRoleName() === 'BELLAROMA';
     }
 
     public function isCallCenter(): bool
     {
-        return $this->role === 'CALLCENTER';
+        return $this->resolveRoleName() === 'CALLCENTER';
     }
 
     public function isCedis(): bool
     {
-        return $this->role === 'CEDIS';
+        return $this->resolveRoleName() === 'CEDIS';
     }
 
     /**
@@ -118,5 +140,13 @@ class User extends Authenticatable
     public function canManageShifts(): bool
     {
         return $this->can_manage_shifts;
+    }
+
+    public function setRoleAttribute(?string $value): void
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn($this->getTable(), 'role')) {
+            $this->attributes['role'] = $value;
+        }
+        $this->attributes['role_id'] = $value ? Role::idFromName($value) : null;
     }
 }

@@ -33,7 +33,7 @@
                     <tr class="hover:bg-gray-800/30 transition-colors">
                         <td class="p-4">
                             <span class="font-mono text-gray-400 block">{{ $customer->customer_number ?? 'S/N' }}</span>
-                            @if($customer->client_type === 'VIP') <span class="bg-yellow-500/20 text-yellow-400 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/30 uppercase font-bold mt-1 inline-block">VIP</span> @endif
+                            @if($customer->catalogClientType?->usesPremiumAlert()) <span class="bg-yellow-500/20 text-yellow-400 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/30 uppercase font-bold mt-1 inline-block">{{ $customer->catalogClientType->displayLabel() }}</span> @endif
                         </td>
                         <td class="p-4 font-bold text-white">{{ $customer->name }}</td>
                         <td class="p-4 text-center">

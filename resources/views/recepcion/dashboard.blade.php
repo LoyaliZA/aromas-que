@@ -79,9 +79,9 @@
                                 <div>
                                     <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Área Origen *</label>
                                     <select name="department" required class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-white text-lg focus:ring-sky-500 shadow-inner">
-                                        <option value="AROMAS">Aromas</option>
-                                        <option value="BELLAROMA">Bellaroma</option>
-                                        <option value="CALLCENTER">Call Center</option>
+                                        @foreach($departments as $dept)
+                                            <option value="{{ $dept->name }}">{{ $dept->name }}</option>
+                                        @endforeach
                                     </select>
                                 </div>
                             </div>
@@ -224,6 +224,7 @@
     {{-- Inicialización de Alpine con el nuevo path y configuración de rutas --}}
     <div x-data="deliveryApp({ 
             queueCount: {{ $peopleInQueue }}, 
+            otherReasonId: {{ $otherAbandonmentReason?->id ?? 'null' }},
             routes: { 
                 dashboard: '{{ route('recepcion.dashboard') }}', 
                 queueList: '{{ route('recepcion.queue.list') }}' 
@@ -341,9 +342,9 @@
                 <div class="contents">
                     <select id="deptFilter" @change="fetchData(search)" class="bg-black/20 border border-aromas-tertiary/30 text-white rounded-lg px-4 py-3 focus:border-aromas-highlight cursor-pointer">
                         <option value="ALL">Todos los Deptos</option>
-                        <option value="BELLAROMA">Bellaroma</option>
-                        <option value="CALLCENTER">Call Center</option>
-                        <option value="AROMAS">Aromas</option>
+                        @foreach($departments as $dept)
+                            <option value="{{ $dept->name }}">{{ $dept->name }}</option>
+                        @endforeach
                     </select>
                     <input type="hidden" id="statusFilter" value="ALL">
                 </div>
@@ -746,7 +747,7 @@
                                                 :class="client.service_type === 'SALES' ? 'bg-blue-500/20 text-blue-300' : 'bg-green-500/20 text-green-300'"
                                                 x-text="client.service_type === 'SALES' ? 'Ventas' : 'Caja'"></span>
 
-                                            <span x-show="client.customer && client.customer.client_type === 'VIP'" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-aromas-highlight text-aromas-main">VIP</span>
+                                            <span x-show="client.use_premium_alert" class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-aromas-highlight text-aromas-main" x-text="client.client_type_label || 'Premium'"></span>
                                         </div>
                                     </div>
                                 </div>
@@ -775,12 +776,11 @@
 
                     <select x-model="abandonReasonId" class="w-full bg-black/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 mb-6">
                         <option value="" disabled selected>Selecciona un motivo...</option>
-                        <option value="1">Tiempo de espera muy largo</option>
-                        <option value="2">Solo venía a preguntar / ver</option>
-                        <option value="3">Emergencia personal / Prisa</option>
-                        <option value="4">Otro motivo</option>
+                        @foreach($abandonmentReasons as $reason)
+                            <option value="{{ $reason->id }}">{{ $reason->reason }}</option>
+                        @endforeach
                     </select>
-                    <div x-show="abandonReasonId == '4'" x-transition class="mb-6">
+                    <div x-show="otherReasonId && abandonReasonId == otherReasonId" x-transition class="mb-6">
                         <input type="text" x-model="customAbandonReason" placeholder="Escribe el motivo específico..." class="w-full bg-black/50 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
                     </div>
 
@@ -885,9 +885,9 @@
                                     <div>
                                         <span class="text-xs text-gray-400 block mb-1">Departamento Origen:</span>
                                         <select name="department" x-model="pickupData.department" required class="w-full bg-black/40 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-sky-500 shadow-inner text-sm">
-                                            <option value="AROMAS">Aromas</option>
-                                            <option value="BELLAROMA">Bellaroma</option>
-                                            <option value="CALLCENTER">Call Center</option>
+                                            @foreach($departments as $dept)
+                                                <option value="{{ $dept->name }}">{{ $dept->name }}</option>
+                                            @endforeach
                                         </select>
                                     </div>
                                     <div><span class="text-xs text-gray-400 block mb-1">Piezas Esperadas:</span> <span class="text-white font-bold text-lg" x-text="pickupData.pieces"></span></div>

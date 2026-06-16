@@ -10,7 +10,7 @@ class CallCenterController extends Controller
 {
     public function index()
     {
-        $remissions = Pickup::where('department', 'CALLCENTER')
+        $remissions = Pickup::byDepartment('CALLCENTER')
             ->whereHas('currentStatus', function ($query) {
                 // Ocultamos los entregados y cancelados para limpiar la vista
                 $query->whereNotIn('code', ['DELIVERED', 'CANCELLED']);

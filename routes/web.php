@@ -33,7 +33,7 @@ use App\Http\Controllers\Logistica\CedisController;
 Route::get('/', function () {
     // Si el usuario ya inició sesión, lo redirigimos a su panel según su rol
     if (Auth::check()) {
-        $role = Auth::user()->role;
+        $role = Auth::user()->resolveRoleName();
 
         if ($role === 'ADMIN') return redirect()->route('admin.dashboard');
         if ($role === 'MANAGER') return redirect()->route('gerencia.dashboard');

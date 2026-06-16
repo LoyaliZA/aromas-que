@@ -47,7 +47,7 @@ class CreateRemissionForm extends Component
     {
         $this->origin = strtoupper($origin);
         $this->capture_date = now()->format('Y-m-d\TH:i');
-        $this->sellersList = Employee::where('department', $this->origin)->get();
+        $this->sellersList = Employee::byDepartment($this->origin)->get();
     }
 
     public function updatedClientSearch($value)

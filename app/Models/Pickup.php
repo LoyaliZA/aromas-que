@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use App\Models\PickupStatus;
+use App\Models\Department;
 
 class Pickup extends Model
 {
@@ -17,6 +18,7 @@ class Pickup extends Model
         'client_ref_id',
         'client_name',
         'department',
+        'department_id',
         'amount',         
         'balance',        
         'seller_id',      
@@ -87,7 +89,14 @@ class Pickup extends Model
     public function scopeByDepartment(Builder $query, $department = null): void
     {
         if ($department && $department !== 'ALL') {
-            $query->where('department', $department);
+            $query->where(function ($q) use ($department) {
+                $q->whereHas('catalogDepartment', function ($q2) use ($department) {
+                    $q2->where('name', $department);
+                });
+                if (\Illuminate\Support\Facades\Schema::hasColumn('pickups', 'department')) {
+                    $q->orWhere('department', $department);
+                }
+            });
         }
     }
     public function scopeVisibleForChecker(Builder $query): void
@@ -144,6 +153,18 @@ class Pickup extends Model
         return $this->hasOne(PickupLogistic::class);
     }
 
+    public function catalogDepartment()
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function getDepartmentAttribute(): ?string
+    {
+        $this->loadMissing('catalogDepartment');
+
+        return $this->catalogDepartment?->name ?? ($this->attributes['department'] ?? null);
+    }
+
     public function timelines(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PickupTimeline::class)->orderBy('created_at', 'desc');
@@ -179,5 +200,13 @@ class Pickup extends Model
     public function complementaryPickups()
     {
         return $this->hasMany(Pickup::class, 'parent_pickup_id');
+    }
+
+    public function setDepartmentAttribute(?string $value): void
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn($this->getTable(), 'department')) {
+            $this->attributes['department'] = $value;
+        }
+        $this->attributes['department_id'] = $value ? Department::idFromName($value) : null;
     }
 }

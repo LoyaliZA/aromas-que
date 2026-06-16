@@ -13,7 +13,7 @@ class BellaromaController extends Controller
      */
     public function index()
     {
-        $remissions = Pickup::where('department', 'BELLAROMA')
+        $remissions = Pickup::byDepartment('BELLAROMA')
             ->whereHas('currentStatus', function ($query) {
                 // Ocultamos los entregados y cancelados del panel de operación diaria
                 $query->whereNotIn('code', ['DELIVERED', 'CANCELLED']);
@@ -30,7 +30,7 @@ class BellaromaController extends Controller
      */
     public function history(Request $request)
     {
-        $query = Pickup::where('department', 'BELLAROMA')
+        $query = Pickup::byDepartment('BELLAROMA')
             ->with(['logistic', 'currentStatus', 'seller']);
             
         if ($request->filled('search')) {

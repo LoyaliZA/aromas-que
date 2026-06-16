@@ -29,7 +29,7 @@
 <body class="bg-aromas-main text-white h-screen w-screen overflow-hidden flex font-sans relative">
 
     {{-- AUDIOS (Normal y VIP) --}}
-    <audio id="chimeSound" src="/audio/timbre.mp3" preload="auto"></audio>
+    <audio id="chimeSound" src="/audio/bell.mp3" preload="auto"></audio>
     <audio id="vipChimeSound" src="/audio/bell_vip.mp3" preload="auto"></audio>
 
     <div id="alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 opacity-0 pointer-events-none transition-opacity duration-300 backdrop-blur-sm">
@@ -105,6 +105,33 @@
             const waitTimeEl = document.getElementById('wait-time');
             const chimeSound = document.getElementById('chimeSound');
             const vipChimeSound = document.getElementById('vipChimeSound');
+
+            function stopAlertAudio() {
+                [chimeSound, vipChimeSound].forEach((audio) => {
+                    if (!audio) return;
+                    audio.onended = null;
+                    audio.pause();
+                    audio.currentTime = 0;
+                });
+            }
+
+            function unlockAlertAudio(audio) {
+                if (!audio) return;
+                audio.play()
+                    .then(() => {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    })
+                    .catch(() => {});
+            }
+
+            function unlockAllAlertAudio() {
+                if (isAlertActive) return;
+                [chimeSound, vipChimeSound].forEach((audio) => unlockAlertAudio(audio));
+            }
+
+            document.body.addEventListener('click', unlockAllAlertAudio, { once: true });
+            document.body.addEventListener('keydown', unlockAllAlertAudio, { once: true });
             
             // --- NUEVA LÓGICA ANTI-SALTOS DE TV ---
             let announcedIds = new Set();
@@ -311,6 +338,12 @@
                 });
             }
 
+            function getCallMode(ticket) {
+                const isPremium = ticket.use_premium_alert === true;
+                const isDiscreet = ticket.hide_on_public_tv === true && !isPremium;
+                return { isPremium, isDiscreet, useNameOnlyCall: isPremium || isDiscreet };
+            }
+
             function renderServing(servingArray) {
                 if (servingArray.length === 0) {
                     servingList.innerHTML = '<div class="text-center text-aromas-tertiary mt-10 italic">No hay clientes siendo atendidos.</div>';
@@ -322,21 +355,27 @@
                 servingArray.forEach((ticket, index) => {
                     const isNewest = index === 0;
                     const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Vendedor');
-                    
-                    const isVIP = ticket.client_type === 'VIP';
-                    const ticketNumberDisplay = isVIP ? 'AVISO' : (ticket.turn_number ? ticket.turn_number : 'S/N');
-                    const textNumberSize = isVIP ? 'text-4xl mt-2 mb-4 text-yellow-500' : 'text-6xl mb-2 text-white';
+                    const { isPremium, isDiscreet, useNameOnlyCall } = getCallMode(ticket);
+
+                    const sectionLabel = useNameOnlyCall ? 'Atención' : 'Turno Actual';
+                    const ticketNumberDisplay = isPremium ? 'AVISO' : (useNameOnlyCall ? '' : (ticket.turn_number ? ticket.turn_number : 'S/N'));
+                    const textNumberSize = isPremium ? 'text-4xl mt-2 mb-4 text-yellow-500' : 'text-6xl mb-2 text-white';
+                    const destAccent = ticket.service_type === 'CASHIER' ? 'text-green-500' : (isPremium ? 'text-yellow-500' : 'text-aromas-highlight');
                     
                     if (isNewest) {
+                        const numberBlock = ticketNumberDisplay
+                            ? `<div class="font-black tracking-tighter ${textNumberSize}">${ticketNumberDisplay}</div>`
+                            : '';
+
                         html += `
-                            <div class="ticket-enter bg-aromas-secondary border-2 ${isVIP ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-aromas-highlight'} rounded-xl p-4 flex flex-col justify-center items-center shadow-2xl pulse-ticket mb-4">
-                                <span class="text-sm font-bold uppercase tracking-widest ${isVIP ? 'text-yellow-500' : 'text-aromas-highlight'} mb-1">${isVIP ? 'Atención' : 'Turno Actual'}</span>
-                                <div class="font-black tracking-tighter ${textNumberSize}">${ticketNumberDisplay}</div>
-                                <div class="text-lg font-bold text-gray-300 w-full text-center mb-4 truncate" title="${ticket.client_name}">${ticket.client_name}</div>
+                            <div class="ticket-enter bg-aromas-secondary border-2 ${isPremium ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'border-aromas-highlight'} rounded-xl p-4 flex flex-col justify-center items-center shadow-2xl pulse-ticket mb-4">
+                                <span class="text-sm font-bold uppercase tracking-widest ${isPremium ? 'text-yellow-500' : 'text-aromas-highlight'} mb-1">${sectionLabel}</span>
+                                ${numberBlock}
+                                <div class="text-lg font-bold text-gray-300 w-full text-center mb-4 truncate ${useNameOnlyCall && !isPremium ? 'text-2xl mt-2' : ''}" title="${ticket.client_name}">${ticket.client_name}</div>
                                 
                                 <div class="w-full bg-aromas-main rounded-lg p-3 text-center border border-aromas-tertiary/30">
                                     <span class="block text-[10px] uppercase text-aromas-tertiary font-bold tracking-wider mb-1">${ticket.service_type === 'CASHIER' ? 'Pasar a:' : 'Vendedor asignado:'}</span>
-                                    <span class="block text-xl font-black ${ticket.service_type === 'CASHIER' ? 'text-green-500' : (isVIP ? 'text-yellow-500' : 'text-aromas-highlight')} uppercase tracking-wider truncate">
+                                    <span class="block text-xl font-black ${destAccent} uppercase tracking-wider truncate">
                                         ${destName}
                                     </span>
                                 </div>
@@ -345,13 +384,16 @@
                         `;
                     } else {
                         if (index <= 5) { 
-                            const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : (isVIP ? 'text-yellow-500' : 'text-aromas-highlight');
+                            const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : (isPremium ? 'text-yellow-500' : 'text-aromas-highlight');
                             const labelText = ticket.service_type === 'CASHIER' ? 'Caja' : 'Vendedor';
+                            const previousNumberBlock = ticketNumberDisplay
+                                ? `<div class="text-lg font-bold ${isPremium ? 'text-yellow-500' : 'text-white'}">${ticketNumberDisplay}</div>`
+                                : '';
                             html += `
                                 <div class="bg-aromas-main border border-aromas-tertiary/20 rounded-lg p-3 flex justify-between items-center mb-2">
                                     <div class="overflow-hidden pr-2">
-                                        <div class="text-lg font-bold ${isVIP ? 'text-yellow-500' : 'text-white'}">${ticketNumberDisplay}</div>
-                                        <div class="text-[11px] text-gray-400 truncate w-24" title="${ticket.client_name}">${ticket.client_name}</div>
+                                        ${previousNumberBlock}
+                                        <div class="text-[11px] text-gray-400 truncate w-24 ${isDiscreet ? 'text-sm text-white font-bold' : ''}" title="${ticket.client_name}">${ticket.client_name}</div>
                                     </div>
                                     <div class="text-right flex flex-col items-end min-w-[80px]">
                                         <span class="text-[9px] text-aromas-tertiary uppercase font-bold">${labelText}:</span>
@@ -398,23 +440,35 @@
                 const destName = ticket.service_type === 'CASHIER' ? 'Caja Principal' : (ticket.assigned_shift ? ticket.assigned_shift.employee.full_name : 'Un vendedor');
                 const destLabel = ticket.service_type === 'CASHIER' ? 'Pase a:' : 'Vendedor asignado:';
                 const destColor = ticket.service_type === 'CASHIER' ? 'text-green-500' : 'text-aromas-highlight';
-                
-                const isVIP = ticket.client_type === 'VIP';
+                const { isPremium, isDiscreet, useNameOnlyCall } = getCallMode(ticket);
 
                 pauseCarrousel();
+                stopAlertAudio();
 
                 const titleEl = document.getElementById('modal-title');
                 const numberEl = document.getElementById('modal-turn-number');
                 const nameEl = document.getElementById('modal-client-name');
                 const destElement = document.getElementById('modal-dest-name');
-                
-                if (isVIP) {
-                    titleEl.innerText = "AVISO DIRECTO";
-                    numberEl.style.display = 'none'; 
-                    nameEl.style.fontSize = '4.5rem'; 
-                    destElement.className = "block text-6xl font-black uppercase text-yellow-500"; 
+
+                titleEl.className = isPremium
+                    ? 'text-4xl font-bold text-yellow-500 uppercase tracking-widest mb-4'
+                    : 'text-4xl font-bold text-aromas-highlight uppercase tracking-widest mb-4';
+                alertModalContent.className = isPremium
+                    ? 'bg-aromas-secondary border-4 border-yellow-500 rounded-3xl p-16 shadow-[0_0_100px_rgba(234,179,8,0.4)] flex flex-col items-center justify-center text-center transform scale-90 transition-transform duration-300'
+                    : 'bg-aromas-secondary border-4 border-aromas-highlight rounded-3xl p-16 shadow-[0_0_100px_rgba(253,201,116,0.4)] flex flex-col items-center justify-center text-center transform scale-90 transition-transform duration-300';
+
+                if (isPremium) {
+                    titleEl.innerText = 'AVISO DIRECTO';
+                    numberEl.style.display = 'none';
+                    nameEl.style.fontSize = '4.5rem';
+                    destElement.className = 'block text-6xl font-black uppercase text-yellow-500';
+                } else if (isDiscreet) {
+                    titleEl.innerText = 'FAVOR DE PASAR';
+                    numberEl.style.display = 'none';
+                    nameEl.style.fontSize = '4.5rem';
+                    destElement.className = `block text-6xl font-black uppercase ${destColor}`;
                 } else {
-                    titleEl.innerText = "NUEVO TURNO";
+                    titleEl.innerText = 'NUEVO TURNO';
                     numberEl.style.display = 'block';
                     numberEl.innerText = ticket.turn_number ? ticket.turn_number : '--';
                     nameEl.style.fontSize = '3rem';
@@ -423,72 +477,115 @@
 
                 nameEl.innerText = ticket.client_name;
                 document.getElementById('modal-dest-label').innerText = destLabel;
-                destElement.innerText = destName; 
+                destElement.innerText = destName;
 
                 alertModal.classList.remove('opacity-0', 'pointer-events-none');
                 alertModalContent.classList.remove('scale-90');
                 alertModalContent.classList.add('scale-100');
 
-                let audioPlayer = (isVIP && vipChimeSound) ? vipChimeSound : chimeSound;
-                
-                audioPlayer.onended = null;
-                audioPlayer.currentTime = 0; 
-                
-                window.speechSynthesis.cancel(); 
-
-                let script = "";
-                if (isVIP) {
+                let script = '';
+                if (useNameOnlyCall) {
                     script = `Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con ' + destName}.`;
                 } else {
                     let ticketNumber = ticket.turn_number ? ticket.turn_number : '0';
                     let cleanNumber = ticketNumber;
-                    if(ticketNumber.includes('-')) {
+                    if (ticketNumber.includes('-')) {
                         let parts = ticketNumber.split('-');
-                        cleanNumber = parseInt(parts[1], 10); 
+                        cleanNumber = parseInt(parts[1], 10);
                     }
                     script = `Turno número ${cleanNumber}. Cliente ${ticket.client_name}, favor de pasar ${ticket.service_type === 'CASHIER' ? 'a caja principal' : 'con el vendedor ' + destName}.`;
                 }
-                
-                const utterance = new SpeechSynthesisUtterance(script);
-                if (spanishVoice) utterance.voice = spanishVoice;
-                utterance.rate = 0.85; 
+
+                const postSpeechDelayMs = useNameOnlyCall ? 3000 : 1500;
+                const fallbackMs = Math.max(20000, script.length * 120 + 12000);
+                const audioPlayer = (isPremium && vipChimeSound) ? vipChimeSound : chimeSound;
 
                 let isModalClosed = false;
                 let fallbackTimer = null;
+                let speechStarted = false;
+                let speechFinished = false;
+                let speechRetryCount = 0;
+                const alertSessionId = Symbol('tv-alert');
 
                 const closeAlert = () => {
                     if (isModalClosed) return;
                     isModalClosed = true;
-                    clearTimeout(fallbackTimer); 
-                    
+                    clearTimeout(fallbackTimer);
+                    window.activeTvAlertSession = null;
+
                     alertModal.classList.add('opacity-0', 'pointer-events-none');
                     alertModalContent.classList.remove('scale-100');
                     alertModalContent.classList.add('scale-90');
-                    
+
                     setTimeout(() => {
-                        onCompleteCallback(); 
-                    }, 500); 
+                        onCompleteCallback();
+                    }, 500);
                 };
 
-                const startSpeech = () => {
-                    if ('speechSynthesis' in window) {
-                        window.speechSynthesis.speak(utterance);
+                const scheduleCloseAfterSpeech = () => {
+                    if (isModalClosed || window.activeTvAlertSession !== alertSessionId) return;
+                    speechFinished = true;
+                    clearTimeout(fallbackTimer);
+                    fallbackTimer = setTimeout(closeAlert, postSpeechDelayMs);
+                };
+
+                const startSpeechOnce = () => {
+                    if (speechStarted || isModalClosed || window.activeTvAlertSession !== alertSessionId) return;
+                    speechStarted = true;
+
+                    if (!('speechSynthesis' in window)) {
+                        fallbackTimer = setTimeout(closeAlert, 6000);
+                        return;
+                    }
+
+                    const speakNow = () => {
+                        if (isModalClosed || window.activeTvAlertSession !== alertSessionId) return;
+
+                        window.currentTvUtterance = new SpeechSynthesisUtterance(script);
+                        if (spanishVoice) {
+                            window.currentTvUtterance.voice = spanishVoice;
+                        } else {
+                            window.currentTvUtterance.lang = 'es-MX';
+                        }
+                        window.currentTvUtterance.rate = 0.85;
+
+                        window.currentTvUtterance.onend = () => scheduleCloseAfterSpeech();
+
+                        window.currentTvUtterance.onerror = (event) => {
+                            if (event.error === 'interrupted' || event.error === 'canceled') {
+                                if (!speechFinished && speechRetryCount < 1 && window.activeTvAlertSession === alertSessionId) {
+                                    speechRetryCount++;
+                                    speechStarted = false;
+                                    speakNow();
+                                }
+                                return;
+                            }
+                            if (!speechFinished) {
+                                scheduleCloseAfterSpeech();
+                            }
+                        };
+
+                        window.speechSynthesis.speak(window.currentTvUtterance);
+                    };
+
+                    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+                        window.speechSynthesis.cancel();
+                        setTimeout(speakNow, 100);
                     } else {
-                        setTimeout(closeAlert, 6000);
+                        speakNow();
                     }
                 };
 
-                audioPlayer.onended = startSpeech;
+                window.activeTvAlertSession = alertSessionId;
+                fallbackTimer = setTimeout(closeAlert, fallbackMs);
 
-                audioPlayer.play().catch(e => {
-                    console.log("Se requiere clic inicial para audio.");
-                    startSpeech();
-                });
-
-                utterance.onend = () => { setTimeout(closeAlert, 1000); };
-                utterance.onerror = () => { closeAlert(); };
-
-                fallbackTimer = setTimeout(closeAlert, 15000); 
+                if (audioPlayer) {
+                    audioPlayer.onended = startSpeechOnce;
+                    audioPlayer.currentTime = 0;
+                    audioPlayer.play().catch(() => startSpeechOnce());
+                } else {
+                    startSpeechOnce();
+                }
             }
 
             fetchQueueData(); 

@@ -2,45 +2,41 @@
 
 namespace App\Models;
 
+use App\Models\Traits\ResolvesCatalogValues;
+use App\Models\Traits\ResolvesClientTypeMetadata;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class SalesQueue extends Model
 {
-    use HasFactory;
+    use HasFactory, ResolvesCatalogValues, ResolvesClientTypeMetadata;
 
-    /**
-     * IMPORTANTE: La tabla no tiene created_at/updated_at estándar.
-     * Desactivamos los timestamps automáticos para evitar errores SQL.
-     */
     public $timestamps = false;
 
     protected $table = 'sales_queue';
 
     protected $fillable = [
-        'customer_id',            // <-- NUEVO: Relación con el cliente registrado
+        'customer_id',
         'client_name',
-        'client_type',
-        'has_disability',       // <-- NUEVO: Indica si el cliente tiene alguna discapacidad
-        'service_type',       // SALES o CASHIER
-        'turn_number',        // Número de turno asignado
-        'source',             // QR_MOBILE, MANUAL_KIOSK
-        'status',             // WAITING, SERVING, COMPLETED, ABANDONED
-        'abandonment_reason_id',  // <-- NUEVO: Motivo de abandono si aplica
-        'assigned_shift_id',  // El turno del vendedor que lo atiende
+        'client_type_id',
+        'has_disability',
+        'service_type_id',
+        'turn_number',
+        'source_id',
+        'status_id',
+        'abandonment_reason_id',
+        'assigned_shift_id',
         'queued_at',
         'started_serving_at',
         'completed_at',
         'last_extended_at',
         'extension_count',
-        'custom_abandonment_reason', // <-- NUEVO: Texto libre para motivo de abandono personalizado
+        'custom_abandonment_reason',
     ];
 
-    /**
-     * Casting de fechas para que Carbon las maneje automáticamente.
-     */
     protected function casts(): array
     {
         return [
@@ -51,57 +47,96 @@ class SalesQueue extends Model
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
-
     public function assignedShift(): BelongsTo
     {
         return $this->belongsTo(DailyShift::class, 'assigned_shift_id');
     }
 
-    /**
-     * Relación: Un turno en la fila pertenece a un cliente específico.
-     */
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
     }
 
-    /**
-     * Relación: Un turno puede tener asociado un motivo de abandono.
-     */
     public function abandonmentReason(): BelongsTo
     {
         return $this->belongsTo(AbandonmentReason::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes (Consultas Pre-fabricadas)
-    |--------------------------------------------------------------------------
-    */
+    public function catalogClientType(): BelongsTo
+    {
+        return $this->belongsTo(ClientType::class, 'client_type_id');
+    }
+
+    public function catalogServiceType(): BelongsTo
+    {
+        return $this->belongsTo(ServiceType::class, 'service_type_id');
+    }
+
+    public function catalogStatus(): BelongsTo
+    {
+        return $this->belongsTo(QueueStatus::class, 'status_id');
+    }
+
+    public function catalogSource(): BelongsTo
+    {
+        return $this->belongsTo(QueueSource::class, 'source_id');
+    }
+
+    public function resolveServiceTypeName(): ?string
+    {
+        $this->loadMissing('catalogServiceType');
+
+        return $this->catalogServiceType?->name ?? $this->legacyColumn('service_type');
+    }
+
+    public function resolveStatusCode(): ?string
+    {
+        $this->loadMissing('catalogStatus');
+
+        return $this->catalogStatus?->code ?? $this->legacyColumn('status');
+    }
+
+    public function resolveSourceCode(): ?string
+    {
+        $this->loadMissing('catalogSource');
+
+        return $this->catalogSource?->code ?? $this->legacyColumn('source');
+    }
+
+    public function scopeWithStatusCode(Builder $query, string $code): void
+    {
+        if (self::hasLegacyColumn('status')) {
+            $statusId = QueueStatus::idFromCode($code);
+            $query->where(function ($q) use ($code, $statusId) {
+                if ($statusId) {
+                    $q->where('status_id', $statusId);
+                }
+                $q->orWhere('status', $code);
+            });
+
+            return;
+        }
+
+        $query->whereHas('catalogStatus', fn ($q) => $q->where('code', $code));
+    }
 
     public function scopeWaiting(Builder $query): void
     {
-        $query->where('status', 'WAITING')
-            // 1. VIPs van primero (1)
-            // 2. Discapacidad va después (2)
-            // 3. Regulares van al final (3)
-            ->orderByRaw("CASE 
-                                WHEN client_type = 'VIP' THEN 1 
-                                WHEN has_disability = 1 THEN 2 
-                                ELSE 3 
-                            END")
-            // Dentro de cada grupo de prioridad, se respeta quién llegó primero
-            ->orderBy('queued_at', 'asc');
+        $disabilityPriority = config('sales_queue.disability_queue_priority', 15);
+
+        $query->withStatusCode('WAITING')
+            ->leftJoin('client_types', 'sales_queue.client_type_id', '=', 'client_types.id')
+            ->select('sales_queue.*')
+            ->orderByRaw('LEAST(
+                COALESCE(CASE WHEN client_types.prioritize_in_queue = 1 THEN client_types.sort_order END, 999),
+                COALESCE(CASE WHEN sales_queue.has_disability = 1 THEN ? END, 999)
+            ) ASC', [$disabilityPriority])
+            ->orderBy('sales_queue.queued_at', 'asc');
     }
 
     public function scopeServing(Builder $query): void
     {
-        $query->where('status', 'SERVING');
+        $query->withStatusCode('SERVING');
     }
 
     public function scopeToday(Builder $query): void
@@ -111,19 +146,131 @@ class SalesQueue extends Model
 
     public function scopeSales(Builder $query): void
     {
-        $query->where('service_type', 'SALES');
+        if (self::hasLegacyColumn('service_type')) {
+            $salesId = ServiceType::idFromName('SALES');
+            $query->where(function ($q) use ($salesId) {
+                if ($salesId) {
+                    $q->where('service_type_id', $salesId);
+                }
+                $q->orWhere('service_type', 'SALES')
+                    ->orWhereHas('catalogServiceType', fn ($q2) => $q2->where('name', 'SALES'));
+            });
+
+            return;
+        }
+
+        $query->whereHas('catalogServiceType', fn ($q) => $q->where('name', 'SALES'));
     }
 
     public function scopeCashier(Builder $query): void
     {
-        $query->where('service_type', 'CASHIER');
+        if (self::hasLegacyColumn('service_type')) {
+            $cashierId = ServiceType::idFromName('CASHIER');
+            $query->where(function ($q) use ($cashierId) {
+                if ($cashierId) {
+                    $q->where('service_type_id', $cashierId);
+                }
+                $q->orWhere('service_type', 'CASHIER')
+                    ->orWhereHas('catalogServiceType', fn ($q2) => $q2->where('name', 'CASHIER'));
+            });
+
+            return;
+        }
+
+        $query->whereHas('catalogServiceType', fn ($q) => $q->where('name', 'CASHIER'));
     }
 
-    /**
-     * Relación: Un turno en la fila puede tener múltiples calificaciones (Cliente y Vendedor).
-     */
+    public function scopeByClientType(Builder $query, $clientType = null): void
+    {
+        if ($clientType && $clientType !== 'ALL') {
+            $code = ClientType::normalizeInput($clientType);
+            $query->where(function ($q) use ($code, $clientType) {
+                $q->whereHas('catalogClientType', fn ($q2) => $q2->where('code', $code));
+                if (self::hasLegacyColumn('client_type')) {
+                    $q->orWhere('client_type', $code)->orWhere('client_type', $clientType);
+                }
+            });
+        }
+    }
+
+    public function scopeByServiceType(Builder $query, $serviceType = null): void
+    {
+        if ($serviceType && $serviceType !== 'ALL') {
+            $query->where(function ($q) use ($serviceType) {
+                $q->whereHas('catalogServiceType', fn ($q2) => $q2->where('name', $serviceType));
+                if (self::hasLegacyColumn('service_type')) {
+                    $q->orWhere('service_type', $serviceType);
+                }
+            });
+        }
+    }
+
     public function ratings()
     {
         return $this->hasMany(SaleRating::class, 'sales_queue_id');
+    }
+
+    public static function attributesForStatus(string $code): array
+    {
+        $attrs = ['status_id' => QueueStatus::idFromCode($code)];
+        if (self::hasLegacyColumn('status')) {
+            $attrs['status'] = $code;
+        }
+
+        return $attrs;
+    }
+
+    public static function attributesForSource(string $code): array
+    {
+        $attrs = ['source_id' => QueueSource::idFromCode($code)];
+        if (self::hasLegacyColumn('source')) {
+            $attrs['source'] = $code;
+        }
+
+        return $attrs;
+    }
+
+    public static function attributesForServiceType(string $name): array
+    {
+        $attrs = ['service_type_id' => ServiceType::idFromName($name)];
+        if (self::hasLegacyColumn('service_type')) {
+            $attrs['service_type'] = $name;
+        }
+
+        return $attrs;
+    }
+
+    public static function attributesForClientType(?string $input): array
+    {
+        $type = $input ? ClientType::resolveFromInput($input) : null;
+        $code = $type?->code;
+
+        $attrs = ['client_type_id' => $type?->id ?? ClientType::defaultId()];
+        if (self::hasLegacyColumn('client_type')) {
+            $attrs['client_type'] = $code ?? ClientType::DEFAULT_CODE;
+        }
+
+        return $attrs;
+    }
+
+    public function toQueuePayload(array $extra = []): array
+    {
+        return array_merge([
+            'id' => $this->id,
+            'turn_number' => $this->turn_number,
+            'client_name' => $this->client_name,
+            'client_type' => $this->resolveClientTypeCode(),
+            'client_type_label' => $this->resolveClientTypeLabel(),
+            'has_disability' => (bool) $this->has_disability,
+            'queued_at' => $this->queued_at,
+        ], $this->clientTypeMetadata(), $extra);
+    }
+
+    protected static function hasLegacyColumn(string $column): bool
+    {
+        static $columns = null;
+        $columns ??= Schema::getColumnListing('sales_queue');
+
+        return in_array($column, $columns, true);
     }
 }

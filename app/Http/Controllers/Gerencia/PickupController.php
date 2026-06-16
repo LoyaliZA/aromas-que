@@ -32,10 +32,12 @@ class PickupController extends Controller
 
         // 1. Métricas de Atención en Piso
         $queueMetrics = [
-            'waiting' => SalesQueue::whereDate('queued_at', $today)->where('status', 'WAITING')->count(),
-            'serving' => SalesQueue::whereDate('queued_at', $today)->where('status', 'SERVING')->count(),
-            'completed' => SalesQueue::whereDate('queued_at', $today)->where('status', 'COMPLETED')->count(),
-            'abandoned' => SalesQueue::whereDate('queued_at', $today)->whereIn('status', ['ABANDONED', 'CANCELED'])->count(),
+            'waiting' => SalesQueue::whereDate('queued_at', $today)->withStatusCode('WAITING')->count(),
+            'serving' => SalesQueue::whereDate('queued_at', $today)->withStatusCode('SERVING')->count(),
+            'completed' => SalesQueue::whereDate('queued_at', $today)->withStatusCode('COMPLETED')->count(),
+            'abandoned' => SalesQueue::whereDate('queued_at', $today)->where(function ($q) {
+                $q->withStatusCode('ABANDONED')->orWhere(fn ($q2) => $q2->withStatusCode('CANCELED'));
+            })->count(),
         ];
 
         // 2. Control de Personal Activo (Vendedores)
@@ -44,7 +46,7 @@ class PickupController extends Controller
             ->get();
 
         // 3. Lista de Clientes en Espera (Ordenados por prioridad y llegada)
-        $waitingClients = SalesQueue::today()->waiting()->get();
+        $waitingClients = SalesQueue::today()->waiting()->with('catalogClientType')->get();
 
         return view('gerencia.dashboard', compact('queueMetrics', 'sellers', 'waitingClients'));
     }
@@ -392,7 +394,7 @@ class PickupController extends Controller
 
         // 1. Filtro por Departamento
         if ($request->filled('department') && $request->department !== 'ALL') {
-            $query->where('department', $request->department);
+            $query->byDepartment($request->department);
         }
 
         // 2. Filtro por Estado

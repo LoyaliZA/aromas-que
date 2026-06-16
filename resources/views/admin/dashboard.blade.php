@@ -64,7 +64,7 @@
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <p class="text-sm font-bold text-blue-300 truncate" x-text="seller.client_name"></p>
                                             {{-- Banderas VIP / Discapacidad --}}
-                                            <span x-show="seller.client_type === 'VIP'" class="text-[8px] text-yellow-500 bg-yellow-500/20 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black uppercase">VIP</span>
+                                            <span x-show="seller.use_premium_alert" class="text-[8px] text-yellow-500 bg-yellow-500/20 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black uppercase" x-text="seller.client_type_label || 'Premium'"></span>
                                             <span x-show="seller.has_disability" class="text-[8px] text-blue-400 bg-blue-500/20 border border-blue-500/30 px-1.5 py-0.5 rounded font-black uppercase">PREF</span>
                                         </div>
                                     </div>
@@ -102,7 +102,7 @@
                                     <td class="py-3 px-4 font-mono font-bold text-white flex items-center gap-2">
                                         <span x-text="client.turn_number"></span>
                                         {{-- Banderas VIP / Discapacidad --}}
-                                        <span x-show="client.client_type === 'VIP'" class="text-[8px] text-yellow-500 bg-yellow-500/20 border border-yellow-500/30 px-1 rounded font-black uppercase">VIP</span>
+                                        <span x-show="client.use_premium_alert" class="text-[8px] text-yellow-500 bg-yellow-500/20 border border-yellow-500/30 px-1 rounded font-black uppercase" x-text="client.client_type_label || 'Premium'"></span>
                                         <span x-show="client.has_disability" class="text-[8px] text-blue-400 bg-blue-500/20 border border-blue-500/30 px-1 rounded font-black uppercase">PREF</span>
                                     </td>
                                     <td class="py-3 px-2 text-sm text-gray-300 truncate max-w-[100px]" x-text="client.client_name"></td>

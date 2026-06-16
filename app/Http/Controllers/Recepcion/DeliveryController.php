@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pickup;
 use App\Models\PickupStatus;
+use App\Models\AbandonmentReason;
+use App\Models\ServiceType;
 use App\Models\SalesQueue;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Storage;
@@ -38,7 +40,7 @@ class DeliveryController extends Controller
         }
 
         if ($request->has('department') && $request->department !== 'ALL') {
-            $query->where('department', $request->department);
+            $query->byDepartment($request->department);
         }
 
         if ($request->has('search') && $request->search != '') {
@@ -63,6 +65,10 @@ class DeliveryController extends Controller
             ->orderBy('updated_at', 'desc')
             ->get();
 
+        $departments = \App\Models\Department::where('is_active', true)->get();
+        $abandonmentReasons = AbandonmentReason::where('is_active', true)->orderBy('reason')->get();
+        $otherAbandonmentReason = $abandonmentReasons->firstWhere('reason', 'Otro motivo');
+
         if ($request->ajax()) {
             $html = view('recepcion.partials.card-grid', compact('pickups'))->render();
             return response()->json([
@@ -71,7 +77,14 @@ class DeliveryController extends Controller
             ]);
         }
 
-        return view('recepcion.dashboard', compact('pickups', 'peopleInQueue', 'incomingPickups'));
+        return view('recepcion.dashboard', compact(
+            'pickups',
+            'peopleInQueue',
+            'incomingPickups',
+            'departments',
+            'abandonmentReasons',
+            'otherAbandonmentReason'
+        ));
     }
 
     /**
@@ -140,7 +153,8 @@ class DeliveryController extends Controller
                 return response()->json([]);
             }
 
-            $query = Customer::select('id', 'name', 'customer_number', 'client_type');
+            $query = Customer::select('id', 'name', 'customer_number', 'client_type_id')
+                ->with('catalogClientType');
 
             // Búsqueda rápida por número de cliente o coincidencia de nombre
             if (is_numeric($search) || preg_match('/^[A-Za-z0-9]+$/', $search)) {
@@ -150,7 +164,15 @@ class DeliveryController extends Controller
                 $query->where('name', 'LIKE', "%{$search}%");
             }
                                  
-            return response()->json($query->limit(15)->get());
+            return response()->json(
+                $query->limit(15)->get()->map(fn ($customer) => array_merge([
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'customer_number' => $customer->customer_number,
+                    'client_type' => $customer->resolveClientTypeCode(),
+                    'client_type_label' => $customer->resolveClientTypeLabel(),
+                ], $customer->clientTypeMetadata()))
+            );
         }
         return response()->json(['error' => 'No autorizado'], 403);
     }
@@ -161,7 +183,7 @@ class DeliveryController extends Controller
     public function addToQueue(Request $request)
     {
         $request->validate([
-            'service_type' => 'required|in:SALES,CASHIER',
+            'service_type' => ['required', 'string', \Illuminate\Validation\Rule::exists('service_types', 'name')->where('is_active', true)],
             'is_new_customer' => 'nullable|boolean',
             'customer_id' => 'required_without:is_new_customer|exists:customers,id|nullable',
             'new_client_name' => 'required_if:is_new_customer,1|string|max:100|nullable',
@@ -172,7 +194,7 @@ class DeliveryController extends Controller
 
         $customerId = null;
         $clientName = null;
-        $clientType = 'REGULAR';
+        $clientType = \App\Models\ClientType::DEFAULT_CODE;
 
         // 1. Validamos de dónde viene el cliente
         if (!$request->boolean('is_new_customer')) {
@@ -180,33 +202,35 @@ class DeliveryController extends Controller
             $customer = Customer::findOrFail($request->customer_id);
             $customerId = $customer->id;
             $clientName = $request->boolean('is_third_party') ? $request->representative_name : $customer->name;
-            $clientType = $customer->client_type;
+            $clientType = $customer->resolveClientTypeCode() ?? \App\Models\ClientType::DEFAULT_CODE;
         } else {
             // B) Es un cliente NUEVO (NO lo guardamos en la tabla customers, solo tomamos su nombre para el ticket)
             $clientName = strtoupper($request->new_client_name);
-            $clientType = 'REGULAR';
+            $clientType = \App\Models\ClientType::DEFAULT_CODE;
         }
 
         // 2. Generar Folio
         $prefix = $request->service_type === 'SALES' ? 'V' : 'C';
-        $todayCount = SalesQueue::where('service_type', $request->service_type)
+        $todayCount = SalesQueue::byServiceType($request->service_type)
             ->whereDate('queued_at', today())
             ->count();
 
         $turnNumber = sprintf('%s-%03d', $prefix, $todayCount + 1);
 
         // 3. Crear el ticket en la fila
-        SalesQueue::create([
-            'customer_id' => $customerId, // Si es nuevo, esto se guardará como NULL automáticamente
-            'client_name' => $clientName,
-            'client_type' => $clientType,
-            'has_disability' => $request->boolean('has_disability'),
-            'turn_number' => $turnNumber,
-            'source' => 'MANUAL_KIOSK',
-            'status' => 'WAITING',
-            'service_type' => $request->service_type,
-            'queued_at' => now(),
-        ]);
+        SalesQueue::create(array_merge(
+            [
+                'customer_id' => $customerId,
+                'client_name' => $clientName,
+                'has_disability' => $request->boolean('has_disability'),
+                'turn_number' => $turnNumber,
+                'queued_at' => now(),
+            ],
+            SalesQueue::attributesForClientType($clientType),
+            SalesQueue::attributesForServiceType($request->service_type),
+            SalesQueue::attributesForSource('MANUAL_KIOSK'),
+            SalesQueue::attributesForStatus('WAITING')
+        ));
 
         $tipo = $request->service_type === 'SALES' ? 'Ventas' : 'Caja';
 
@@ -223,11 +247,14 @@ class DeliveryController extends Controller
     public function getQueueList(Request $request)
     {
         if ($request->ajax()) {
-            $waitingClients = SalesQueue::with('customer')
+            $waitingClients = SalesQueue::with(['customer.catalogClientType', 'catalogClientType', 'catalogServiceType'])
                 ->whereDate('queued_at', today())
-                ->where('status', 'WAITING')
-                ->orderBy('queued_at', 'asc')
-                ->get();
+                ->waiting()
+                ->get()
+                ->map(fn ($client) => array_merge($client->toArray(), $client->clientTypeMetadata(), [
+                    'client_type' => $client->resolveClientTypeCode(),
+                    'client_type_label' => $client->resolveClientTypeLabel(),
+                ]));
 
             return response()->json([
                 'clients' => $waitingClients
@@ -243,20 +270,21 @@ class DeliveryController extends Controller
     {
         // 1. Forzamos la extracción y validación estricta del payload JSON
         $validated = $request->validate([
-            'abandonment_reason_id' => 'required|integer',
+            'abandonment_reason_id' => 'required|integer|exists:abandonment_reasons,id',
             'custom_abandonment_reason' => 'nullable|string'
         ]);
 
         $client = SalesQueue::findOrFail($id);
 
-        if ($client->status === 'WAITING') {
-            // 2. Inyectamos los datos validados directamente, garantizando su captura
-            $client->update([
-                'status' => 'ABANDONED',
-                'completed_at' => now(),
-                'abandonment_reason_id' => $validated['abandonment_reason_id'],
-                'custom_abandonment_reason' => $validated['custom_abandonment_reason'] ?? null,
-            ]);
+        if ($client->resolveStatusCode() === 'WAITING') {
+            $client->update(array_merge(
+                SalesQueue::attributesForStatus('ABANDONED'),
+                [
+                    'completed_at' => now(),
+                    'abandonment_reason_id' => $validated['abandonment_reason_id'],
+                    'custom_abandonment_reason' => $validated['custom_abandonment_reason'] ?? null,
+                ]
+            ));
 
             if ($request->ajax()) {
                 return response()->json(['success' => true, 'message' => 'Turno marcado como abandonado.']);
@@ -292,7 +320,7 @@ class DeliveryController extends Controller
 
         // Agregamos department y pieces a la validación
         $request->validate([
-            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
+            'department' => 'required|exists:departments,name',
             'pieces' => 'required|integer|min:1',
             'client_name' => 'required|string|max:150',
             'customer_id' => 'nullable|exists:customers,id', // ID que viene del buscador
@@ -336,7 +364,7 @@ class DeliveryController extends Controller
     {
         $request->validate([
             'ticket_folio' => 'required|string|max:50|unique:pickups,ticket_folio',
-            'department' => 'required|in:AROMAS,BELLAROMA,CALLCENTER',
+            'department' => 'required|exists:departments,name',
             'client_name' => 'required|string|max:150',
             'customer_id' => 'nullable|exists:customers,id',
             'pieces' => 'required|integer|min:1',

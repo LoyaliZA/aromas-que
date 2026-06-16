@@ -9,7 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf;
-use App\Models\Employee;
+use App\Models\BreakReason;
 use App\Models\SalesQueue;
 use App\Models\DailyShift;
 use App\Models\SaleRating;
@@ -29,13 +29,10 @@ class GenerateEmployeePdfJob implements ShouldQueue
      */
     public int $tries = 1;
 
-    private array $reasonsDict = [
-        'LUNCH'     => 'Comida',
-        'BATHROOM'  => 'Baño',
-        'ERRAND'    => 'Mandado',
-        'PACKAGING' => 'Empaque',
-        'GENERAL'   => 'General / Otros',
-    ];
+    private function breakReasonLabels(): array
+    {
+        return BreakReason::labelsByCode();
+    }
 
     private array $statusDict = [
         'ONLINE'  => 'DISPONIBLE',
@@ -132,7 +129,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
     {
         $stats = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
             ->whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED')
+            ->withStatusCode('COMPLETED')
             ->selectRaw('COUNT(*) as served, AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')
             ->first();
 
@@ -142,7 +139,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
         $avgStarsRaw = SaleRating::where('rater_type', 'CLIENT')
             ->whereIn('sales_queue_id', SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
                 ->whereBetween('completed_at', [$start, $end])
-                ->where('status', 'COMPLETED')
+                ->withStatusCode('COMPLETED')
                 ->select('id')
             )
             ->avg('stars');
@@ -163,7 +160,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
 
         $totalSales = SalesQueue::whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
             ->whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED')
+            ->withStatusCode('COMPLETED')
             ->count();
 
         if ($totalSales === 0) {
@@ -176,7 +173,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
         SalesQueue::with($includeRatings ? ['ratings', 'customer'] : ['customer'])
             ->whereHas('assignedShift', fn ($q) => $q->where('employee_id', $empId))
             ->whereBetween('completed_at', [$start, $end])
-            ->where('status', 'COMPLETED')
+            ->withStatusCode('COMPLETED')
             ->orderBy('completed_at', 'desc')
             ->chunk(200, function ($chunk) use (&$rows, $includeRatings, &$processedCount, $totalSales) {
                 foreach ($chunk as $sale) {
@@ -194,7 +191,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
                     $row = [
                         'turn'       => $sale->turn_number,
                         'client'     => $sale->client_name,
-                        'type'       => $sale->client_type,
+                        'type'       => $sale->resolveClientTypeName(),
                         'no_cliente' => $sale->customer->customer_number ?? 'N/A',
                         'wait'       => $wait,
                         'serve'      => $serve,
@@ -242,7 +239,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
             ->whereHas('salesQueue', function ($q) use ($empId, $start, $end) {
                 $q->whereHas('assignedShift', fn ($s) => $s->where('employee_id', $empId))
                   ->whereBetween('completed_at', [$start, $end])
-                  ->where('status', 'COMPLETED');
+                  ->withStatusCode('COMPLETED');
             })
             ->orderBy('created_at', 'desc')
             ->get()
@@ -261,7 +258,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
     {
         $shifts = DailyShift::where('employee_id', $employeeId)
             ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-            ->with(['statusLogs' => fn ($q) => $q->orderBy('changed_at', 'asc')])
+            ->with(['statusLogs' => fn ($q) => $q->with('catalogBreakReason')->orderBy('changed_at', 'asc')])
             ->get();
 
         $totalBreakSeconds    = 0;
@@ -273,7 +270,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
         $shiftIds = $shifts->pluck('id')->toArray();
         if (! empty($shiftIds)) {
             $servingSecondsByShift = SalesQueue::whereIn('assigned_shift_id', $shiftIds)
-                ->where('status', 'COMPLETED')
+                ->withStatusCode('COMPLETED')
                 ->whereNotNull('started_serving_at')
                 ->whereNotNull('completed_at')
                 ->groupBy('assigned_shift_id')
@@ -301,7 +298,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
                 if ($log->new_status === 'BREAK' || $log->previous_status === 'BREAK') {
                     $statusLabel = $transStatus;
                     if ($log->new_status === 'BREAK') {
-                        $reasonTrans  = $this->reasonsDict[$log->reason] ?? ($log->reason ?? 'General');
+                        $reasonTrans  = $this->breakReasonLabels()[$log->resolveReasonCode()] ?? $log->resolveReasonLabel();
                         $statusLabel .= ' (' . $reasonTrans . ')';
                     }
                     $timeline[] = [
@@ -316,7 +313,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
 
                 if ($log->new_status === 'BREAK') {
                     $breakStart    = $logTime;
-                    $currentReason = $log->reason ?? 'GENERAL';
+                    $currentReason = $log->resolveReasonCode() ?? 'GENERAL';
                     if ($onlineStart) {
                         $dailySeconds[$dateStr]['AVAILABLE'] += $onlineStart->diffInSeconds($logTime);
                         $onlineStart = null;
@@ -370,7 +367,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
                 if ($reason === 'AVAILABLE') {
                     $formattedDailyBreaks[$date] = ['Tiempo Disponible' => $this->formatSeconds($secs)] + $formattedDailyBreaks[$date];
                 } else {
-                    $reasonName = $this->reasonsDict[$reason] ?? $reason;
+                    $reasonName = $this->breakReasonLabels()[$reason] ?? $reason;
                     $formattedDailyBreaks[$date][$reasonName] = $this->formatSeconds($secs);
                 }
             }
@@ -385,7 +382,7 @@ class GenerateEmployeePdfJob implements ShouldQueue
         }
         $formattedBreakTotals = ['Tiempo Disponible' => $this->formatSeconds($totalsByReason['AVAILABLE'])];
         foreach (['LUNCH', 'BATHROOM', 'ERRAND', 'PACKAGING', 'GENERAL'] as $r) {
-            $formattedBreakTotals[$this->reasonsDict[$r] ?? $r] = $this->formatSeconds($totalsByReason[$r]);
+            $formattedBreakTotals[$this->breakReasonLabels()[$r] ?? $r] = $this->formatSeconds($totalsByReason[$r]);
         }
 
         return [

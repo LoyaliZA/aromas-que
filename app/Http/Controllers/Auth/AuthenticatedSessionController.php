@@ -30,7 +30,7 @@ class AuthenticatedSessionController extends Controller
 
         // 2. Lógica de Redirección por ROL
         $user = $request->user();
-        $role = $user->role;
+        $role = $user->resolveRoleName();
 
         // Redirecciones de roles base
         if ($role === 'ADMIN') {

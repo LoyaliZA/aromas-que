@@ -21,8 +21,9 @@
         <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo de Cliente</label>
         <select name="client_type" class="w-full bg-gray-900 text-white border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-aromas-highlight transition">
             <option value="">Todos</option>
-            <option value="REGULAR" {{ request('client_type') === 'REGULAR' ? 'selected' : '' }}>Normal</option>
-            <option value="VIP" {{ request('client_type') === 'VIP' ? 'selected' : '' }}>VIP</option>
+            @foreach(($clientTypes ?? []) as $type)
+                <option value="{{ $type->code }}" {{ request('client_type') === $type->code ? 'selected' : '' }}>{{ $type->label }}</option>
+            @endforeach
         </select>
     </div>
 

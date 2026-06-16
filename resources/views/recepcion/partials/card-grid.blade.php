@@ -9,15 +9,14 @@
                 <span class="font-mono text-2xl font-black text-aromas-highlight leading-none">{{ $pickup->ticket_folio }}</span>
             </div>
             <div class="text-right">
-                @if($pickup->department === 'AROMAS')
-                <span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-purple-400"></span> Aromas
+                @php
+                    $deptName = $pickup->catalogDepartment->name ?? $pickup->department;
+                    $isAromas = strtoupper($deptName) === 'AROMAS';
+                    $color = $isAromas ? 'purple' : 'pink';
+                @endphp
+                <span class="bg-{{ $color }}-500/20 text-{{ $color }}-300 border border-{{ $color }}-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-{{ $color }}-400"></span> {{ $deptName }}
                 </span>
-                @else
-                <span class="bg-pink-500/20 text-pink-300 border border-pink-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-pink-400"></span> Bellaroma
-                </span>
-                @endif
             </div>
         </div>
 

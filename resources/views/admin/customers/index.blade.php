@@ -42,9 +42,9 @@
                 <div class="md:w-64">
                     <select name="client_type" class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight cursor-pointer" onchange="this.form.submit()">
                         <option value="ALL">Todos los tipos</option>
-                        <option value="REGULAR" {{ request('client_type') == 'REGULAR' ? 'selected' : '' }}>Regular</option>
-                        <option value="VIP" {{ request('client_type') == 'VIP' ? 'selected' : '' }}>VIP</option>
-                        <option value="DISCAPACITY" {{ request('client_type') == 'DISCAPACITY' ? 'selected' : '' }}>Discapacidad</option>
+                        @foreach($clientTypes as $type)
+                            <option value="{{ $type->code }}" {{ request('client_type') == $type->code ? 'selected' : '' }}>{{ $type->label }}</option>
+                        @endforeach
                     </select>
                 </div>
                 
@@ -79,19 +79,15 @@
                                     @if($customer->email) <div class="flex items-center gap-1 mt-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg> {{ $customer->email }}</div> @endif
                                 </td>
                                 <td class="p-4 text-center">
-                                    @if($customer->client_type === 'VIP')
-                                        <span class="bg-aromas-highlight text-aromas-main px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm">VIP</span>
-                                    @elseif($customer->client_type === 'DISCAPACITY')
-                                        <span class="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Discapacidad</span>
-                                    @else
-                                        <span class="bg-gray-800 text-gray-400 border border-gray-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Regular</span>
-                                    @endif
+                                    <span class="bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                                        {{ $customer->catalogClientType?->displayLabel() ?? $customer->resolveClientTypeLabel() ?? 'Clientes' }}
+                                    </span>
                                 </td>
                                 <td class="p-4 text-center text-xs text-gray-500">
                                     {{ $customer->created_at->format('d/m/Y') }}
                                 </td>
                                 <td class="p-4 text-center">
-                                    <button @click="openEditModal({{ json_encode($customer) }})" class="text-aromas-highlight hover:text-white p-2 rounded-lg bg-aromas-highlight/10 hover:bg-aromas-highlight transition-colors" title="Editar Cliente">
+                                    <button @click="openEditModal({{ json_encode(array_merge($customer->toArray(), ['client_type' => $customer->resolveClientTypeCode() ?? \App\Models\ClientType::DEFAULT_CODE])) }})" class="text-aromas-highlight hover:text-white p-2 rounded-lg bg-aromas-highlight/10 hover:bg-aromas-highlight transition-colors" title="Editar Cliente">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                     </button>
                                 </td>
@@ -137,11 +133,32 @@
                         <p class="font-bold text-aromas-highlight mb-2">Estructura requerida del CSV:</p>
                         <ul class="list-disc list-inside space-y-1 ml-2 text-xs font-mono">
                             <li><span class="text-white">numero_cliente</span> (Obligatorio)</li>
-                            <li><span class="text-white">nombre</span> (Obligatorio)</li>
+                            <li><span class="text-white">nombre</span> (Obligatorio en altas)</li>
                             <li><span class="text-white">telefono</span> (Opcional)</li>
                             <li><span class="text-white">email</span> (Opcional)</li>
-                            <li><span class="text-white">tipo_cliente</span> (Opcional: VIP, REGULAR)</li>
+                            <li><span class="text-white">codigo_lista</span> (Lista del sistema externo)</li>
                         </ul>
+                        <p class="text-xs text-gray-400 mt-3 mb-2">Valores aceptados en <span class="text-white font-mono">codigo_lista</span>:</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-[10px] font-mono text-gray-300 border border-gray-700 rounded-lg">
+                                <thead class="bg-gray-800 text-gray-400">
+                                    <tr>
+                                        <th class="px-2 py-1 text-left">Código</th>
+                                        <th class="px-2 py-1 text-left">Lista asignada</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800">
+                                    <tr><td class="px-2 py-1">PG</td><td class="px-2 py-1">Clientes (Público General)</td></tr>
+                                    <tr><td class="px-2 py-1">1 / ORO / MAYOREO ORO</td><td class="px-2 py-1">Oro</td></tr>
+                                    <tr><td class="px-2 py-1">2 / BRONCE / MAYOREO BRONCE</td><td class="px-2 py-1">Bronce</td></tr>
+                                    <tr><td class="px-2 py-1">3 / PLATA / MAYOREO PLATA</td><td class="px-2 py-1">Plata</td></tr>
+                                    <tr><td class="px-2 py-1">4 / DIAMANTE / MAYOREO DIAMANTE</td><td class="px-2 py-1">Diamante</td></tr>
+                                    <tr><td class="px-2 py-1">5 / PLATAFORMAS</td><td class="px-2 py-1">Plataformas</td></tr>
+                                    <tr><td class="px-2 py-1">7 / COLABORADORES</td><td class="px-2 py-1">Colaboradores</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-2">Códigos no reconocidos se asignan a Clientes (Público General).</p>
                     </div>
 
                     <div class="mb-6">
@@ -193,9 +210,9 @@
                         <div>
                             <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Tipo de Cliente *</label>
                             <select name="client_type" x-model="editingCustomer.client_type" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-aromas-highlight">
-                                <option value="REGULAR">Regular</option>
-                                <option value="VIP">VIP</option>
-                                <option value="DISCAPACITY">Discapacidad</option>
+                                @foreach($clientTypes as $type)
+                                    <option value="{{ $type->code }}">{{ $type->label }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>

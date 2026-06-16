@@ -10,10 +10,6 @@ class ShiftStatusLog extends Model
 {
     use HasFactory;
 
-    /**
-     * Desactivamos los timestamps automáticos de Laravel (created_at, updated_at)
-     * porque esta tabla tiene su propia columna de tiempo personalizada ('changed_at').
-     */
     public $timestamps = false;
 
     protected $fillable = [
@@ -21,13 +17,10 @@ class ShiftStatusLog extends Model
         'previous_status',
         'new_status',
         'reason',
+        'break_reason_id',
         'changed_at',
     ];
 
-    /**
-     * Casting de tipos.
-     * Convertimos 'changed_at' a una instancia real de Carbon (Fecha).
-     */
     protected function casts(): array
     {
         return [
@@ -35,17 +28,27 @@ class ShiftStatusLog extends Model
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Este log pertenece a un Turno Diario específico.
-     */
     public function dailyShift(): BelongsTo
     {
         return $this->belongsTo(DailyShift::class);
+    }
+
+    public function catalogBreakReason(): BelongsTo
+    {
+        return $this->belongsTo(BreakReason::class, 'break_reason_id');
+    }
+
+    public function resolveReasonCode(): ?string
+    {
+        $this->loadMissing('catalogBreakReason');
+
+        return $this->catalogBreakReason?->code ?? $this->reason;
+    }
+
+    public function resolveReasonLabel(): string
+    {
+        $this->loadMissing('catalogBreakReason');
+
+        return $this->catalogBreakReason?->label ?? ($this->reason ?? 'General');
     }
 }

@@ -3,11 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClientType;
 use App\Models\Customer;
+use App\Services\ClientTypeImportMapper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class CustomerController extends Controller
 {
+    public function __construct(
+        private readonly ClientTypeImportMapper $clientTypeImportMapper,
+    ) {}
+
     /**
      * Mostrar la lista de clientes con buscador y filtros.
      */
@@ -25,12 +32,13 @@ class CustomerController extends Controller
         }
 
         if ($request->filled('client_type') && $request->client_type !== 'ALL') {
-            $query->where('client_type', $request->client_type);
+            $query->byClientType($request->client_type);
         }
 
-        $customers = $query->orderBy('id', 'desc')->paginate(15)->withQueryString();
+        $customers = $query->with('catalogClientType')->orderBy('id', 'desc')->paginate(15)->withQueryString();
+        $clientTypes = ClientType::where('is_active', true)->orderBy('sort_order')->get();
 
-        return view('admin.customers.index', compact('customers'));
+        return view('admin.customers.index', compact('customers', 'clientTypes'));
     }
 
     /**
@@ -39,7 +47,7 @@ class CustomerController extends Controller
     public function importCsv(Request $request)
     {
         $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:5120', 
+            'csv_file' => 'required|file|mimes:csv,txt|max:5120',
         ], [
             'csv_file.required' => 'Por favor selecciona un archivo CSV.',
             'csv_file.mimes' => 'El archivo debe ser un CSV válido.',
@@ -48,56 +56,59 @@ class CustomerController extends Controller
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
         $header = fgetcsv($handle, 1000, ',');
-        
+
         if (!$header) {
             return back()->withErrors(['csv_file' => 'El archivo está vacío o no se pudo leer.']);
         }
 
-        // Limpieza de encabezados
         $header[0] = preg_replace('/\x{FEFF}/u', '', $header[0]);
         $header = array_map('strtolower', $header);
         $header = array_map('trim', $header);
 
-        // Validación: Solo numero_cliente es estrictamente necesario para que el archivo sea procesable
         if (!in_array('numero_cliente', $header)) {
             fclose($handle);
             return back()->withErrors(['csv_file' => 'El CSV debe contener obligatoriamente la columna: "numero_cliente".']);
         }
 
+        $usesCodigoLista = in_array('codigo_lista', $header, true);
         $imported = 0;
         $updated = 0;
+        $unrecognized = 0;
 
         while (($row = fgetcsv($handle, 1000, ',')) !== FALSE) {
-            
-            if(count($header) !== count($row)) continue; 
-            
+
+            if(count($header) !== count($row)) continue;
+
             $data = array_combine($header, $row);
             $numeroCliente = trim($data['numero_cliente'] ?? '');
-            
-            if (empty($numeroCliente)) continue; 
 
-            // Buscamos si el cliente ya existe
+            if (empty($numeroCliente)) continue;
+
             $customer = Customer::where('customer_number', $numeroCliente)->first();
+            $listInput = $this->listInputFromRow($data, $usesCodigoLista);
+            $typeResult = $this->clientTypeImportMapper->resolveWithMeta($listInput);
+
+            if ($listInput !== null && trim($listInput) !== '' && !$typeResult['recognized']) {
+                $unrecognized++;
+            }
 
             if ($customer) {
-                // ACTUALIZACIÓN PARCIAL: Solo actualiza las columnas que vengan en el CSV
                 $updateData = [];
-                
+
                 if (isset($data['nombre']) && trim($data['nombre']) !== '') {
                     $updateData['name'] = trim($data['nombre']);
                 }
-                
+
                 if (array_key_exists('telefono', $data)) {
                     $updateData['phone'] = trim($data['telefono']) === '' ? null : trim($data['telefono']);
                 }
-                
+
                 if (array_key_exists('email', $data)) {
                     $updateData['email'] = trim($data['email']) === '' ? null : trim($data['email']);
                 }
-                
-                if (array_key_exists('tipo_cliente', $data)) {
-                    $tipo = strtoupper(trim($data['tipo_cliente']));
-                    $updateData['client_type'] = in_array($tipo, ['REGULAR', 'VIP', 'DISCAPACITY']) ? $tipo : 'REGULAR';
+
+                if ($this->rowHasListAssignment($data, $usesCodigoLista)) {
+                    $updateData = array_merge($updateData, $this->clientTypeAttributes($typeResult['type']));
                 }
 
                 if (!empty($updateData)) {
@@ -106,29 +117,26 @@ class CustomerController extends Controller
                 }
 
             } else {
-                // CREACIÓN DE NUEVO CLIENTE: Requiere nombre forzosamente
                 $nombre = trim($data['nombre'] ?? '');
-                
-                if (empty($nombre)) continue; // Si no hay nombre, ignoramos la fila para no crear registros corruptos
-                
-                $tipo = strtoupper(trim($data['tipo_cliente'] ?? 'REGULAR'));
-                $tipo = in_array($tipo, ['REGULAR', 'VIP', 'DISCAPACITY']) ? $tipo : 'REGULAR';
 
-                Customer::create([
+                if (empty($nombre)) continue;
+
+                Customer::create(array_merge([
                     'customer_number' => $numeroCliente,
                     'name' => $nombre,
                     'phone' => (array_key_exists('telefono', $data) && trim($data['telefono']) !== '') ? trim($data['telefono']) : null,
                     'email' => (array_key_exists('email', $data) && trim($data['email']) !== '') ? trim($data['email']) : null,
-                    'client_type' => $tipo,
-                ]);
-                
+                ], $this->clientTypeAttributes($typeResult['type'])));
+
                 $imported++;
             }
         }
 
         fclose($handle);
 
-        return back()->with('success', "Proceso finalizado. Clientes Nuevos: {$imported} | Actualizados: {$updated}");
+        $message = "Proceso finalizado. Clientes Nuevos: {$imported} | Actualizados: {$updated} | Sin lista reconocida: {$unrecognized}";
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -143,11 +151,55 @@ class CustomerController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
-            'client_type' => 'required|in:REGULAR,VIP,DISCAPACITY',
+            'client_type' => 'required|string',
         ]);
 
-        $customer->update($request->all());
+        $resolved = ClientType::resolveFromInput($request->client_type);
+        if (!$resolved) {
+            return back()->withErrors(['client_type' => 'Tipo de cliente inválido.']);
+        }
+
+        $customer->update([
+            'customer_number' => $request->customer_number,
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'client_type' => $resolved->code,
+        ]);
 
         return back()->with('success', 'Cliente actualizado correctamente.');
+    }
+
+    private function listInputFromRow(array $data, bool $usesCodigoLista): ?string
+    {
+        if ($usesCodigoLista && array_key_exists('codigo_lista', $data)) {
+            return $data['codigo_lista'];
+        }
+
+        if (array_key_exists('tipo_cliente', $data)) {
+            return $data['tipo_cliente'];
+        }
+
+        return null;
+    }
+
+    private function rowHasListAssignment(array $data, bool $usesCodigoLista): bool
+    {
+        if ($usesCodigoLista && array_key_exists('codigo_lista', $data)) {
+            return true;
+        }
+
+        return array_key_exists('tipo_cliente', $data);
+    }
+
+    private function clientTypeAttributes(ClientType $type): array
+    {
+        $attrs = ['client_type_id' => $type->id];
+
+        if (Schema::hasColumn('customers', 'client_type')) {
+            $attrs['client_type'] = $type->code;
+        }
+
+        return $attrs;
     }
 }

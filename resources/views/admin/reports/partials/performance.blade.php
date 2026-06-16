@@ -119,7 +119,7 @@
                     <td class="p-4">
                         <span class="font-mono font-bold text-white block">{{ $client->turn_number }}</span>
                         <span class="text-sm text-gray-300 block mb-1">{{ $client->client_name }}</span>
-                        @if($client->client_type === 'VIP') <span class="bg-yellow-500/20 text-yellow-400 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/30 uppercase font-bold">VIP</span>
+                        @if($client->catalogClientType?->usesPremiumAlert()) <span class="bg-yellow-500/20 text-yellow-400 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/30 uppercase font-bold">{{ $client->catalogClientType->displayLabel() }}</span>
                         @elseif($client->has_disability) <span class="bg-blue-500/20 text-blue-400 text-[9px] px-1.5 py-0.5 rounded border border-blue-500/30 uppercase font-bold">PREF</span>@endif
                     </td>
                     <td class="p-4 text-xs text-center">

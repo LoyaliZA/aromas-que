@@ -5,7 +5,7 @@ window.deliveryApp = function(config) {
         pickup: {}, isThirdParty: false, receiverName: '', signaturePad: null, signatureData: '', isPadEmpty: true,
         queueType: 'SALES', waitingClients: [], evidencePreview: null, evidenceName: '', 
         clientSearchQuery: '', clientSearchResults: [], showClientDropdown: false, selectedCustomerId: '',
-        selectedCustomerObj: null, abandoningClient: null, abandonReasonId: '', customAbandonReason: '',
+        selectedCustomerObj: null, abandoningClient: null, abandonReasonId: '', customAbandonReason: '', otherReasonId: config.otherReasonId || null,
         isThirdPartyQueue: false, representativeNameQueue: '', hasDisabilityQueue: false, isNewCustomerQueue: false, newClientName: '',
 
         validateQueueForm(e) {
@@ -82,7 +82,7 @@ window.deliveryApp = function(config) {
             fetch(`/recepcion/queue/${this.abandoningClient.id}/abandon`, {
                 method: 'PUT',
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Accept': 'application/json' },
-                body: JSON.stringify({ abandonment_reason_id: this.abandonReasonId, custom_abandonment_reason: this.abandonReasonId == '4' ? this.customAbandonReason : null })
+                body: JSON.stringify({ abandonment_reason_id: this.abandonReasonId, custom_abandonment_reason: (this.otherReasonId && this.abandonReasonId == this.otherReasonId) ? this.customAbandonReason : null })
             }).then(r => r.json()).then(data => {
                 if (data.success) { this.showAbandonModal = false; this.fetchQueueList(); this.fetchData(this.search); } 
                 else { alert(data.message || 'Error'); }

@@ -87,7 +87,7 @@ class ReviewController extends Controller
      */
     public function showCustomer(Request $request, $id)
     {
-        $customer = Customer::findOrFail($id);
+        $customer = Customer::with('catalogClientType')->findOrFail($id);
 
         $query = SaleRating::with(['salesQueue.assignedShift.employee'])
             ->where('rater_type', 'SELLER')
@@ -137,11 +137,18 @@ class ReviewController extends Controller
             ->get();
 
         // Buscar Clientes (Por Nombre o Número)
-        $customers = Customer::where('name', 'like', "%{$q}%")
+        $customers = Customer::with('catalogClientType')
+            ->where('name', 'like', "%{$q}%")
             ->orWhere('customer_number', 'like', "%{$q}%")
-            ->select('id', 'name', 'customer_number', 'client_type')
+            ->select('id', 'name', 'customer_number', 'client_type_id')
             ->limit(5)
-            ->get();
+            ->get()
+            ->map(fn ($customer) => array_merge([
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'customer_number' => $customer->customer_number,
+                'client_type' => $customer->resolveClientTypeCode(),
+            ], $customer->clientTypeMetadata()));
 
         return response()->json([
             'sellers' => $sellers,

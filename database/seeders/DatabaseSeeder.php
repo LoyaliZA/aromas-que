@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         // Llamamos a nuestro seeder específico
         $this->call([
             AdminUserSeeder::class,
+            AbandonmentReasonSeeder::class,
         ]);
     }
 }

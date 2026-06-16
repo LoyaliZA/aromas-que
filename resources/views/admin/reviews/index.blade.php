@@ -81,7 +81,7 @@
                                 <div>
                                     <div class=\"flex items-center gap-2\">
                                         <p class="font-bold text-white text-xs" x-text="customer.name"></p>
-                                        <span x-show="customer.client_type === 'VIP'" class="bg-yellow-500 text-yellow-900 text-[9px] px-1.5 rounded font-black uppercase tracking-wider" style="display: none;">VIP</span>
+                                        <span x-show="customer.use_premium_alert" class="bg-yellow-500 text-yellow-900 text-[9px] px-1.5 rounded font-black uppercase tracking-wider" style="display: none;" x-text="customer.client_type_label || 'Premium'"></span>
                                     </div>
                                     <p class="text-[10px] text-gray-400 font-mono">ID: <span x-text="customer.customer_number || 'S/N'"></span></p>
                                 </div>

@@ -7,8 +7,8 @@
         <h1 class="text-3xl font-black text-white uppercase tracking-widest">{{ $customer->name }}</h1>
         <div class="flex items-center gap-3 mt-2">
             <span class="text-sm text-gray-400 font-mono">ID: {{ $customer->customer_number ?? 'S/N' }}</span>
-            @if($customer->client_type === 'VIP')
-                <span class="bg-yellow-500 text-yellow-900 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">Cliente VIP</span>
+            @if($customer->catalogClientType?->usesPremiumAlert())
+                <span class="bg-yellow-500 text-yellow-900 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">{{ $customer->catalogClientType->displayLabel() }}</span>
             @endif
         </div>
     </div>

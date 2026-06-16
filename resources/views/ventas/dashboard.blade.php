@@ -33,7 +33,7 @@
                 </div>
 
                 <div class="flex items-center gap-6">
-                    @if(in_array(auth()->user()->role, ['MANAGER', 'ADMIN']))
+                    @if(in_array(auth()->user()->resolveRoleName(), ['MANAGER', 'ADMIN']))
                     <button @click="openRetentionModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -78,28 +78,17 @@
                     @csrf
                     <input type="hidden" name="shift_id" :value="breakShiftId">
                     <input type="hidden" name="reason" id="break-reason-input">
-                    <button type="button" @click="selectBreakReason('BATHROOM')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
-                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S12 3 12 3s-4.5 4.03-4.5 9 2.015 9 4.5 9z"></path>
-                        </svg>
-                        Baño
-                    </button>
-                    <button type="button" @click="selectBreakReason('LUNCH')" :class="lunchSecondsLeft <= 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
-                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 15a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h14a2 2 0 012 2v6z"></path></svg>
-                        Comida 
+                    @foreach($breakReasons as $breakReason)
+                    <button type="button" @click="selectBreakReason('{{ $breakReason->code }}')"
+                        @if($breakReason->is_lunch) :class="lunchSecondsLeft <= 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" @else class="hover:bg-aromas-highlight hover:text-aromas-main" @endif
+                        class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
+                        <span class="text-sm uppercase tracking-wide">{{ $breakReason->label }}</span>
+                        @if($breakReason->is_lunch)
                         <span x-show="lunchSecondsLeft <= 0" class="absolute bottom-2 text-[10px] text-red-400 font-black">Agotado</span>
                         <span x-show="lunchSecondsLeft > 0 && lunchSecondsLeft < 1800" class="absolute bottom-2 text-[10px] text-yellow-400 font-black" x-text="Math.floor(lunchSecondsLeft/60) + ' min' + (lunchSecondsLeft < 60 ? ' (Poco tiempo)' : '')"></span>
+                        @endif
                     </button>
-                    <button type="button" @click="selectBreakReason('ERRAND')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
-                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg> Encargo
-                    </button>
-                    <button type="button" @click="selectBreakReason('PACKAGING')" class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl hover:bg-aromas-highlight hover:text-aromas-main text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
-                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                        </svg> Paquetería
-                    </button>
+                    @endforeach
                 </form>
                 <button @click="showBreakModal = false" class="mt-6 w-full py-4 text-gray-500 font-bold hover:text-white transition-colors uppercase text-sm">Cancelar</button>
             </div>
@@ -116,7 +105,7 @@
         </div>
 
         {{-- MODAL RETENCIÓN (ACTUALIZADO CON VENDEDORES DINÁMICOS) --}}
-        @if(in_array(auth()->user()->role, ['MANAGER', 'ADMIN']))
+        @if(in_array(auth()->user()->resolveRoleName(), ['MANAGER', 'ADMIN']))
         <div x-show="showRetentionModal" style="display: none;" class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" x-transition>
             <div class="bg-gray-900 rounded-2xl border-2 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)] p-6 w-full max-w-2xl flex flex-col max-h-[85vh]">
                 <div class="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
@@ -195,27 +184,27 @@
         {{-- MEGA NOTIFICACIÓN (ACTUALIZADA PARA VIP DORADO) --}}
         <div x-show="showMegaAlert" style="display: none;"
             class="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-xl"
-            :class="alertData.client_type === 'VIP' ? 'bg-yellow-900/90' : 'bg-blue-900/95'" x-transition>
+            :class="alertData.use_premium_alert ? 'bg-yellow-900/90' : 'bg-blue-900/95'" x-transition>
             <div class="text-center p-8 max-w-5xl w-full">
 
                 <h2 class="text-3xl uppercase tracking-[0.2em] font-bold mb-8"
-                    :class="alertData.client_type === 'VIP' ? 'text-yellow-200' : 'text-blue-200'">Nueva Asignación</h2>
+                    :class="alertData.use_premium_alert ? 'text-yellow-200' : 'text-blue-200'">Nueva Asignación</h2>
 
                 {{-- Contenedor dinámico Dorado/Azul --}}
                 <div class="rounded-[2rem] p-12 shadow-2xl mx-auto transform transition-all border-4"
-                    :class="alertData.client_type === 'VIP' ? 'border-yellow-400 bg-gradient-to-br from-yellow-50 to-white shadow-[0_0_50px_rgba(234,179,8,0.3)]' : 'border-blue-400/50 bg-white'">
+                    :class="alertData.use_premium_alert ? 'border-yellow-400 bg-gradient-to-br from-yellow-50 to-white shadow-[0_0_50px_rgba(234,179,8,0.3)]' : 'border-blue-400/50 bg-white'">
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-12 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                         <div>
                             <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Vendedor</p>
                             <p class="text-5xl font-black leading-tight"
-                                :class="alertData.client_type === 'VIP' ? 'text-yellow-600' : 'text-blue-600'"
+                                :class="alertData.use_premium_alert ? 'text-yellow-600' : 'text-blue-600'"
                                 x-text="alertData.seller"></p>
                         </div>
                         <div class="pt-8 md:pt-0 md:pl-12">
                             <p class="text-sm text-gray-400 uppercase font-bold mb-2 tracking-widest">Cliente (Turno: <span x-text="alertData.folio"></span>)</p>
                             <div class="flex justify-center items-center gap-3 mb-2">
-                                <span x-show="alertData.client_type === 'VIP'" class="bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider">VIP</span>
+                                <span x-show="alertData.use_premium_alert" class="bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider" x-text="alertData.client_type_label || 'Premium'"></span>
                                 <span x-show="alertData.has_disability" class="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider">PRIORIDAD</span>
                             </div>
                             <p class="text-4xl font-black text-gray-800 leading-tight" x-text="alertData.client"></p>
@@ -224,7 +213,7 @@
                 </div>
 
                 <button @click="closeAlert()" class="mt-12 px-12 py-5 rounded-2xl font-black text-xl transition-all duration-300 tracking-wider bg-white shadow-xl transform hover:-translate-y-1"
-                    :class="alertData.client_type === 'VIP' ? 'text-yellow-900 hover:bg-yellow-50 shadow-white/20' : 'text-blue-900 hover:bg-blue-50 shadow-white/10'">
+                    :class="alertData.use_premium_alert ? 'text-yellow-900 hover:bg-yellow-50 shadow-white/20' : 'text-blue-900 hover:bg-blue-50 shadow-white/10'">
                     <span>ENTERADO</span>
                 </button>
             </div>
@@ -261,7 +250,9 @@
                     seller: '',
                     client: '',
                     folio: '',
-                    client_type: 'REGULAR',
+                    client_type: 'CLIENTES',
+                    client_type_label: 'Clientes',
+                    use_premium_alert: false,
                     has_disability: false
                 },
                 alertTimer: 5,
@@ -540,7 +531,7 @@
                     };
 
                     // 1. REPRODUCIR SONIDO (Dependiendo si es VIP)
-                    let audioId = data.client_type === 'VIP' ? 'bell_vip' : 'bell';
+                    let audioId = data.use_premium_alert ? 'bell_vip' : 'bell';
                     let audio = document.getElementById(audioId);
 
                     if (!audio) audio = document.getElementById('bell');
@@ -567,7 +558,7 @@
 
                     // 3. NOTIFICACIÓN DE SISTEMA OPERATIVO
                     if ("Notification" in window && Notification.permission === "granted") {
-                        new Notification(data.client_type === 'VIP' ? "⭐ ¡Cliente VIP Asignado!" : "¡Nuevo Cliente Asignado!", {
+                        new Notification(data.use_premium_alert ? "⭐ ¡Cliente Premium Asignado!" : "¡Nuevo Cliente Asignado!", {
                             body: `Turno: ${data.folio}\nCliente: ${data.client}\nVendedor: ${data.seller}`,
                             icon: '/images/aromas_logo_recortado.png'
                         });

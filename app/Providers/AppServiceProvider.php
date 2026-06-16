@@ -27,5 +27,15 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Livewire::forceAssetInjection();
+
+        // Register Observers
+        \App\Models\Role::observe(\App\Observers\RoleObserver::class);
+        \App\Models\Department::observe(\App\Observers\DepartmentObserver::class);
+        \App\Models\JobPosition::observe(\App\Observers\JobPositionObserver::class);
+        \App\Models\ClientType::observe(\App\Observers\ClientTypeObserver::class);
+        \App\Models\ServiceType::observe(\App\Observers\ServiceTypeObserver::class);
+        \App\Models\BreakReason::observe(\App\Observers\BreakReasonObserver::class);
+        \App\Models\QueueStatus::observe(\App\Observers\QueueStatusObserver::class);
+        \App\Models\QueueSource::observe(\App\Observers\QueueSourceObserver::class);
     }
 }

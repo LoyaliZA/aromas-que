@@ -7,32 +7,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class DailyShift extends Model
 {
     use HasFactory;
 
-    /**
-     * Definimos los campos editables.
-     * Importante: 'last_action_at' es vital para el "Heartbeat" del sistema
-     * (saber si el usuario sigue ahí).
-     */
     protected $fillable = [
         'employee_id',
         'work_date',
-        'current_status',       // ONLINE, BREAK, BUSY, OFFLINE
-        'break_reason',         // Agregado: BATHROOM, LUNCH, ERRAND, PACKAGING
-        'has_taken_lunch',      // Nuevo: Indica si ya tomó su comida hoy
-        'lunch_seconds_left',   // Nuevo: Cuántos segundos de comida le quedan (1800 = 30 min)
-        'flagged_as_idle',      // Si el sistema detectó abandono (True/False)
+        'current_status',
+        'break_reason',
+        'break_reason_id',
+        'has_taken_lunch',
+        'lunch_seconds_left',
+        'flagged_as_idle',
         'customers_served_count',
         'last_status_change_at',
         'last_action_at',
     ];
 
-    /**
-     * Casting de tipos nativos.
-     */
     protected function casts(): array
     {
         return [
@@ -46,100 +40,106 @@ class DailyShift extends Model
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * El turno pertenece a un Empleado.
-     */
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
-    /**
-     * Un turno tiene una bitácora de cambios de estado.
-     * Ejemplo: De ONLINE pasó a BUSY a las 10:00am.
-     */
+    public function catalogBreakReason(): BelongsTo
+    {
+        return $this->belongsTo(BreakReason::class, 'break_reason_id');
+    }
+
     public function statusLogs(): HasMany
     {
         return $this->hasMany(ShiftStatusLog::class);
     }
 
-    /**
-     * Un turno tiene múltiples clientes atendidos (Ventas).
-     * Relación con la tabla 'sales_queue'.
-     */
     public function servedCustomers(): HasMany
     {
         return $this->hasMany(SalesQueue::class, 'assigned_shift_id');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes (Filtros Reutilizables)
-    |--------------------------------------------------------------------------
-    */
+    public function resolveBreakReasonCode(): ?string
+    {
+        $this->loadMissing('catalogBreakReason');
 
-    /**
-     * Filtra solo los turnos que están "En Línea" y NO están atendiendo a nadie.
-     */
+        return $this->catalogBreakReason?->code ?? ($this->attributes['break_reason'] ?? null);
+    }
+
+    public function resolveBreakReasonLabel(): string
+    {
+        $this->loadMissing('catalogBreakReason');
+
+        return $this->catalogBreakReason?->label ?? ($this->attributes['break_reason'] ?? 'General');
+    }
+
+    public function isLunchBreak(): bool
+    {
+        $this->loadMissing('catalogBreakReason');
+
+        if ($this->catalogBreakReason) {
+            return $this->catalogBreakReason->is_lunch;
+        }
+
+        return ($this->attributes['break_reason'] ?? null) === 'LUNCH';
+    }
+
+    public static function breakReasonAttributes(?BreakReason $breakReason): array
+    {
+        if (!$breakReason) {
+            return ['break_reason_id' => null];
+        }
+
+        $attrs = ['break_reason_id' => $breakReason->id];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('daily_shifts', 'break_reason')) {
+            $attrs['break_reason'] = $breakReason->code;
+        }
+
+        return $attrs;
+    }
+
     public function scopeAvailable(Builder $query): void
     {
+        $servingId = QueueStatus::idFromCode('SERVING');
+        $hasLegacyStatus = \Illuminate\Support\Facades\Schema::hasColumn('sales_queue', 'status');
+
         $query->where('current_status', 'ONLINE')
             ->where('flagged_as_idle', false)
-            // Nueva protección: No debe tener clientes en estado SERVING
-            ->whereNotExists(function ($query) {
-                $query->select(DB::raw(1))
+            ->whereNotExists(function ($sub) use ($servingId, $hasLegacyStatus) {
+                $sub->select(DB::raw(1))
                     ->from('sales_queue')
                     ->whereColumn('sales_queue.assigned_shift_id', 'daily_shifts.id')
-                    ->where('sales_queue.status', 'SERVING');
+                    ->where(function ($q) use ($servingId, $hasLegacyStatus) {
+                        if ($servingId) {
+                            $q->where('sales_queue.status_id', $servingId);
+                        }
+                        if ($hasLegacyStatus) {
+                            $q->orWhere('sales_queue.status', 'SERVING');
+                        } elseif (!$servingId) {
+                            $q->whereRaw('0 = 1');
+                        }
+                    });
             });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Lógica de Dominio (Business Logic)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * ALGORITMO DE ASIGNACIÓN DE TURNOS
-     * Determina qué vendedor debe recibir al siguiente cliente.
-     * * Regla 1: Inicio del día (0 ventas globales) -> Aleatorio.
-     * Regla 2: Operación normal -> El que lleve más tiempo esperando (Longest Idle).
-     */
     public static function assignNextAgent(): ?self
     {
-        // 1. Obtenemos todos los candidatos disponibles AHORA.
-        // Usamos 'get()' para traerlos a memoria y poder evaluar la lógica compleja.
         $candidates = self::available()->get();
 
         if ($candidates->isEmpty()) {
             return null;
         }
 
-        // 2. Verificamos si es el "Inicio del Turno" (Nadie ha vendido nada hoy).
         $totalSalesToday = $candidates->sum('customers_served_count');
 
         if ($totalSalesToday === 0) {
-            // REGLA 1: Aleatorio para evitar favoritismos al llegar.
             return $candidates->random();
         }
 
-        // 3. REGLA 2: Justicia (Longest Idle Agent).
-        // Ordenamos por 'last_status_change_at' ASCENDENTE (del más viejo al más nuevo).
-        // Quien haya cambiado a ONLINE hace más tiempo (ej. 10:00am) va antes
-        // que quien cambió hace poco (ej. 10:05am).
         return $candidates->sortBy('last_status_change_at')->first();
     }
 
-    /**
-     * Helpers de estado individual.
-     */
     public function isAvailable(): bool
     {
         return $this->current_status === 'ONLINE' && ! $this->flagged_as_idle;

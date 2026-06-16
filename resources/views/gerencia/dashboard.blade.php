@@ -72,7 +72,7 @@
                                 </td>
                                 <td class="p-4 text-center">
                                     {{-- Validamos si el usuario logueado es ADMIN o tiene el permiso explícito --}}
-                                    @if(auth()->user()->role === 'ADMIN' || auth()->user()->can_manage_shifts)
+                                    @if(auth()->user()->isAdmin() || auth()->user()->can_manage_shifts)
                                         <form action="{{ route('gerencia.staff.toggle') }}" method="POST">
                                             @csrf
                                             <input type="hidden" name="employee_id" value="{{ $seller->id }}">
@@ -116,8 +116,9 @@
                                     <span class="font-mono font-black text-aromas-highlight text-lg">{{ $client->turn_number ?? 'S/N' }}</span>
                                     
                                     {{-- Etiquetas de Prioridad --}}
-                                    @if($client->client_type === 'VIP')
-                                        <span class="text-[9px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">VIP</span>
+                                    @php $clientType = $client->catalogClientType; @endphp
+                                    @if($clientType?->usesPremiumAlert())
+                                        <span class="text-[9px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{{ $clientType->displayLabel() }}</span>
                                     @elseif($client->has_disability)
                                         <span class="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">PREF</span>
                                     @endif

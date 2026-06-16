@@ -9,15 +9,17 @@ $isRating = $status === 'RATING';
 $currentClient = null;
 if ($shift) {
 $currentClient = App\Models\SalesQueue::where('assigned_shift_id', $shift->id)
-->where('status', 'SERVING')
+->with('catalogClientType')
+->serving()
 ->first();
 }
 $isServing = !is_null($currentClient);
 
-// Clases dinámicas respetando tu diseño original pero agregando el VIP
+// Clases dinámicas según alerta premium del tipo de cliente
 $cardClasses = 'bg-gray-800/50 border-gray-700 opacity-60 grayscale';
+$isPremium = $currentClient?->catalogClientType?->usesPremiumAlert() ?? false;
 if ($isServing) {
-if ($currentClient->client_type === 'VIP') {
+if ($isPremium) {
 $cardClasses = 'bg-gray-900 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)] transform scale-[1.02] z-10 ring-2 ring-yellow-500/30';
 } else {
 $cardClasses = 'bg-aromas-secondary border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.3)] transform scale-[1.02] z-10 ring-2 ring-blue-500/20';
@@ -52,7 +54,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     @if($isOnBreak)
     data-on-break="true"
     data-break-start-time="{{ $breakStartTime }}"
-    data-break-reason="{{ $shift->break_reason }}"
+    data-break-reason="{{ $shift->resolveBreakReasonCode() }}"
     data-lunch-left="{{ $shift->lunch_seconds_left ?? 1800 }}"
     @endif
     @if($isOnline)
@@ -64,7 +66,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     {{-- Indicador de Estado (Punto titilante) --}}
     <div class="absolute top-4 right-4 flex items-center gap-2 z-20">
         @if($isServing)
-        @if($currentClient->client_type === 'VIP')
+        @if($isPremium)
         <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-yellow-400 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
         @else
@@ -82,30 +84,30 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
 
     <div class="p-6 text-center flex-1 flex flex-col">
         {{-- Avatar Original --}}
-        <div class="w-16 h-16 mx-auto bg-black/30 rounded-full flex items-center justify-center border-2 {{ $isServing ? ($currentClient->client_type === 'VIP' ? 'border-yellow-500 text-yellow-400' : 'border-blue-500 text-blue-400') : ($isOnline ? 'border-aromas-highlight text-aromas-highlight' : 'border-gray-600 text-gray-500') }} mb-3 transition-colors duration-500">
+        <div class="w-16 h-16 mx-auto bg-black/30 rounded-full flex items-center justify-center border-2 {{ $isServing ? ($isPremium ? 'border-yellow-500 text-yellow-400' : 'border-blue-500 text-blue-400') : ($isOnline ? 'border-aromas-highlight text-aromas-highlight' : 'border-gray-600 text-gray-500') }} mb-3 transition-colors duration-500">
             <span class="text-xl font-black">{{ substr($seller->full_name, 0, 2) }}</span>
         </div>
 
         {{-- Info Vendedor --}}
         <h3 class="text-lg font-bold text-white mb-0 leading-tight truncate">{{ $seller->full_name }}</h3>
-        <p class="text-[10px] uppercase tracking-widest font-bold {{ $isServing ? ($currentClient->client_type === 'VIP' ? 'text-yellow-400' : 'text-blue-400') : ($isOnline ? 'text-aromas-tertiary' : ($isRating ? 'text-purple-400' : 'text-gray-600')) }} mb-4">
-            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift->break_reason }}) @elseif($isRating) Calificando @elseif($isOnline) Disponible @else Inactivo @endif
+        <p class="text-[10px] uppercase tracking-widest font-bold {{ $isServing ? ($isPremium ? 'text-yellow-400' : 'text-blue-400') : ($isOnline ? 'text-aromas-tertiary' : ($isRating ? 'text-purple-400' : 'text-gray-600')) }} mb-4">
+            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift->resolveBreakReasonLabel() }}) @elseif($isRating) Calificando @elseif($isOnline) Disponible @else Inactivo @endif
         </p>
 
         {{-- ZONA CENTRAL ORIGINAL --}}
         <div class="flex-1 flex flex-col justify-center min-h-[80px]">
             @if($isServing)
             {{-- Tarjeta Cliente con Cronómetro de Atención --}}
-            <div class="border rounded-lg p-4 animate-fade-in-up {{ $currentClient->client_type === 'VIP' ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-blue-500/10 border-blue-500/20' }}">
+            <div class="border rounded-lg p-4 animate-fade-in-up {{ $isPremium ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-blue-500/10 border-blue-500/20' }}">
 
                 {{-- ENCABEZADO: Turno y Badges --}}
                 <div class="flex justify-between items-start mb-1 gap-2">
-                    <span class="text-[10px] uppercase tracking-wider font-bold {{ $currentClient->client_type === 'VIP' ? 'text-yellow-300' : 'text-blue-300' }}">
+                    <span class="text-[10px] uppercase tracking-wider font-bold {{ $isPremium ? 'text-yellow-300' : 'text-blue-300' }}">
                         Turno: {{ $currentClient->turn_number }}
                     </span>
                     <div class="flex gap-1 flex-wrap justify-end">
-                        @if($currentClient->client_type === 'VIP')
-                        <span class="bg-yellow-500 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">VIP</span>
+                        @if($isPremium)
+                        <span class="bg-yellow-500 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{{ $currentClient->catalogClientType?->displayLabel() ?? 'Premium' }}</span>
                         @endif
                         @if($currentClient->has_disability)
                         <span class="bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">PRIORIDAD</span>
@@ -119,9 +121,9 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 </div>
 
                 {{-- CRONÓMETRO --}}
-                <div class="mt-4 bg-black/30 border rounded py-2 px-3 {{ $currentClient->client_type === 'VIP' ? 'border-yellow-500/20' : 'border-blue-500/20' }}">
+                <div class="mt-4 bg-black/30 border rounded py-2 px-3 {{ $isPremium ? 'border-yellow-500/20' : 'border-blue-500/20' }}">
                     <span class="text-[9px] text-gray-400 uppercase tracking-widest block mb-1">Tiempo de Atención</span>
-                    <span class="seller-timer text-xl font-mono font-bold tracking-wider {{ $currentClient->client_type === 'VIP' ? 'text-yellow-300' : 'text-blue-300' }}">00:00</span>
+                    <span class="seller-timer text-xl font-mono font-bold tracking-wider {{ $isPremium ? 'text-yellow-300' : 'text-blue-300' }}">00:00</span>
                 </div>
             </div>
             @elseif($isOnBreak)
@@ -158,7 +160,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
             @elseif($isRating)
                 {{-- NUEVO: Botón AJAX para abrir el modal de calificación --}}
                 @php 
-                    $lastClient = App\Models\SalesQueue::where('assigned_shift_id', $shift->id)->where('status', 'COMPLETED')->latest('completed_at')->first(); 
+                    $lastClient = App\Models\SalesQueue::where('assigned_shift_id', $shift->id)->withStatusCode('COMPLETED')->latest('completed_at')->first(); 
                 @endphp
                 <button type="button" @click="$dispatch('open-rating-modal', { shift_id: {{ $shift->id }}, queue_id: {{ $lastClient->id ?? 0 }} })" class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg animate-pulse">
                     Calificar al Cliente
@@ -170,7 +172,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                         @csrf
                         <input type="hidden" name="shift_id" value="{{ $shift->id }}">
                         <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
-                            {{ $shift->break_reason === 'LUNCH' ? 'Pausar Comida y Volver' : 'Regresar a Activo' }}
+                            {{ $shift->isLunchBreak() ? 'Pausar Comida y Volver' : 'Regresar a Activo' }}
                         </button>
                     </form>
                 @else
