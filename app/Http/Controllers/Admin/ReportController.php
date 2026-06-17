@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateEmployeePdfJob;
 use App\Models\BreakReason;
+use App\Models\DailyShift;
 use App\Models\Employee;
 use App\Models\SaleRating;
 use App\Models\SalesQueue;
