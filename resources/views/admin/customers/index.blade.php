@@ -173,6 +173,7 @@
                                     <tr><td class="px-2 py-1">2 / BRONCE / MAYOREO BRONCE</td><td class="px-2 py-1">Bronce</td></tr>
                                     <tr><td class="px-2 py-1">3 / PLATA / MAYOREO PLATA</td><td class="px-2 py-1">Plata</td></tr>
                                     <tr><td class="px-2 py-1">4 / DIAMANTE / MAYOREO DIAMANTE</td><td class="px-2 py-1">Diamante</td></tr>
+                                    <tr><td class="px-2 py-1">VIP</td><td class="px-2 py-1">VIP</td></tr>
                                     <tr><td class="px-2 py-1">5 / PLATAFORMAS</td><td class="px-2 py-1">Plataformas</td></tr>
                                     <tr><td class="px-2 py-1">7 / COLABORADORES</td><td class="px-2 py-1">Colaboradores</td></tr>
                                 </tbody>

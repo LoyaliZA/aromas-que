@@ -14,7 +14,6 @@ class ClientType extends Model
 
     private const LEGACY_ALIASES = [
         'REGULAR' => 'CLIENTES',
-        'VIP' => 'DIAMANTE',
         'DISCAPACITY' => 'CLIENTES',
     ];
 

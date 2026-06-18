@@ -21,6 +21,7 @@ return [
         'PLATA' => 'Plata',
         'ORO' => 'Oro',
         'DIAMANTE' => 'Diamante',
+        'VIP' => 'VIP',
         'COLABORADORES' => 'Colaboradores',
         'PLATAFORMAS' => 'Plataformas',
     ],
@@ -28,6 +29,6 @@ return [
         'roles' => ['ADMIN', 'MANAGER', 'CHECKER', 'SELLER', 'CUSTOMER', 'AUXILIAR', 'BELLAROMA', 'CALLCENTER', 'CEDIS'],
         'job_positions' => ['ADMIN', 'MANAGER', 'CHECKER', 'SELLER', 'AUXILIAR'],
         'departments' => ['AROMAS', 'BELLAROMA', 'CALLCENTER', 'CEDIS', 'NONE'],
-        'client_types' => ['CLIENTES', 'BRONCE', 'PLATA', 'ORO', 'DIAMANTE', 'COLABORADORES', 'PLATAFORMAS'],
+        'client_types' => ['CLIENTES', 'BRONCE', 'PLATA', 'ORO', 'DIAMANTE', 'VIP', 'COLABORADORES', 'PLATAFORMAS'],
     ],
 ];

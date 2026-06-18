@@ -38,7 +38,7 @@ return [
         // Legacy / direct internal codes
         'CLIENTES' => 'CLIENTES',
         'REGULAR' => 'CLIENTES',
-        'VIP' => 'DIAMANTE',
+        'VIP' => 'VIP',
     ],
 
     'default_code' => 'CLIENTES',
