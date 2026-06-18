@@ -148,7 +148,11 @@ Route::prefix('gerencia')
         Route::delete('/pickups/bulk-destroy', [PickupController::class, 'bulkDestroy'])->name('pickups.bulkDestroy');
 
         Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::get('/staff/create', [StaffController::class, 'create'])->name('staff.create');
+        Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
         Route::post('/staff/toggle', [StaffController::class, 'toggleShift'])->name('staff.toggle');
+        Route::post('/staff/toggle-queue', [StaffController::class, 'toggleQueue'])->name('staff.toggle-queue');
+        Route::post('/staff/{id}/deactivate', [StaffController::class, 'deactivate'])->name('staff.deactivate');
 
         // --- RUTAS: CALIFICACIÓN CLIENTES (TABLET) ---
         Route::get('/calificacion-cliente', [ClientRatingController::class, 'index'])->name('calificacion.index');

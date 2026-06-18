@@ -51,6 +51,7 @@ class UserController extends Controller
                         'is_active' => true,
                         'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                         'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
+                        'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
                     ]);
                     $userId = $user->id;
                 }
@@ -113,6 +114,7 @@ class UserController extends Controller
                             'role' => $userRole,
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
+                            'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
                         ];
                         if (!empty($validated['password'])) {
                             $dataToUpdate['password'] = Hash::make($validated['password']);
@@ -127,6 +129,7 @@ class UserController extends Controller
                             'is_active' => true,
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
+                            'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
                         ]);
                         $employee->update(['user_id' => $user->id]);
                     }
@@ -193,6 +196,7 @@ class UserController extends Controller
             'appears_in_sales_queue' => 'nullable|boolean',
             'can_manage_rezagados' => 'nullable|boolean',
             'can_manage_shifts' => 'nullable|boolean',
+            'can_manage_sellers' => 'nullable|boolean',
             'has_access' => 'nullable|boolean',
             'email' => [
                 'nullable',

@@ -28,6 +28,7 @@ class User extends Authenticatable
         'is_active',
         'can_manage_rezagados',
         'can_manage_shifts',
+        'can_manage_sellers',
     ];
 
     /**
@@ -49,6 +50,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'can_manage_rezagados' => 'boolean',
             'can_manage_shifts' => 'boolean',
+            'can_manage_sellers' => 'boolean',
         ];
     }
 
@@ -140,6 +142,11 @@ class User extends Authenticatable
     public function canManageShifts(): bool
     {
         return $this->can_manage_shifts;
+    }
+
+    public function canManageSellers(): bool
+    {
+        return $this->can_manage_sellers;
     }
 
     public function setRoleAttribute(?string $value): void

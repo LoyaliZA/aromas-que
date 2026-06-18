@@ -97,6 +97,15 @@
                                     <span class="block text-xs text-gray-400 mt-1">Permite a este gerente activar, pausar o cerrar los turnos del personal de ventas en su dashboard.</span>
                                 </div>
                             </label>
+
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="can_manage_sellers" value="1" class="sr-only peer" {{ old('can_manage_sellers') ? 'checked' : '' }}>
+                                <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                                <div class="ms-3">
+                                    <span class="block text-sm font-bold text-gray-200">Gestor de Vendedores (Pantalla de Ventas)</span>
+                                    <span class="block text-xs text-gray-400 mt-1">Permite crear vendedores, retirarlos y controlar quién aparece en la vista de ventas.</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
 

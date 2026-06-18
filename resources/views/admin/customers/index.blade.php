@@ -48,6 +48,14 @@
                     </select>
                 </div>
                 
+                <div class="md:w-48">
+                    <select name="type_lock" class="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight cursor-pointer" onchange="this.form.submit()">
+                        <option value="ALL" {{ request('type_lock', 'ALL') == 'ALL' ? 'selected' : '' }}>Todos los seguros</option>
+                        <option value="locked" {{ request('type_lock') == 'locked' ? 'selected' : '' }}>Solo bloqueados</option>
+                        <option value="unlocked" {{ request('type_lock') == 'unlocked' ? 'selected' : '' }}>Solo sin bloqueo</option>
+                    </select>
+                </div>
+                
                 <button type="submit" class="bg-gray-700 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-600 transition-colors">Buscar</button>
                 <a href="{{ route('admin.customers.index') }}" class="flex items-center justify-center px-4 py-3 border border-gray-600 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" title="Limpiar Filtros">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -65,6 +73,7 @@
                             <th class="p-4 font-bold">Nombre</th>
                             <th class="p-4 font-bold">Contacto</th>
                             <th class="p-4 font-bold text-center">Tipo</th>
+                            <th class="p-4 font-bold text-center">Seguro</th>
                             <th class="p-4 font-bold text-center">Registro</th>
                             <th class="p-4 font-bold text-center">Acciones</th>
                         </tr>
@@ -83,6 +92,17 @@
                                         {{ $customer->catalogClientType?->displayLabel() ?? $customer->resolveClientTypeLabel() ?? 'Clientes' }}
                                     </span>
                                 </td>
+                                <td class="p-4 text-center">
+                                    @if($customer->client_type_locked)
+                                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-yellow-500/20 text-yellow-400" title="Tipo bloqueado">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-800 text-gray-500" title="Sin bloqueo">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                                        </span>
+                                    @endif
+                                </td>
                                 <td class="p-4 text-center text-xs text-gray-500">
                                     {{ $customer->created_at->format('d/m/Y') }}
                                 </td>
@@ -94,7 +114,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="p-8 text-center text-gray-500">
+                                <td colspan="7" class="p-8 text-center text-gray-500">
                                     <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                                     <p class="text-lg font-bold">No se encontraron clientes</p>
                                     <p class="text-sm">Intenta buscar con otros términos o importa tu base de datos.</p>
@@ -209,12 +229,27 @@
                         </div>
                         <div>
                             <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Tipo de Cliente *</label>
-                            <select name="client_type" x-model="editingCustomer.client_type" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-aromas-highlight">
+                            <template x-if="editingCustomer.client_type_locked">
+                                <input type="hidden" name="client_type" :value="editingCustomer.client_type">
+                            </template>
+                            <select :name="editingCustomer.client_type_locked ? undefined : 'client_type'" x-model="editingCustomer.client_type" :disabled="editingCustomer.client_type_locked" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-aromas-highlight disabled:opacity-50 disabled:cursor-not-allowed">
                                 @foreach($clientTypes as $type)
                                     <option value="{{ $type->code }}">{{ $type->label }}</option>
                                 @endforeach
                             </select>
                         </div>
+                    </div>
+
+                    <div class="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="hidden" name="client_type_locked" value="0">
+                            <input type="checkbox" name="client_type_locked" value="1" x-model="editingCustomer.client_type_locked" class="sr-only peer">
+                            <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                            <div class="ms-3">
+                                <span class="block text-sm font-bold text-gray-200">Bloquear tipo de cliente</span>
+                                <span class="block text-xs text-gray-400 mt-1">Los clientes con seguro activo no cambiarán de lista al importar CSV.</span>
+                            </div>
+                        </label>
                     </div>
 
                     <div>
@@ -259,7 +294,8 @@
                 },
 
                 openEditModal(customer) {
-                    this.editingCustomer = JSON.parse(JSON.stringify(customer)); // Clonar para no mutar directo
+                    this.editingCustomer = JSON.parse(JSON.stringify(customer));
+                    this.editingCustomer.client_type_locked = Boolean(customer.client_type_locked);
                     this.showEditModal = true;
                 }
             }

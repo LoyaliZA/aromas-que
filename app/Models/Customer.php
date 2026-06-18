@@ -18,9 +18,17 @@ class Customer extends Model
         'name',
         'client_type',
         'client_type_id',
+        'client_type_locked',
         'phone',
         'email',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'client_type_locked' => 'boolean',
+        ];
+    }
 
     public function salesQueues(): HasMany
     {

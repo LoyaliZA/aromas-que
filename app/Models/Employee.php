@@ -80,6 +80,22 @@ class Employee extends Model
         return $query->where('appears_in_sales_queue', true)->where('is_active', true);
     }
 
+    public function scopeSellerPosition(Builder $query)
+    {
+        return $query->where(function ($q) {
+            $q->whereHas('catalogJobPosition', fn ($q2) => $q2->where('name', 'SELLER'));
+
+            if (\Illuminate\Support\Facades\Schema::hasColumn('employees', 'job_position')) {
+                $q->orWhere('job_position', 'SELLER');
+            }
+        });
+    }
+
+    public function scopeActiveSellers(Builder $query)
+    {
+        return $query->sellerPosition()->where('is_active', true);
+    }
+
     public function scopeByDepartment(Builder $query, $department = null): void
     {
         if ($department && $department !== 'ALL') {
