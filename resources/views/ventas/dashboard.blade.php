@@ -80,8 +80,8 @@
                     <input type="hidden" name="reason" id="break-reason-input">
                     @foreach($breakReasons as $breakReason)
                     <button type="button" @click="selectBreakReason('{{ $breakReason->code }}')"
-                        @if($breakReason->is_lunch) :class="lunchSecondsLeft <= 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" @else class="hover:bg-aromas-highlight hover:text-aromas-main" @endif
-                        class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all">
+                        class="relative p-6 bg-gray-700/50 border border-gray-600 rounded-xl text-gray-300 font-bold flex flex-col items-center gap-3 transition-all @if(!$breakReason->is_lunch) hover:bg-aromas-highlight hover:text-aromas-main @endif"
+                        @if($breakReason->is_lunch) :class="lunchSecondsLeft <= 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-aromas-highlight hover:text-aromas-main'" @endif>
                         <span class="text-sm uppercase tracking-wide">{{ $breakReason->label }}</span>
                         @if($breakReason->is_lunch)
                         <span x-show="lunchSecondsLeft <= 0" class="absolute bottom-2 text-[10px] text-red-400 font-black">Agotado</span>
@@ -256,9 +256,15 @@
                     has_disability: false
                 },
                 alertTimer: 5,
-                lastAlertedFolio: null, // <-- NUEVA VARIABLE: Guarda el folio que ya sonó
+                alertedFolios: [], // <-- Array en lugar de variable única
+                alertedIncidents: [], // <-- Control de incidentes alertados
+                prorrogaAlerted: {},
                 isLoading: false,
-                spanishVoice: null, // <-- NUEVA VARIABLE AQUÍ
+                spanishVoice: null,
+                requestExtensionUrl: '{{ route('ventas.request-extension') }}',
+
+                taskQueue: [],
+                isProcessingTask: false,
 
                 init() {
 
@@ -394,6 +400,36 @@
                             timerEl.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
                             timerEl.className = mins >= 15 ? "seller-timer text-xl font-mono font-bold text-yellow-500 tracking-wider" : "seller-timer text-xl font-mono font-bold text-gray-300 tracking-wider";
                         }
+
+                        let queueId = card.dataset.queueId;
+                        let turnNumber = card.dataset.turnNumber;
+                        let extensionCount = parseInt(card.dataset.extensionCount) || 0;
+                        let warningEl = card.querySelector('.extension-warning');
+
+                        let maxAllowedMins = 15 + (extensionCount * 15);
+
+                        if (mins >= maxAllowedMins) {
+                            if (warningEl) {
+                                warningEl.innerText = 'Tiempo expirado. Prórroga requerida';
+                                warningEl.classList.remove('hidden');
+                            }
+                            let prorrogaBtn = card.querySelector('.request-extension-btn');
+                            let prorrogaLabel = card.querySelector('.request-extension-label');
+                            if (prorrogaBtn) prorrogaBtn.classList.remove('hidden');
+                            if (prorrogaLabel) prorrogaLabel.classList.add('hidden');
+
+                            if (queueId && !this.prorrogaAlerted[queueId + '_' + extensionCount]) {
+                                this.prorrogaAlerted[queueId + '_' + extensionCount] = true;
+                                let sellerName = card.dataset.sellerName || 'Vendedor';
+                                this.speakMessage(`Atención {{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el tiempo de atención del vendedor ${sellerName} está por expirar.`);
+                            }
+                        } else {
+                            if (warningEl) warningEl.classList.add('hidden');
+                            let prorrogaBtn = card.querySelector('.request-extension-btn');
+                            let prorrogaLabel = card.querySelector('.request-extension-label');
+                            if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
+                            if (prorrogaLabel) prorrogaLabel.classList.remove('hidden');
+                        }
                     });
 
                     const breakCards = document.querySelectorAll('.seller-card[data-on-break="true"]');
@@ -409,29 +445,29 @@
                         let elapsedSecs = Math.floor((now - breakStartTime) / 1000);
 
                         if (breakReason === 'LUNCH') {
-                            // LÓGICA COMIDA: Cuenta regresiva y 5 mins de Gracia
-                            if (elapsedSecs < 0) {
-                                // Estamos en la gracia de 5 mins
-                                let graceLeft = Math.abs(elapsedSecs);
-                                let gMins = Math.floor(graceLeft / 60);
-                                let gSecs = graceLeft % 60;
-                                timerEl.innerText = `Inicio en: ${gMins.toString().padStart(2, '0')}:${gSecs.toString().padStart(2, '0')}`;
-                                timerEl.className = "break-timer text-xl font-mono font-bold text-blue-400 tracking-wider animate-pulse";
-                            } else {
-                                // Ya cuenta de sus 30 mins
-                                let remaining = lunchLeft - elapsedSecs;
-                                if (remaining < 0) {
-                                    let excess = Math.abs(remaining);
-                                    let eMins = Math.floor(excess / 60);
-                                    let eSecs = excess % 60;
-                                    timerEl.innerText = `-${eMins.toString().padStart(2, '0')}:${eSecs.toString().padStart(2, '0')}`;
-                                    timerEl.className = "break-timer text-2xl font-mono font-black text-red-500 tracking-wider animate-pulse";
-                                } else {
-                                    let rMins = Math.floor(remaining / 60);
-                                    let rSecs = remaining % 60;
-                                    timerEl.innerText = `${rMins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')}`;
-                                    timerEl.className = "break-timer text-2xl font-mono font-bold text-yellow-400 tracking-wider";
+                            // LÓGICA COMIDA: Ya cuenta de sus 30 mins
+                            let remaining = lunchLeft - elapsedSecs;
+                            
+                            // ALERTA DE 5 MINUTOS RESTANTES
+                            if (remaining === 300) {
+                                if (!card.dataset.lunchAlerted) {
+                                    card.dataset.lunchAlerted = "true";
+                                    let sellerName = card.dataset.sellerName || 'Vendedor';
+                                    this.speakMessage(`Atención ${sellerName}, te quedan 5 minutos de comida para regresar al trabajo.`);
                                 }
+                            }
+
+                            if (remaining < 0) {
+                                let excess = Math.abs(remaining);
+                                let eMins = Math.floor(excess / 60);
+                                let eSecs = excess % 60;
+                                timerEl.innerText = `-${eMins.toString().padStart(2, '0')}:${eSecs.toString().padStart(2, '0')}`;
+                                timerEl.className = "break-timer text-2xl font-mono font-black text-red-500 tracking-wider animate-pulse";
+                            } else {
+                                let rMins = Math.floor(remaining / 60);
+                                let rSecs = remaining % 60;
+                                timerEl.innerText = `${rMins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')}`;
+                                timerEl.className = "break-timer text-2xl font-mono font-bold text-yellow-400 tracking-wider";
                             }
                         } else {
                             // PAUSAS NORMALES: Cuenta hacia arriba
@@ -493,8 +529,22 @@
                                 this.updateTimers();
                             }
                             // Mostrar alerta SOLO si es un turno nuevo que no ha sonado
-                            if (data.alert && data.alert.folio !== this.lastAlertedFolio) {
-                                this.triggerMegaAlert(data.alert);
+                            if (data.alerts && data.alerts.length > 0) {
+                                data.alerts.forEach(alert => {
+                                    if (!this.alertedFolios.includes(alert.folio)) {
+                                        this.alertedFolios.push(alert.folio);
+                                        this.enqueueTask({ type: 'megaAlert', data: alert });
+                                    }
+                                });
+                            }
+
+                            if (data.incidents && data.incidents.length > 0) {
+                                data.incidents.forEach(inc => {
+                                    if (!this.alertedIncidents.includes(inc.id)) {
+                                        this.alertedIncidents.push(inc.id);
+                                        this.enqueueTask({ type: 'speech', message: inc.message });
+                                    }
+                                });
                             }
                         })
                         .finally(() => {
@@ -502,61 +552,84 @@
                         });
                 },
 
-                triggerMegaAlert(data) {
+                enqueueTask(task) {
+                    this.taskQueue.push(task);
+                    this.processTaskQueue();
+                },
+
+                processTaskQueue() {
+                    if (this.isProcessingTask || this.taskQueue.length === 0) return;
+                    this.isProcessingTask = true;
+                    
+                    const task = this.taskQueue.shift();
+                    
+                    if (task.type === 'megaAlert') {
+                        this.executeMegaAlert(task.data, () => {
+                            this.showMegaAlert = false;
+                            this.isProcessingTask = false;
+                            setTimeout(() => this.processTaskQueue(), 500);
+                        });
+                    } else if (task.type === 'speech') {
+                        this.executeSpeech(task.message, () => {
+                            this.isProcessingTask = false;
+                            setTimeout(() => this.processTaskQueue(), 500);
+                        });
+                    }
+                },
+
+                executeMegaAlert(data, callback) {
                     this.alertData = data;
                     this.showMegaAlert = true;
                     this.alertTimer = 5;
 
-                    
-                    // Función separada para el Texto a Voz (TTS) con tu mensaje personalizado
+                    let hasCalledDone = false;
+                    const done = () => {
+                        if (hasCalledDone) return;
+                        hasCalledDone = true;
+                        
+                        const delay = this.taskQueue.length > 0 ? 2000 : 5000;
+                        setTimeout(() => {
+                            callback();
+                        }, delay);
+                    };
+
+                    let audioId = data.use_premium_alert ? 'bell_vip' : 'bell';
+                    let audio = document.getElementById(audioId) || document.getElementById('bell');
+
                     const hablarMensaje = () => {
+                        if (audio) audio.onended = null; // Limpiar evento para evitar que vuelva a saltar luego
+                        
                         if ('speechSynthesis' in window) {
-                            // 1. Limpiar cualquier voz trabada anterior
                             window.speechSynthesis.cancel();
 
                             let mensaje = data.seller + " ¡tienes un nuevo cliente asignado!. " + data.client;
-
-                            // 2. Usar variable global para evitar que Chrome corte el audio
                             window.currentUtterance = new SpeechSynthesisUtterance(mensaje);
                             
-                            if (this.spanishVoice) {
-                                window.currentUtterance.voice = this.spanishVoice;
-                            } else {
-                                window.currentUtterance.lang = 'es-MX'; // Fallback
-                            }
+                            if (this.spanishVoice) window.currentUtterance.voice = this.spanishVoice;
+                            else window.currentUtterance.lang = 'es-MX';
                             
-                            window.currentUtterance.rate = 0.9; // Velocidad cómoda
+                            window.currentUtterance.rate = 0.9;
+                            
+                            window.currentUtterance.onend = done;
+                            window.currentUtterance.onerror = done;
+                            
                             window.speechSynthesis.speak(window.currentUtterance);
+                        } else {
+                            done();
                         }
                     };
 
-                    // 1. REPRODUCIR SONIDO (Dependiendo si es VIP)
-                    let audioId = data.use_premium_alert ? 'bell_vip' : 'bell';
-                    let audio = document.getElementById(audioId);
-
-                    if (!audio) audio = document.getElementById('bell');
-
                     if (audio) {
-                        // Asegurarnos de limpiar eventos anteriores
-                        audio.onended = null;
-                        
-                        // Rebobinar el audio al inicio (VITAL para que suene más de una vez)
-                        audio.currentTime = 0; 
-                        
-                        // Asignar el evento de hablar justo cuando termine el timbre
                         audio.onended = hablarMensaje;
-
-                        // Reproducir
+                        audio.currentTime = 0; 
+                        audio.volume = 1.0;
                         audio.play().catch(e => {
-                            console.log("Audio bloqueado por el navegador:", e);
-                            hablarMensaje(); // Si el navegador bloquea el timbre, que al menos hable
+                            hablarMensaje();
                         });
                     } else {
-                        // Si por algún motivo no encuentra la etiqueta <audio> en el HTML
                         hablarMensaje();
                     }
 
-                    // 3. NOTIFICACIÓN DE SISTEMA OPERATIVO
                     if ("Notification" in window && Notification.permission === "granted") {
                         new Notification(data.use_premium_alert ? "⭐ ¡Cliente Premium Asignado!" : "¡Nuevo Cliente Asignado!", {
                             body: `Turno: ${data.folio}\nCliente: ${data.client}\nVendedor: ${data.seller}`,
@@ -568,10 +641,6 @@
                         this.alertTimer--;
                         if (this.alertTimer <= 0) clearInterval(timerInterval);
                     }, 1000);
-
-                    setTimeout(() => {
-                        if (this.showMegaAlert) this.closeAlert();
-                    }, 15000);
                 },
 
                 closeAlert() {
@@ -586,10 +655,82 @@
                         body: JSON.stringify({ shift_id: shiftId })
                     }).then(r => r.json()).then(data => {
                         if(data.success) {
+                            this.speakMessage('Venta terminada.');
                             this.fetchUpdates(); // Refresca el Grid para mostrar estado morado
                             this.openRatingModal(shiftId, queueId);
                         }
                     });
+                },
+
+                requestExtension(payload) {
+                    fetch(this.requestExtensionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ queue_id: payload.queue_id })
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            this.enqueueTask({ type: 'speech', message: `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.` });
+                            this.fetchUpdates();
+                        } else {
+                            alert(data.message || 'Error al solicitar la prórroga.');
+                        }
+                    }).catch(() => {
+                        alert('Error al solicitar la prórroga.');
+                    });
+                },
+
+                speakMessage(message) {
+                    this.enqueueTask({ type: 'speech', message: message });
+                },
+
+                executeSpeech(message, callback) {
+                    if (!('speechSynthesis' in window)) {
+                        callback();
+                        return;
+                    }
+
+                    // Opcional: Tocar el timbre suavemente antes de hablar
+                    let audio = document.getElementById('bell');
+                    if (audio) {
+                        audio.onended = null; // IMPORTANT: Prevenir que dispare eventos antiguos
+                        audio.currentTime = 0;
+                        audio.volume = 0.5;
+                        audio.play().catch(e => console.log('Silenciado por el navegador:', e));
+                    }
+
+                    // Limpiar audios atascados
+                    window.speechSynthesis.cancel();
+
+                    setTimeout(() => {
+                        let hasCalledCallback = false;
+                        const done = () => {
+                            if (hasCalledCallback) return;
+                            hasCalledCallback = true;
+                            callback();
+                        };
+
+                        const utterance = new SpeechSynthesisUtterance(message);
+                        if (this.spanishVoice) {
+                            utterance.voice = this.spanishVoice;
+                        } else {
+                            utterance.lang = 'es-MX';
+                        }
+                        utterance.rate = 0.9;
+                        
+                        utterance.onend = done;
+                        utterance.onerror = done;
+                        
+                        window.currentUtterance = utterance; // Prevenir Garbage Collection
+                        window.speechSynthesis.speak(utterance);
+                        
+                        // Fallback: Si el evento onend nunca se dispara, liberar cola después de un margen seguro
+                        setTimeout(done, 15000);
+                    }, 100);
                 },
 
                 openRatingModal(shiftId, queueId) {

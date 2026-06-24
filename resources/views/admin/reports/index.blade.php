@@ -27,6 +27,9 @@
                     <button @click="switchTab('abandoned')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all duration-200" :class="activeTab === 'abandoned' ? 'bg-aromas-highlight text-aromas-main shadow-md' : 'text-gray-400 hover:bg-aromas-tertiary/20 hover:text-white'">
                         Abandonos
                     </button>
+                    <button @click="switchTab('incidents')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all duration-200" :class="activeTab === 'incidents' ? 'bg-aromas-highlight text-aromas-main shadow-md' : 'text-gray-400 hover:bg-aromas-tertiary/20 hover:text-white'">
+                        Incidencias de Atención
+                    </button>
                     <div class="w-full h-px bg-aromas-tertiary/20 my-2"></div>
                     <button @click="switchTab('performance')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all duration-200" :class="activeTab === 'performance' ? 'bg-aromas-highlight text-aromas-main shadow-md' : 'text-gray-400 hover:bg-aromas-tertiary/20 hover:text-white'">
                         Rendimiento Vendedor
@@ -83,6 +86,10 @@
 
                 <div x-show="activeTab === 'abandoned'" style="display: none;">
                     @include('admin.reports.partials.abandoned')
+                </div>
+
+                <div x-show="activeTab === 'incidents'" style="display: none;">
+                    @include('admin.reports.partials.incidents')
                 </div>
 
                 <div x-show="activeTab === 'performance'" style="display: none;">

@@ -49,6 +49,10 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     @if($isServing)
     data-serving="true"
     data-shift-id="{{ $shift->id }}"
+    data-queue-id="{{ $currentClient->id }}"
+    data-turn-number="{{ $currentClient->turn_number }}"
+    data-extension-count="{{ $currentClient->extension_count ?? 0 }}"
+    data-last-extended-at="{{ $currentClient->last_extended_at ? $currentClient->last_extended_at->timestamp * 1000 : 0 }}"
     data-start-time="{{ $serveStartTime }}"
     @endif
     @if($isOnBreak)
@@ -60,7 +64,8 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     @if($isOnline)
     data-online="true"
     data-last-action-at="{{ $shift->last_action_at ? $shift->last_action_at->timestamp * 1000 : 0 }}"
-    @endif>
+    @endif
+    data-seller-name="{{ $seller->full_name }}">
 
 
     {{-- Indicador de Estado (Punto titilante) --}}
@@ -125,6 +130,17 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                     <span class="text-[9px] text-gray-400 uppercase tracking-widest block mb-1">Tiempo de Atención</span>
                     <span class="seller-timer text-xl font-mono font-bold tracking-wider {{ $isPremium ? 'text-yellow-300' : 'text-blue-300' }}">00:00</span>
                 </div>
+                <p class="extension-warning mt-3 text-sm font-bold uppercase text-amber-300 hidden"></p>
+                <div class="mt-3">
+                    <button type="button" @click="requestExtension({ queue_id: {{ $currentClient->id }}, seller_name: '{{ $seller->full_name }}' })" class="request-extension-btn hidden w-full py-2 rounded-xl border border-blue-500/60 bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 transition">
+                        Solicitar Prórroga {{ $currentClient->extension_count > 0 ? '(' . ($currentClient->extension_count + 1) . ')' : '' }}
+                    </button>
+                    @if($currentClient->extension_count > 0)
+                        <span class="request-extension-label inline-flex items-center justify-center w-full rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-200">
+                            Prórroga solicitada ({{ $currentClient->extension_count }})
+                        </span>
+                    @endif
+                </div>
             </div>
             @elseif($isOnBreak)
             {{-- Tarjeta de Cronómetro de Pausa --}}
@@ -167,19 +183,23 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 </button>
                 
             @elseif($isOnline || $isOnBreak)
-                @if($isOnBreak)
-                    <form action="{{ route('ventas.toggle-break') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="shift_id" value="{{ $shift->id }}">
-                        <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
-                            {{ $shift->isLunchBreak() ? 'Pausar Comida y Volver' : 'Regresar a Activo' }}
+                @if(auth()->check() && auth()->user()->resolveRoleName() !== 'SELLER')
+                    @if($isOnBreak)
+                        <form action="{{ route('ventas.toggle-break') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="shift_id" value="{{ $shift->id }}">
+                            <button class="w-full py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/30">
+                                {{ $shift->isLunchBreak() ? 'Pausar Comida y Volver' : 'Regresar a Activo' }}
+                            </button>
+                        </form>
+                    @else
+                        <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, lunchLeft: {{ $shift->lunch_seconds_left ?? 1800 }} })"
+                            class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
+                            Pausar Turno
                         </button>
-                    </form>
+                    @endif
                 @else
-                    <button @click="$dispatch('open-break-modal', { id: {{ $shift->id }}, lunchLeft: {{ $shift->lunch_seconds_left ?? 1800 }} })"
-                        class="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 flex items-center justify-center gap-2">
-                        Pausar Turno
-                    </button>
+                    <span class="text-xs text-gray-600 italic">Pausas gestionadas por Gerencia</span>
                 @endif
                 
             @else

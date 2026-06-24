@@ -34,6 +34,7 @@
                         <th class="p-3 text-center">Turnos</th>
                         <th class="p-3 text-center">Promedio</th>
                         <th class="p-3 text-center">Pausas</th>
+                        <th class="p-3 text-center">Incidencias</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
@@ -44,6 +45,7 @@
                         <td class="p-3 text-xs text-center text-green-400 font-mono">{{ $em['served'] }}</td>
                         <td class="p-3 text-xs text-center text-blue-400 font-mono">{{ $em['formatted_avg_service'] }}</td>
                         <td class="p-3 text-[10px] text-center text-yellow-500 font-mono">{{ $em['formatted_break_time'] }}</td>
+                        <td class="p-3 text-xs text-center text-red-400 font-mono">{{ $em['incidents'] }}</td>
                     </tr>
                     @endforeach
                 </tbody>

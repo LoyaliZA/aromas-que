@@ -586,6 +586,56 @@ class PickupController extends Controller
     }
 
     /**
+     * REGRESAR REZAGADO A RECEPCION
+     */
+    public function returnToReception(Request $request, $id)
+    {
+        $request->validate([
+            'password' => 'required|string'
+        ]);
+
+        if (!\Illuminate\Support\Facades\Hash::check($request->password, Auth::user()->password)) {
+            return redirect()->back()->with('error', 'Contraseña incorrecta. Acción cancelada.');
+        }
+
+        $pickup = Pickup::findOrFail($id);
+
+        $isRezagado = $pickup->created_at->lt(now()->subDays(15)->startOfDay());
+        if (!$isRezagado) {
+             return redirect()->back()->with('error', 'Este resguardo no es un rezagado.');
+        }
+        
+        if (!Auth::user()->canManageRezagados()) {
+            return redirect()->back()->with('error', 'No tienes permisos para gestionar rezagados.');
+        }
+
+        if ($pickup->currentStatus?->code !== 'IN_CUSTODY') {
+             return redirect()->back()->with('error', 'El resguardo no está en custodia.');
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($pickup) {
+            $notes = $pickup->notes ?? '';
+            $notes = trim($notes . "\n[Gerencia regresó rezago a Recepción]: Por " . Auth::user()->name);
+
+            // Se actualiza created_at a now() para que vuelva a ser visible para los checadores (<= 15 días)
+            // NOTA: Se debe usar forceFill porque created_at no es fillable por defecto.
+            $pickup->forceFill([
+                'notes' => $notes,
+                'created_at' => now(), 
+            ])->save();
+
+            \App\Models\PickupEdit::create([
+                'pickup_id' => $pickup->id,
+                'user_id' => Auth::id(),
+                'changes' => json_encode(['created_at' => 'Reinicio de fecha para visibilidad en recepción']),
+                'reason' => 'Regresado a recepción por: ' . Auth::user()->name,
+            ]);
+        });
+
+        return redirect()->route('gerencia.rezagados.index')->with('success', 'El resguardo ha sido regresado a la vista de Recepción.');
+    }
+
+    /**
      * Confirmar entrega de resguardo (firma, evidencia, titular o tercero).
      */
     public function deliver(Request $request, $id)

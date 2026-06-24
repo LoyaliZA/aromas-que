@@ -19,6 +19,7 @@ class ShiftStatusLog extends Model
         'reason',
         'break_reason_id',
         'changed_at',
+        'approved_by_id',
     ];
 
     protected function casts(): array
@@ -50,5 +51,10 @@ class ShiftStatusLog extends Model
         $this->loadMissing('catalogBreakReason');
 
         return $this->catalogBreakReason?->label ?? ($this->reason ?? 'General');
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by_id');
     }
 }

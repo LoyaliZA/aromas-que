@@ -49,7 +49,12 @@
                                     {{ \App\Support\CustodyDurationFormatter::label($pickup->created_at) }}
                                 </span>
                             </td>
-                            <td class="p-4 text-center">
+                            <td class="p-4 text-center flex justify-center gap-2">
+                                <button type="button"
+                                    @click="$dispatch('open-return-reception', { id: {{ $pickup->id }}, folio: '{{ $pickup->ticket_folio }}' })"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs uppercase tracking-wider shadow-lg shadow-blue-600/20 transition-transform active:scale-95">
+                                    Regresar a Recepción
+                                </button>
                                 <button type="button"
                                     @click="$dispatch('open-gerencia-delivery', {{ \Illuminate\Support\Js::from([
                                         'id' => $pickup->id,
@@ -82,4 +87,45 @@
 
     @include('gerencia.partials.pickup-delivery-modal')
     @include('gerencia.partials.delivery-scripts', ['deliveryRedirectTo' => route('gerencia.rezagados.index')])
+
+    <!-- Modal para Regresar a Recepción -->
+    <div x-data="{
+        show: false,
+        pickupId: null,
+        folio: '',
+        password: '',
+        openModal(e) {
+            this.pickupId = e.detail.id;
+            this.folio = e.detail.folio;
+            this.password = '';
+            this.show = true;
+            setTimeout(() => this.$refs.pwdInput.focus(), 100);
+        }
+    }"
+    @open-return-reception.window="openModal($event)"
+    x-show="show"
+    class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+    x-transition.opacity
+    style="display: none;">
+        <div class="bg-aromas-secondary rounded-xl shadow-2xl border border-blue-500/30 p-6 w-full max-w-md m-4"
+             @click.away="show = false">
+            <h3 class="text-xl font-bold text-white mb-4">Regresar a Recepción</h3>
+            <p class="text-gray-300 text-sm mb-4">
+                Estás a punto de regresar el resguardo <span class="font-bold text-blue-400" x-text="folio"></span> a la vista de Recepción. 
+                Se actualizará la fecha para que sea visible nuevamente.
+            </p>
+            <form :action="`{{ url('/gerencia/rezagados') }}/${pickupId}/return-to-reception`" method="POST">
+                @csrf
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-300 mb-2">Contraseña de Gerente</label>
+                    <input type="password" name="password" x-model="password" x-ref="pwdInput" required
+                           class="w-full bg-black/50 border border-aromas-tertiary/30 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" @click="show = false" class="px-5 py-2 rounded-lg text-gray-400 hover:text-white font-bold transition-colors">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-600/20 transition-transform active:scale-95">Confirmar y Regresar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </x-gerencia-layout>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Ventas;
 
 use App\Http\Controllers\Controller;
+use App\Models\AttentionIncident;
 use App\Models\BreakReason;
 use App\Models\DailyShift;
 use App\Models\Employee;
@@ -26,24 +27,41 @@ class QueueController extends Controller
 
     public function poll()
     {
+        $this->enforceAttentionTimeouts();
         $this->runMatchmaker();
 
         $sellers = $this->getSellersList();
         $clientsWaiting = SalesQueue::waiting()->sales()->count();
 
-        $recentAssignment = SalesQueue::withStatusCode('SERVING')
+        $recentAssignments = SalesQueue::withStatusCode('SERVING')
             ->where('turn_number', 'not like', '%-R')
-            ->where('started_serving_at', '>=', now()->subSeconds(2))
+            ->where('started_serving_at', '>=', now()->subSeconds(6))
             ->with(['assignedShift.employee', 'catalogClientType'])
-            ->first();
+            ->get();
 
-        $alertData = null;
-        if ($recentAssignment && $recentAssignment->assignedShift) {
-            $alertData = array_merge($recentAssignment->toQueuePayload(), [
-                'client' => $recentAssignment->client_name,
-                'seller' => $recentAssignment->assignedShift->employee->full_name,
-                'folio' => $recentAssignment->turn_number,
-            ]);
+        $alertsData = [];
+        foreach ($recentAssignments as $recentAssignment) {
+            if ($recentAssignment && $recentAssignment->assignedShift) {
+                $alertsData[] = array_merge($recentAssignment->toQueuePayload(), [
+                    'client' => $recentAssignment->client_name,
+                    'seller' => $recentAssignment->assignedShift->employee->full_name,
+                    'folio' => $recentAssignment->turn_number,
+                ]);
+            }
+        }
+
+        $recentIncidents = AttentionIncident::where('created_at', '>=', now()->subSeconds(6))
+            ->where('reason', 'TIEMPO_ATENCION_CADUCADO')
+            ->with(['employee'])
+            ->get();
+            
+        $incidentAlerts = [];
+        foreach ($recentIncidents as $incident) {
+            $sellerName = $incident->employee ? explode(' ', $incident->employee->name ?? $incident->employee->full_name)[0] : 'Vendedor';
+            $incidentAlerts[] = [
+                'id' => $incident->id,
+                'message' => "Atención. El turno de {$sellerName} fue finalizado por tiempo expirado."
+            ];
         }
 
         $html = view('ventas.partials.sellers-grid', compact('sellers'))->render();
@@ -51,8 +69,69 @@ class QueueController extends Controller
         return response()->json([
             'html' => $html,
             'waiting' => $clientsWaiting,
-            'alert' => $alertData,
+            'alerts' => $alertsData,
+            'incidents' => $incidentAlerts,
         ]);
+    }
+
+    public function requestExtension(Request $request)
+    {
+        $request->validate(['queue_id' => 'required|exists:sales_queue,id']);
+
+        $queue = SalesQueue::serving()->with('assignedShift')->findOrFail($request->queue_id);
+        $queue->update([
+            'last_extended_at' => now(),
+            'extension_count' => max(1, $queue->extension_count + 1),
+        ]);
+
+        \App\Models\QueueActionLog::create([
+            'sales_queue_id' => $queue->id,
+            'user_id' => auth()->id(),
+            'action_type' => 'EXTENSION',
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Prórroga registrada.']);
+    }
+
+    private function enforceAttentionTimeouts(): void
+    {
+        $expiredQueues = SalesQueue::serving()
+            ->whereNotNull('started_serving_at')
+            ->whereRaw('TIMESTAMPDIFF(MINUTE, started_serving_at, NOW()) >= (17 + (COALESCE(extension_count, 0) * 15))')
+            ->with('assignedShift')
+            ->get();
+
+        foreach ($expiredQueues as $queue) {
+            DB::transaction(function () use ($queue) {
+                $shift = $queue->assignedShift;
+                $queue->update(array_merge(
+                    SalesQueue::attributesForStatus('COMPLETED'),
+                    [
+                        'completed_at' => now(),
+                        // Remove custom_abandonment_reason as it's no longer abandoned
+                    ]
+                ));
+
+                if ($shift) {
+                    $shift->increment('customers_served_count');
+                    $shift->update([
+                        'current_status' => 'ONLINE',
+                        'last_action_at' => now(),
+                    ]);
+                }
+
+                \App\Models\AttentionIncident::create([
+                    'daily_shift_id' => $shift->id ?? null,
+                    'sales_queue_id' => $queue->id,
+                    'employee_id' => $shift->employee_id ?? null,
+                    'customer_id' => $queue->customer_id,
+                    'turn_number' => $queue->turn_number,
+                    'client_name' => $queue->client_name,
+                    'reason' => 'TIEMPO_ATENCION_CADUCADO',
+                    'details' => 'Turno terminado automáticamente tras no solicitar prórroga dentro del tiempo de atención.',
+                ]);
+            });
+        }
     }
 
     public function toggleBreak(Request $request)
@@ -78,7 +157,7 @@ class QueueController extends Controller
                     return back()->with('error', 'El tiempo de comida se ha agotado.');
                 }
                 $shift->has_taken_lunch = true;
-                $statusChangeAt = now()->addMinutes(5);
+                $statusChangeAt = now();
             } else {
                 $statusChangeAt = now();
             }
@@ -98,6 +177,7 @@ class QueueController extends Controller
                     'previous_status' => $previousStatus,
                     'new_status' => 'BREAK',
                     'changed_at' => now(),
+                    'approved_by_id' => auth()->check() ? auth()->id() : null,
                 ],
                 DailyShift::breakReasonAttributes($breakReason),
                 \Illuminate\Support\Facades\Schema::hasColumn('shift_status_logs', 'reason')
@@ -127,6 +207,7 @@ class QueueController extends Controller
                 'previous_status' => $previousStatus,
                 'new_status' => 'ONLINE',
                 'changed_at' => now(),
+                'approved_by_id' => auth()->check() ? auth()->id() : null,
             ]);
         }
 
@@ -154,6 +235,12 @@ class QueueController extends Controller
                 $shift->update([
                     'current_status' => 'RATING',
                     'last_action_at' => now(),
+                ]);
+
+                \App\Models\QueueActionLog::create([
+                    'sales_queue_id' => $client->id,
+                    'user_id' => auth()->id(),
+                    'action_type' => 'FINISHED',
                 ]);
             }
         });

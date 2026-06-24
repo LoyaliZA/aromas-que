@@ -55,6 +55,9 @@ Route::get('/', function () {
 });
 
 Route::get('/dashboard', function () {
+    if (auth()->check() && auth()->user()->resolveRoleName() === 'SELLER') {
+        return redirect()->route('ventas.dashboard');
+    }
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -136,6 +139,7 @@ Route::prefix('gerencia')
         // --- RUTAS: REZAGADOS ---
         Route::get('/rezagados', [PickupController::class, 'rezagados'])->name('rezagados.index');
         Route::post('/rezagados/{id}/entregar', [PickupController::class, 'entregarRezagado'])->name('rezagados.entregar');
+        Route::post('/rezagados/{id}/return-to-reception', [PickupController::class, 'returnToReception'])->name('rezagados.returnToReception');
         Route::put('/pickups/{id}/deliver', [PickupController::class, 'deliver'])->name('pickups.deliver');
         Route::get('/customers/search', [PickupController::class, 'searchCustomers'])->name('customers.search');
         // --- Resguardos --
@@ -202,6 +206,7 @@ Route::prefix('ventas')
         Route::get('/poll', [QueueController::class, 'poll'])->name('poll');
         Route::post('/toggle-break', [QueueController::class, 'toggleBreak'])->name('toggle-break');
         Route::post('/finish-service', [QueueController::class, 'finishService'])->name('finish-service');
+        Route::post('/request-extension', [QueueController::class, 'requestExtension'])->name('request-extension');
         Route::post('/submit-rating', [QueueController::class, 'submitRating'])->name('submit-rating');
 
         // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---

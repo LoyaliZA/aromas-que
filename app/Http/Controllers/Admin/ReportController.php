@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateEmployeePdfJob;
+use App\Models\AttentionIncident;
 use App\Models\BreakReason;
 use App\Models\DailyShift;
 use App\Models\Employee;
@@ -61,6 +62,14 @@ class ReportController extends Controller
         })->count();
         $avgServiceSeconds = SalesQueue::whereBetween('completed_at', [$start, $end])->whereNotNull('started_serving_at')->whereNotNull('completed_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, started_serving_at, completed_at)) as avg_time')->value('avg_time');
         $avgWaitSeconds = SalesQueue::whereBetween('started_serving_at', [$start, $end])->whereNotNull('queued_at')->whereNotNull('started_serving_at')->selectRaw('AVG(TIMESTAMPDIFF(SECOND, queued_at, started_serving_at)) as avg_time')->value('avg_time');
+        $filterSeller = $request->input('seller_id_filter');
+
+        $incidentsQuery = AttentionIncident::whereBetween('created_at', [$start, $end]);
+        if (!empty($filterSeller)) {
+            $incidentsQuery->where('employee_id', $filterSeller);
+        }
+        $totalIncidents = (clone $incidentsQuery)->count();
+        $detailedIncidents = $incidentsQuery->with(['employee', 'salesQueue'])->orderBy('created_at', 'desc')->paginate(15, ['*'], 'incident_page')->appends(request()->query());
 
         // --- DESEMPEÑO EMPLEADOS (CON CALIFICACIONES) ---
         $employeesList = Employee::sellers()->get();
@@ -84,7 +93,8 @@ class ReportController extends Controller
                 'served' => $servedCount,
                 'formatted_avg_service' => $this->formatSeconds($avgEmpServiceSeconds),
                 'formatted_break_time' => $this->calculateEmployeeBreaks($employee->id, $start, $end)['total_formatted'],
-                'avg_stars' => $avgStars // <--- NUEVO KPI
+                'avg_stars' => $avgStars, // <--- NUEVO KPI
+                'incidents' => AttentionIncident::where('employee_id', $employee->id)->whereBetween('created_at', [$start, $end])->count(),
             ];
         });
 
@@ -111,7 +121,6 @@ class ReportController extends Controller
         // --- TABLAS DETALLADAS EXISTENTES ---
         $searchClient = $request->input('search_client');
         $filterType = $request->input('client_type');
-        $filterSeller = $request->input('seller_id_filter');
 
         $clientsQuery = SalesQueue::with(['assignedShift.employee', 'ratings', 'customer'])
             ->whereBetween('completed_at', [$start, $end])
@@ -255,6 +264,8 @@ class ReportController extends Controller
             'chart_data' => $chartData,
             'detailedClients' => $detailedClients,
             'detailedAbandoned' => $detailedAbandoned,
+            'detailedIncidents' => $detailedIncidents,
+            'total_incidents' => $totalIncidents,
             'employeesList' => $employeesList,
             'clientTypes' => \App\Models\ClientType::active()->orderBy('sort_order')->get(),
             'selectedEmployeeId' => $selectedEmployeeId,
@@ -578,6 +589,35 @@ class ReportController extends Controller
                 $motivo = !empty($d->custom_abandonment_reason) ? $d->custom_abandonment_reason : ($d->abandonment_reason_id ? $d->abandonmentReason->reason : 'Inactividad');
                 $rows[] = [$d->turn_number, $d->client_name, $d->resolveClientTypeName(), Carbon::parse($d->queued_at)->format('d/m/Y H:i:s'), $motivo];
             }
+        } elseif ($type === 'incidents') {
+            $headers = ['Fecha / Hora', 'Turno / Cliente', 'Vendedor', 'Razón / Detalle', 'Prórrogas', 'Tiempo Atendido'];
+            $incidentsQuery = AttentionIncident::with(['employee', 'salesQueue', 'customer'])->whereBetween('created_at', [$start, $end]);
+            
+            $filterSeller = $request->input('seller_id_filter');
+            if (!empty($filterSeller)) {
+                $incidentsQuery->where('employee_id', $filterSeller);
+            }
+            $data = $incidentsQuery->orderBy('created_at', 'desc')->get();
+
+            foreach ($data as $incident) {
+                $queue = $incident->salesQueue;
+                $prorrogas = $queue ? ($queue->extension_count ?? 0) : 0;
+                $tiempoAtendido = 'N/A';
+                if ($queue && $queue->started_serving_at) {
+                    $endQueue = $queue->completed_at ? Carbon::parse($queue->completed_at) : Carbon::parse($incident->created_at);
+                    $diff = Carbon::parse($queue->started_serving_at)->diffInSeconds($endQueue);
+                    $tiempoAtendido = gmdate($diff >= 3600 ? "H:i:s" : "i:s", $diff);
+                }
+
+                $rows[] = [
+                    optional($incident->created_at)->format('d/m/Y H:i:s'),
+                    ($incident->turn_number ?? 'N/A') . ' - ' . ($incident->client_name ?? optional($incident->customer)->full_name ?? 'N/A'),
+                    optional($incident->employee)->full_name ?? 'N/A',
+                    $incident->reason . ' - ' . ($incident->details ?? '-'),
+                    $prorrogas,
+                    $tiempoAtendido
+                ];
+            }
         } elseif ($type === 'employee' && $empId) {
             $employee = Employee::find($empId);
             $headers = ['Turno', 'Cliente', 'Tipo Cliente', 'Tiempo Atención', 'Estado', 'Fecha/Hora'];
@@ -626,7 +666,7 @@ class ReportController extends Controller
         $shifts = DailyShift::where('employee_id', $employeeId)
             ->whereBetween('work_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->with(['statusLogs' => function ($q) {
-                $q->with('catalogBreakReason')->orderBy('changed_at', 'asc');
+                $q->with(['catalogBreakReason', 'approvedBy'])->orderBy('changed_at', 'asc');
             }])
             ->get();
 
@@ -668,6 +708,9 @@ class ReportController extends Controller
                     if ($log->new_status === 'BREAK') {
                         $reasonTrans = $this->breakReasonLabels()[$log->resolveReasonCode()] ?? $log->resolveReasonLabel();
                         $statusLabel .= ' (' . $reasonTrans . ')';
+                    }
+                    if ($log->approvedBy) {
+                        $statusLabel .= ' [Aprob: ' . strtok($log->approvedBy->name, " ") . ']';
                     }
 
                     $timeline[] = [
@@ -712,6 +755,28 @@ class ReportController extends Controller
                 }
             }
 
+            // --- 2.5 Lógica para Eventos de Cola (Prórrogas y Ventas Terminadas) ---
+            $queueLogs = \App\Models\QueueActionLog::whereHas('salesQueue', function($q) use ($shift) {
+                $q->where('assigned_shift_id', $shift->id);
+            })->with(['user', 'salesQueue'])->get();
+
+            foreach ($queueLogs as $qLog) {
+                $label = '';
+                $turn = $qLog->salesQueue->turn_number;
+                if ($qLog->action_type === 'EXTENSION') {
+                    $label = 'Prórroga solicitada por ' . ($qLog->user->name ?? 'Usuario') . ' [Turno: ' . $turn . ']';
+                } elseif ($qLog->action_type === 'FINISHED') {
+                    $label = 'Venta terminada por ' . ($qLog->user->name ?? 'Usuario') . ' [Turno: ' . $turn . ']';
+                }
+
+                $timeline[] = [
+                    'status' => $label,
+                    'time' => \Carbon\Carbon::parse($qLog->created_at)->format('H:i:s'),
+                    'date' => \Carbon\Carbon::parse($qLog->created_at)->format('d/m/Y'),
+                    'color' => 'text-blue-400'
+                ];
+            }
+
             // Si el turno sigue abierto (hoy), contar hasta el minuto actual
             if ($shift->work_date == today()->format('Y-m-d')) {
                 if ($onlineStart && $shift->current_status === 'ONLINE') {
@@ -732,6 +797,11 @@ class ReportController extends Controller
 
             $totalAvailableSeconds += $dailySeconds[$dateStr]['AVAILABLE'];
         }
+
+        // --- Ordenar la línea de tiempo de forma cronológica ---
+        usort($timeline, function($a, $b) {
+            return \Carbon\Carbon::createFromFormat('d/m/Y H:i:s', $a['date'] . ' ' . $a['time']) <=> \Carbon\Carbon::createFromFormat('d/m/Y H:i:s', $b['date'] . ' ' . $b['time']);
+        });
 
         // Formateamos las matrices para enviarlas a Blade
         $formattedDailyBreaks = [];

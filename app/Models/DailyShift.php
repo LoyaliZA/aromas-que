@@ -60,6 +60,11 @@ class DailyShift extends Model
         return $this->hasMany(SalesQueue::class, 'assigned_shift_id');
     }
 
+    public function attentionIncidents(): HasMany
+    {
+        return $this->hasMany(AttentionIncident::class, 'daily_shift_id');
+    }
+
     public function resolveBreakReasonCode(): ?string
     {
         $this->loadMissing('catalogBreakReason');

@@ -1,9 +1,12 @@
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
     @forelse($pickups as $pickup)
-    <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-700 shadow-xl flex flex-col overflow-hidden group hover:border-aromas-highlight/50 transition-colors">
+    @php
+        $isReturnedRezagado = str_contains($pickup->notes ?? '', '[Gerencia regresó rezago a Recepción]');
+    @endphp
+    <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl border {{ $isReturnedRezagado ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'border-gray-700' }} shadow-xl flex flex-col overflow-hidden group hover:border-aromas-highlight/50 transition-colors relative">
 
         {{-- CABECERA CARD --}}
-        <div class="px-5 py-4 border-b border-gray-700 bg-gray-900/50 flex justify-between items-center">
+        <div class="px-5 py-4 border-b {{ $isReturnedRezagado ? 'border-orange-500/50 bg-orange-500/10' : 'border-gray-700 bg-gray-900/50' }} flex justify-between items-center">
             <div>
                 <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold block mb-1">Folio del Paquete</span>
                 <span class="font-mono text-2xl font-black text-aromas-highlight leading-none">{{ $pickup->ticket_folio }}</span>
@@ -22,6 +25,12 @@
 
         {{-- CUERPO CARD --}}
         <div class="p-5 flex-1 flex flex-col gap-5">
+            @if($isReturnedRezagado)
+            <div class="bg-orange-500/20 border border-orange-500/50 text-orange-400 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-2">
+                <svg class="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                ¡ATENCIÓN! Rezagado Retornado por Gerencia
+            </div>
+            @endif
 
             {{-- Info del Cliente --}}
             <div>
