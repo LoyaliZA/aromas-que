@@ -35,7 +35,7 @@ class QueueController extends Controller
 
         $recentAssignments = SalesQueue::withStatusCode('SERVING')
             ->where('turn_number', 'not like', '%-R')
-            ->where('started_serving_at', '>=', now()->subSeconds(6))
+            ->where('started_serving_at', '>=', now()->subSeconds(12))
             ->with(['assignedShift.employee', 'catalogClientType'])
             ->get();
 
@@ -46,11 +46,12 @@ class QueueController extends Controller
                     'client' => $recentAssignment->client_name,
                     'seller' => $recentAssignment->assignedShift->employee->full_name,
                     'folio' => $recentAssignment->turn_number,
+                    'started_serving_at' => $recentAssignment->started_serving_at?->getTimestamp(),
                 ]);
             }
         }
 
-        $recentIncidents = AttentionIncident::where('created_at', '>=', now()->subSeconds(6))
+        $recentIncidents = AttentionIncident::where('created_at', '>=', now()->subSeconds(12))
             ->where('reason', 'TIEMPO_ATENCION_CADUCADO')
             ->with(['employee'])
             ->get();
@@ -66,11 +67,20 @@ class QueueController extends Controller
 
         $html = view('ventas.partials.sellers-grid', compact('sellers'))->render();
 
+        $servingTimers = SalesQueue::serving()
+            ->whereNotNull('started_serving_at')
+            ->get(['id', 'started_serving_at'])
+            ->mapWithKeys(fn ($queue) => [
+                $queue->id => $queue->started_serving_at->getTimestamp() * 1000,
+            ])
+            ->all();
+
         return response()->json([
             'html' => $html,
             'waiting' => $clientsWaiting,
             'alerts' => $alertsData,
             'incidents' => $incidentAlerts,
+            'serving_timers' => $servingTimers,
         ]);
     }
 

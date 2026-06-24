@@ -34,9 +34,20 @@ $cardClasses = 'bg-aromas-secondary border-aromas-highlight/50 shadow-[0_0_15px_
 
 // --- CÁLCULO DE TIEMPO PARA LOS CRONÓMETROS ---
 $serveStartTime = '';
+$serveTimerDisplay = '00:00';
+$serveTimerColorClass = $isPremium ? 'text-yellow-300' : 'text-blue-300';
 if ($isServing) {
-// Ajustado para leer started_serving_at
-$serveStartTime = $currentClient->started_serving_at ? $currentClient->started_serving_at->timestamp * 1000 : now()->timestamp * 1000;
+    if ($currentClient->started_serving_at) {
+        $serveStartTime = $currentClient->started_serving_at->timestamp * 1000;
+        $elapsedSecs = max(0, $currentClient->started_serving_at->diffInSeconds(now()));
+        $serveTimerDisplay = sprintf('%02d:%02d', intdiv($elapsedSecs, 60), $elapsedSecs % 60);
+        if (intdiv($elapsedSecs, 60) >= 15) {
+            $serveTimerColorClass = 'text-yellow-500';
+        }
+    } else {
+        $serveStartTime = '';
+        $serveTimerDisplay = '--:--';
+    }
 }
 
 $breakStartTime = '';
@@ -45,7 +56,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
 }
 @endphp
 
-<div class="seller-card relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group animate-fade-in"
+<div class="seller-card relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group"
     @if($isServing)
     data-serving="true"
     data-shift-id="{{ $shift->id }}"
@@ -128,7 +139,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 {{-- CRONÓMETRO --}}
                 <div class="mt-4 bg-black/30 border rounded py-2 px-3 {{ $isPremium ? 'border-yellow-500/20' : 'border-blue-500/20' }}">
                     <span class="text-[9px] text-gray-400 uppercase tracking-widest block mb-1">Tiempo de Atención</span>
-                    <span class="seller-timer text-xl font-mono font-bold tracking-wider {{ $isPremium ? 'text-yellow-300' : 'text-blue-300' }}">00:00</span>
+                    <span class="seller-timer text-xl font-mono font-bold tracking-wider {{ $serveTimerColorClass }}">{{ $serveTimerDisplay }}</span>
                 </div>
                 <p class="extension-warning mt-3 text-sm font-bold uppercase text-amber-300 hidden"></p>
                 <div class="mt-3">

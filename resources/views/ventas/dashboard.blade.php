@@ -256,9 +256,12 @@
                     has_disability: false
                 },
                 alertTimer: 5,
-                alertedFolios: [], // <-- Array en lugar de variable única
-                alertedIncidents: [], // <-- Control de incidentes alertados
+                alertedFolios: [],
+                alertedAssignmentKeys: [],
+                alertedIncidents: [],
                 prorrogaAlerted: {},
+                serveTimerAnchors: {},
+                speechSessionId: 0,
                 isLoading: false,
                 spanishVoice: null,
                 requestExtensionUrl: '{{ route('ventas.request-extension') }}',
@@ -310,6 +313,8 @@
                     setInterval(() => {
                         this.updateTimers();
                     }, 1000);
+
+                    setTimeout(() => this.captureServeTimerAnchors(), 0);
                 },
 
                 openRetentionModal() {
@@ -389,7 +394,23 @@
                     const now = Date.now();
                     const servingCards = document.querySelectorAll('.seller-card[data-serving="true"]');
                     servingCards.forEach(card => {
-                        let startTime = parseInt(card.dataset.startTime);
+                        const queueId = card.dataset.queueId;
+                        let startTime = queueId && this.serveTimerAnchors[queueId]
+                            ? this.serveTimerAnchors[queueId]
+                            : parseInt(card.dataset.startTime, 10);
+
+                        if (queueId && Number.isFinite(startTime) && startTime > 0) {
+                            const existing = this.serveTimerAnchors[queueId];
+                            if (!existing || startTime < existing) {
+                                this.serveTimerAnchors[queueId] = startTime;
+                            } else {
+                                startTime = existing;
+                            }
+                            card.dataset.startTime = String(startTime);
+                        }
+
+                        if (!Number.isFinite(startTime) || startTime <= 0) return;
+
                         let elapsedSecs = Math.floor((now - startTime) / 1000);
                         if (elapsedSecs < 0) elapsedSecs = 0;
 
@@ -401,7 +422,6 @@
                             timerEl.className = mins >= 15 ? "seller-timer text-xl font-mono font-bold text-yellow-500 tracking-wider" : "seller-timer text-xl font-mono font-bold text-gray-300 tracking-wider";
                         }
 
-                        let queueId = card.dataset.queueId;
                         let turnNumber = card.dataset.turnNumber;
                         let extensionCount = parseInt(card.dataset.extensionCount) || 0;
                         let warningEl = card.querySelector('.extension-warning');
@@ -510,8 +530,117 @@
                     });
                 },
 
+                captureServeTimerAnchors() {
+                    document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        const startTime = parseInt(card.dataset.startTime, 10);
+                        if (!queueId || !Number.isFinite(startTime) || startTime <= 0) return;
+                        const existing = this.serveTimerAnchors[queueId];
+                        if (!existing || startTime < existing) {
+                            this.serveTimerAnchors[queueId] = startTime;
+                        }
+                    });
+                },
+
+                mergeServingTimers(timers) {
+                    if (!timers || typeof timers !== 'object') return;
+                    Object.entries(timers).forEach(([queueId, startMs]) => {
+                        const ms = Number(startMs);
+                        if (!Number.isFinite(ms) || ms <= 0) return;
+                        const existing = this.serveTimerAnchors[queueId];
+                        if (!existing || ms < existing) {
+                            this.serveTimerAnchors[queueId] = ms;
+                        }
+                    });
+                },
+
+                applyServeTimerAnchors() {
+                    document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        if (queueId && this.serveTimerAnchors[queueId]) {
+                            card.dataset.startTime = String(this.serveTimerAnchors[queueId]);
+                        }
+                    });
+
+                    const activeQueueIds = new Set(
+                        Array.from(document.querySelectorAll('.seller-card[data-serving="true"]'))
+                            .map((card) => card.dataset.queueId)
+                            .filter(Boolean)
+                    );
+                    Object.keys(this.serveTimerAnchors).forEach((queueId) => {
+                        if (!activeQueueIds.has(queueId)) {
+                            delete this.serveTimerAnchors[queueId];
+                        }
+                    });
+                },
+
+                restoreTimerDisplays(displays) {
+                    if (!displays) return;
+                    document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        const saved = displays[queueId];
+                        const timerEl = card.querySelector('.seller-timer');
+                        if (queueId && timerEl && saved && saved !== '00:00' && saved !== '--:--') {
+                            timerEl.innerText = saved;
+                        }
+                    });
+                },
+
+                shouldAnnounceAssignment(alert) {
+                    if (!alert?.id) return false;
+
+                    const startedAt = Number(alert.started_serving_at || 0);
+                    if (startedAt > 0) {
+                        const ageSecs = (Date.now() / 1000) - startedAt;
+                        if (ageSecs > 20) {
+                            return false;
+                        }
+                    }
+
+                    const key = `${alert.id}_${startedAt}`;
+                    if (this.alertedAssignmentKeys.includes(key)) return false;
+                    this.alertedAssignmentKeys.push(key);
+                    if (alert.folio && !this.alertedFolios.includes(alert.folio)) {
+                        this.alertedFolios.push(alert.folio);
+                    }
+                    return true;
+                },
+
+                stopAlertAudio() {
+                    ['bell', 'bell_vip'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (!el) return;
+                        el.onended = null;
+                        el.pause();
+                        el.currentTime = 0;
+                    });
+                },
+
+                waitForAnnouncementIdle() {
+                    return new Promise((resolve) => {
+                        const check = () => {
+                            const bell = document.getElementById('bell');
+                            const bellVip = document.getElementById('bell_vip');
+                            const audioBusy = (bell && !bell.paused && !bell.ended) || (bellVip && !bellVip.paused && !bellVip.ended);
+                            const speechBusy = window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+                            if (!audioBusy && !speechBusy) {
+                                resolve();
+                                return;
+                            }
+                            setTimeout(check, 150);
+                        };
+                        check();
+                    });
+                },
+
+                finishQueuedTask(callback) {
+                    this.waitForAnnouncementIdle().then(() => {
+                        const delay = this.taskQueue.length > 0 ? 3000 : 5000;
+                        setTimeout(callback, delay);
+                    });
+                },
+
                 fetchUpdates() {
-                    if (this.showMegaAlert) return;
                     this.isLoading = true;
 
                     fetch("{{ route('ventas.poll') }}", {
@@ -525,17 +654,21 @@
                             this.waitingCount = data.waiting;
                             const grid = document.getElementById('sellers-grid');
                             if (grid) {
-                                grid.innerHTML = data.html;
-                                this.updateTimers();
-                            }
-                            // Mostrar alerta SOLO si es un turno nuevo que no ha sonado
-                            if (data.alerts && data.alerts.length > 0) {
-                                data.alerts.forEach(alert => {
-                                    if (!this.alertedFolios.includes(alert.folio)) {
-                                        this.alertedFolios.push(alert.folio);
-                                        this.enqueueTask({ type: 'megaAlert', data: alert });
+                                const timerDisplays = {};
+                                document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                                    const queueId = card.dataset.queueId;
+                                    const timerEl = card.querySelector('.seller-timer');
+                                    if (queueId && timerEl) {
+                                        timerDisplays[queueId] = timerEl.innerText;
                                     }
                                 });
+
+                                this.captureServeTimerAnchors();
+                                grid.innerHTML = data.html;
+                                this.mergeServingTimers(data.serving_timers);
+                                this.applyServeTimerAnchors();
+                                this.restoreTimerDisplays(timerDisplays);
+                                this.updateTimers();
                             }
 
                             if (data.incidents && data.incidents.length > 0) {
@@ -543,6 +676,14 @@
                                     if (!this.alertedIncidents.includes(inc.id)) {
                                         this.alertedIncidents.push(inc.id);
                                         this.enqueueTask({ type: 'speech', message: inc.message });
+                                    }
+                                });
+                            }
+
+                            if (data.alerts && data.alerts.length > 0) {
+                                data.alerts.forEach(alert => {
+                                    if (this.shouldAnnounceAssignment(alert)) {
+                                        this.enqueueTask({ type: 'megaAlert', data: alert });
                                     }
                                 });
                             }
@@ -562,72 +703,95 @@
                     this.isProcessingTask = true;
                     
                     const task = this.taskQueue.shift();
-                    
-                    if (task.type === 'megaAlert') {
-                        this.executeMegaAlert(task.data, () => {
-                            this.showMegaAlert = false;
+
+                    this.waitForAnnouncementIdle().then(() => {
+                        this.speechSessionId += 1;
+                        const sessionId = this.speechSessionId;
+                        this.stopAlertAudio();
+                        
+                        if (task.type === 'megaAlert') {
+                            this.executeMegaAlert(task.data, sessionId, () => {
+                                this.showMegaAlert = false;
+                                this.isProcessingTask = false;
+                                this.finishQueuedTask(() => this.processTaskQueue());
+                            });
+                        } else if (task.type === 'speech') {
+                            this.executeSpeech(task.message, sessionId, task.useBell === true, () => {
+                                this.isProcessingTask = false;
+                                this.finishQueuedTask(() => this.processTaskQueue());
+                            });
+                        } else {
                             this.isProcessingTask = false;
-                            setTimeout(() => this.processTaskQueue(), 500);
-                        });
-                    } else if (task.type === 'speech') {
-                        this.executeSpeech(task.message, () => {
-                            this.isProcessingTask = false;
-                            setTimeout(() => this.processTaskQueue(), 500);
-                        });
-                    }
+                            this.processTaskQueue();
+                        }
+                    });
                 },
 
-                executeMegaAlert(data, callback) {
+                executeMegaAlert(data, sessionId, callback) {
                     this.alertData = data;
                     this.showMegaAlert = true;
                     this.alertTimer = 5;
 
                     let hasCalledDone = false;
-                    const done = () => {
-                        if (hasCalledDone) return;
+                    let fallbackTimer = null;
+                    let speechRetryCount = 0;
+                    const done = (reason) => {
+                        if (hasCalledDone || sessionId !== this.speechSessionId) return;
                         hasCalledDone = true;
-                        
-                        const delay = this.taskQueue.length > 0 ? 2000 : 5000;
-                        setTimeout(() => {
-                            callback();
-                        }, delay);
+                        clearTimeout(fallbackTimer);
+                        callback();
                     };
+
+                    fallbackTimer = setTimeout(() => done('fallback-timeout'), 25000);
 
                     let audioId = data.use_premium_alert ? 'bell_vip' : 'bell';
                     let audio = document.getElementById(audioId) || document.getElementById('bell');
 
-                    const hablarMensaje = () => {
-                        if (audio) audio.onended = null; // Limpiar evento para evitar que vuelva a saltar luego
+                    const speakClientAssignment = () => {
+                        if (sessionId !== this.speechSessionId) return;
+                        if (audio) audio.onended = null;
                         
-                        if ('speechSynthesis' in window) {
-                            window.speechSynthesis.cancel();
-
-                            let mensaje = data.seller + " ¡tienes un nuevo cliente asignado!. " + data.client;
-                            window.currentUtterance = new SpeechSynthesisUtterance(mensaje);
-                            
-                            if (this.spanishVoice) window.currentUtterance.voice = this.spanishVoice;
-                            else window.currentUtterance.lang = 'es-MX';
-                            
-                            window.currentUtterance.rate = 0.9;
-                            
-                            window.currentUtterance.onend = done;
-                            window.currentUtterance.onerror = done;
-                            
-                            window.speechSynthesis.speak(window.currentUtterance);
-                        } else {
-                            done();
+                        if (!('speechSynthesis' in window)) {
+                            done('no-tts');
+                            return;
                         }
+
+                        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+                            window.speechSynthesis.cancel();
+                        }
+
+                        let sellerLabel = (data.seller || '').trim().split(/\s+/)[0] || 'Vendedor';
+                            let mensaje = sellerLabel + " ¡tienes un nuevo cliente asignado!. " + data.client;
+                        window.currentUtterance = new SpeechSynthesisUtterance(mensaje);
+                        
+                        if (this.spanishVoice) window.currentUtterance.voice = this.spanishVoice;
+                        else window.currentUtterance.lang = 'es-MX';
+                        
+                        window.currentUtterance.rate = 0.9;
+                        
+                        window.currentUtterance.onend = () => done('speech-onend');
+                        window.currentUtterance.onerror = (event) => {
+                            if ((event.error === 'interrupted' || event.error === 'canceled') && speechRetryCount < 1) {
+                                speechRetryCount += 1;
+                                setTimeout(speakClientAssignment, 200);
+                                return;
+                            }
+                            if (event.error === 'interrupted' || event.error === 'canceled') return;
+                            done('speech-onerror');
+                        };
+                        
+                        window.speechSynthesis.speak(window.currentUtterance);
                     };
 
                     if (audio) {
-                        audio.onended = hablarMensaje;
+                        audio.onended = speakClientAssignment;
                         audio.currentTime = 0; 
                         audio.volume = 1.0;
-                        audio.play().catch(e => {
-                            hablarMensaje();
+                        audio.play().catch(() => {
+                            speakClientAssignment();
                         });
                     } else {
-                        hablarMensaje();
+                        speakClientAssignment();
                     }
 
                     if ("Notification" in window && Notification.permission === "granted") {
@@ -684,35 +848,35 @@
                     });
                 },
 
-                speakMessage(message) {
-                    this.enqueueTask({ type: 'speech', message: message });
+                speakMessage(message, options = {}) {
+                    this.enqueueTask({
+                        type: 'speech',
+                        message: message,
+                        useBell: options.useBell === true,
+                    });
                 },
 
-                executeSpeech(message, callback) {
+                executeSpeech(message, sessionId, useBell, callback) {
                     if (!('speechSynthesis' in window)) {
                         callback();
                         return;
                     }
 
-                    // Opcional: Tocar el timbre suavemente antes de hablar
-                    let audio = document.getElementById('bell');
-                    if (audio) {
-                        audio.onended = null; // IMPORTANT: Prevenir que dispare eventos antiguos
-                        audio.currentTime = 0;
-                        audio.volume = 0.5;
-                        audio.play().catch(e => console.log('Silenciado por el navegador:', e));
-                    }
+                    let hasCalledCallback = false;
+                    let fallbackTimer = null;
+                    let speechRetryCount = 0;
+                    const done = (reason) => {
+                        if (hasCalledCallback || sessionId !== this.speechSessionId) return;
+                        hasCalledCallback = true;
+                        clearTimeout(fallbackTimer);
+                        callback();
+                    };
 
-                    // Limpiar audios atascados
-                    window.speechSynthesis.cancel();
-
-                    setTimeout(() => {
-                        let hasCalledCallback = false;
-                        const done = () => {
-                            if (hasCalledCallback) return;
-                            hasCalledCallback = true;
-                            callback();
-                        };
+                    const speakNow = () => {
+                        if (sessionId !== this.speechSessionId) return;
+                        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+                            window.speechSynthesis.cancel();
+                        }
 
                         const utterance = new SpeechSynthesisUtterance(message);
                         if (this.spanishVoice) {
@@ -722,15 +886,35 @@
                         }
                         utterance.rate = 0.9;
                         
-                        utterance.onend = done;
-                        utterance.onerror = done;
+                        utterance.onend = () => done('speech-onend');
+                        utterance.onerror = (event) => {
+                            if ((event.error === 'interrupted' || event.error === 'canceled') && speechRetryCount < 1) {
+                                speechRetryCount += 1;
+                                setTimeout(speakNow, 200);
+                                return;
+                            }
+                            if (event.error === 'interrupted' || event.error === 'canceled') return;
+                            done('speech-onerror');
+                        };
                         
-                        window.currentUtterance = utterance; // Prevenir Garbage Collection
+                        window.currentUtterance = utterance;
                         window.speechSynthesis.speak(utterance);
-                        
-                        // Fallback: Si el evento onend nunca se dispara, liberar cola después de un margen seguro
-                        setTimeout(done, 15000);
-                    }, 100);
+                        fallbackTimer = setTimeout(() => done('fallback-timeout'), 20000);
+                    };
+
+                    if (useBell) {
+                        let audio = document.getElementById('bell');
+                        if (audio) {
+                            audio.onended = speakNow;
+                            audio.currentTime = 0;
+                            audio.volume = 0.5;
+                            audio.play().catch(() => speakNow());
+                        } else {
+                            speakNow();
+                        }
+                    } else {
+                        speakNow();
+                    }
                 },
 
                 openRatingModal(shiftId, queueId) {
