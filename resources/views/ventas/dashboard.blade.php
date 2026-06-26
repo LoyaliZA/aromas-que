@@ -282,6 +282,7 @@
 
                 taskQueue: [],
                 isProcessingTask: false,
+                _keepaliveAudio: null,
 
                 init() {
 
@@ -314,12 +315,18 @@
 
                     if (sessionStorage.getItem('ventas_media_unlocked') === '1') {
                         this.unlockMedia();
+                        this.ensureNotificationPermission();
                     }
 
                     document.body.addEventListener('click', () => {
                         this.unlockMedia();
-                        if ("Notification" in window && Notification.permission !== "granted") {
-                            Notification.requestPermission();
+                        this.ensureNotificationPermission();
+                    });
+
+                    document.addEventListener('visibilitychange', () => {
+                        if (!document.hidden) {
+                            this.fetchUpdates();
+                            this.updateTimers();
                         }
                     });
 
@@ -487,6 +494,14 @@
                                 this.prorrogaAnnouncing[alertKey] = true;
                                 const msg = `Atención {{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el tiempo de atención del vendedor ${sellerName} está por expirar.`;
                                 this.speakMessage(msg, {
+                                    desktopNotification: {
+                                        title: 'Prórroga requerida',
+                                        body: `El vendedor ${sellerName} necesita prórroga de atención.`,
+                                        tag: `prorroga-alert-${queueId}-${extensionCount}`,
+                                        requireInteraction: true,
+                                        renotify: true,
+                                        onlyWhenHidden: true,
+                                    },
                                     onComplete: (success) => {
                                         this.prorrogaAnnouncing[alertKey] = false;
                                         if (success) this.prorrogaAlerted[alertKey] = true;
@@ -773,10 +788,56 @@
                     this.updateTimers();
                 },
 
+                isTabInBackground() {
+                    return document.visibilityState === 'hidden';
+                },
+
+                ensureNotificationPermission() {
+                    if (!('Notification' in window) || Notification.permission !== 'default') return;
+                    Notification.requestPermission();
+                },
+
+                showDesktopNotification(title, body, options = {}) {
+                    if (!('Notification' in window) || Notification.permission !== 'granted') return null;
+                    try {
+                        const notification = new Notification(title, {
+                            body,
+                            icon: '/images/aromas_logo_recortado.png',
+                            tag: options.tag || undefined,
+                            renotify: options.renotify === true,
+                            requireInteraction: options.requireInteraction === true,
+                            silent: false,
+                        });
+                        notification.onclick = () => {
+                            window.focus();
+                            notification.close();
+                        };
+                        return notification;
+                    } catch (e) {
+                        return null;
+                    }
+                },
+
+                startAudioKeepalive() {
+                    if (this._keepaliveAudio) return;
+                    const el = document.createElement('audio');
+                    el.loop = true;
+                    el.volume = 0.001;
+                    el.setAttribute('aria-hidden', 'true');
+                    el.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+                    el.play().then(() => {
+                        this._keepaliveAudio = el;
+                    }).catch(() => {});
+                },
+
                 unlockMedia() {
-                    if (this.mediaUnlocked) return;
+                    if (this.mediaUnlocked) {
+                        this.startAudioKeepalive();
+                        return;
+                    }
                     this.mediaUnlocked = true;
                     sessionStorage.setItem('ventas_media_unlocked', '1');
+                    this.startAudioKeepalive();
                     ['bell', 'bell_vip', 'soft_alert'].forEach((id) => {
                         const el = document.getElementById(id);
                         if (!el) return;
@@ -806,6 +867,15 @@
                     const pulse = () => {
                         // Si ya no está en prórroga o cambió de key, detener
                         if (!this.prorrogaIntervalActive || !this.prorrogaIntervalActive[key]) return;
+                        const card = document.querySelector(`.seller-card[data-queue-id="${key}"]`);
+                        const sellerName = card?.dataset.sellerName || 'Vendedor';
+                        if (this.isTabInBackground()) {
+                            this.showDesktopNotification(
+                                'Prórroga requerida',
+                                `${sellerName}: solicite la prórroga ahora.`,
+                                { tag: `prorroga-soft-${key}`, renotify: true, requireInteraction: true }
+                            );
+                        }
                         el.volume = 0.8;
                         el.currentTime = 0;
                         el.play().catch((e) => { console.warn('Audio autoplay blocked:', e); });
@@ -875,7 +945,17 @@
                                 data.incidents.forEach(inc => {
                                     if (!this.alertedIncidents.includes(inc.id)) {
                                         this.alertedIncidents.push(inc.id);
-                                        this.enqueueTask({ type: 'speech', message: inc.message });
+                                        this.enqueueTask({
+                                            type: 'speech',
+                                            message: inc.message,
+                                            desktopNotification: {
+                                                title: 'Incidente en ventas',
+                                                body: inc.message,
+                                                tag: `incident-${inc.id}`,
+                                                renotify: true,
+                                                onlyWhenHidden: true,
+                                            },
+                                        });
                                     }
                                 });
                             }
@@ -916,6 +996,21 @@
                                 this.finishQueuedTask(() => this.processTaskQueue());
                             });
                         } else if (task.type === 'speech') {
+                            if (task.desktopNotification) {
+                                const n = task.desktopNotification;
+                                if (!n.onlyWhenHidden || this.isTabInBackground()) {
+                                    this.showDesktopNotification(
+                                        n.title || 'Aromas Ventas',
+                                        n.body || task.message,
+                                        n
+                                    );
+                                }
+                            } else if (this.isTabInBackground()) {
+                                this.showDesktopNotification('Aromas Ventas', task.message, {
+                                    tag: 'ventas-speech',
+                                    renotify: true,
+                                });
+                            }
                             this.executeSpeech(task.message, sessionId, task.useBell === true, (success) => {
                                 if (typeof task.onComplete === 'function') {
                                     task.onComplete(success);
@@ -997,12 +1092,15 @@
                         speakClientAssignment();
                     }
 
-                    if ("Notification" in window && Notification.permission === "granted") {
-                        new Notification(data.use_premium_alert ? "⭐ ¡Cliente Premium Asignado!" : "¡Nuevo Cliente Asignado!", {
-                            body: `Turno: ${data.folio}\nCliente: ${data.client}\nVendedor: ${data.seller}`,
-                            icon: '/images/aromas_logo_recortado.png'
-                        });
-                    }
+                    this.showDesktopNotification(
+                        data.use_premium_alert ? '⭐ ¡Cliente Premium Asignado!' : '¡Nuevo Cliente Asignado!',
+                        `Turno: ${data.folio}\nCliente: ${data.client}\nVendedor: ${data.seller}`,
+                        {
+                            tag: `assignment-${data.folio || data.id}`,
+                            requireInteraction: true,
+                            renotify: true,
+                        }
+                    );
 
                     let timerInterval = setInterval(() => {
                         this.alertTimer--;
@@ -1048,7 +1146,18 @@
                         }
                         this.applyExtensionToCard(payload.queue_id, data.extension_count, data.last_extended_at);
                         this.updateTimers();
-                        this.enqueueTask({ type: 'speech', message: `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.` });
+                        const extensionMsg = `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.`;
+                        this.enqueueTask({
+                            type: 'speech',
+                            message: extensionMsg,
+                            desktopNotification: {
+                                title: 'Prórroga solicitada',
+                                body: extensionMsg,
+                                tag: `extension-request-${payload.queue_id}`,
+                                renotify: true,
+                                onlyWhenHidden: true,
+                            },
+                        });
                         this.fetchUpdates();
                     }).catch(() => {
                         alert('Error al solicitar la prórroga.');
@@ -1061,6 +1170,7 @@
                         message: message,
                         useBell: options.useBell === true,
                         onComplete: options.onComplete,
+                        desktopNotification: options.desktopNotification || null,
                     });
                 },
 
