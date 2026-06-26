@@ -143,14 +143,12 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 </div>
                 <p class="extension-warning mt-3 text-sm font-bold uppercase text-amber-300 hidden"></p>
                 <div class="mt-3">
-                    <button type="button" @click="requestExtension({ queue_id: {{ $currentClient->id }}, seller_name: '{{ $seller->full_name }}' })" class="request-extension-btn hidden w-full py-2 rounded-xl border border-blue-500/60 bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 transition">
+                    <button type="button" class="request-extension-btn hidden w-full py-2 rounded-xl border border-blue-500/60 bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 transition">
                         Solicitar Prórroga {{ $currentClient->extension_count > 0 ? '(' . ($currentClient->extension_count + 1) . ')' : '' }}
                     </button>
-                    @if($currentClient->extension_count > 0)
-                        <span class="request-extension-label inline-flex items-center justify-center w-full rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-200">
-                            Prórroga solicitada ({{ $currentClient->extension_count }})
-                        </span>
-                    @endif
+                    <span class="request-extension-label {{ ($currentClient->extension_count ?? 0) > 0 ? '' : 'hidden' }} inline-flex items-center justify-center w-full rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-200">
+                        Prórroga solicitada ({{ $currentClient->extension_count ?? 0 }})
+                    </span>
                 </div>
             </div>
             @elseif($isOnBreak)

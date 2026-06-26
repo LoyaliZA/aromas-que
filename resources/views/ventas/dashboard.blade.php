@@ -1,3 +1,7 @@
+@php
+    $attentionMins = (int)\App\Models\SystemSetting::getVal('attention_time_minutes', 20);
+    $extensionMins = (int)\App\Models\SystemSetting::getVal('extension_time_minutes', 4);
+@endphp
 <!DOCTYPE html>
 <html lang="es-MX" class="dark">
 
@@ -224,6 +228,7 @@
     {{-- AUDIOS --}}
     <audio id="bell" src="{{ asset('audio/bell.mp3') }}" preload="auto"></audio>
     <audio id="bell_vip" src="{{ asset('audio/bell_vip.mp3') }}" preload="auto"></audio>
+    <audio id="soft_alert" src="{{ asset('audio/soft_alert.mp3') }}" preload="auto"></audio>
 
     <script>
         function salesDashboard() {
@@ -260,6 +265,15 @@
                 alertedAssignmentKeys: [],
                 alertedIncidents: [],
                 prorrogaAlerted: {},
+                prorrogaAnnouncing: {},
+                prorrogaIntervalActive: {},
+                mediaUnlocked: false,
+                extensionOverrides: {},
+                timingSettings: {
+                    attentionMins: {{ $attentionMins }},
+                    extensionMins: {{ $extensionMins }},
+                },
+                softAlertIntervalMs: 3000,
                 serveTimerAnchors: {},
                 speechSessionId: 0,
                 isLoading: false,
@@ -298,13 +312,15 @@
                         this.showBreakModal = true;
                     });
 
-                    // Solicitar permisos para Notificaciones y Voz al hacer el primer clic
+                    if (sessionStorage.getItem('ventas_media_unlocked') === '1') {
+                        this.unlockMedia();
+                    }
+
                     document.body.addEventListener('click', () => {
+                        this.unlockMedia();
                         if ("Notification" in window && Notification.permission !== "granted") {
                             Notification.requestPermission();
                         }
-                    }, {
-                        once: true
                     });
 
                     setInterval(() => {
@@ -315,6 +331,21 @@
                     }, 1000);
 
                     setTimeout(() => this.captureServeTimerAnchors(), 0);
+
+                    const sellersGrid = document.getElementById('sellers-grid');
+                    if (sellersGrid) {
+                        sellersGrid.addEventListener('click', (e) => {
+                            const btn = e.target.closest('.request-extension-btn');
+                            if (!btn || btn.classList.contains('hidden')) return;
+                            const card = btn.closest('.seller-card');
+                            if (!card?.dataset.queueId) return;
+                            e.preventDefault();
+                            this.requestExtension({
+                                queue_id: Number(card.dataset.queueId),
+                                seller_name: card.dataset.sellerName || 'Vendedor',
+                            });
+                        });
+                    }
                 },
 
                 openRetentionModal() {
@@ -419,16 +450,28 @@
                         let timerEl = card.querySelector('.seller-timer');
                         if (timerEl) {
                             timerEl.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                            timerEl.className = mins >= 15 ? "seller-timer text-xl font-mono font-bold text-yellow-500 tracking-wider" : "seller-timer text-xl font-mono font-bold text-gray-300 tracking-wider";
+                            timerEl.className = mins >= this.timingSettings.attentionMins ? "seller-timer text-xl font-mono font-bold text-yellow-500 tracking-wider" : "seller-timer text-xl font-mono font-bold text-gray-300 tracking-wider";
                         }
 
                         let turnNumber = card.dataset.turnNumber;
                         let extensionCount = parseInt(card.dataset.extensionCount) || 0;
+                        let lastExtendedAt = parseInt(card.dataset.lastExtendedAt, 10) || 0;
                         let warningEl = card.querySelector('.extension-warning');
 
-                        let maxAllowedMins = 15 + (extensionCount * 15);
+                        const phase = this.resolveProrrogaPhase(startTime, extensionCount, lastExtendedAt, now);
+                        const { inRequestWindow, inExtensionGrace } = phase;
+                        const shouldSoftAlert = inRequestWindow;
 
-                        if (mins >= maxAllowedMins) {
+                        if (shouldSoftAlert) {
+                            if (!this.prorrogaIntervalActive[queueId]) {
+                                this.prorrogaIntervalActive[queueId] = true;
+                                this.playSoftAlertIntervals(queueId);
+                            }
+                        } else if (this.prorrogaIntervalActive[queueId]) {
+                            this.prorrogaIntervalActive[queueId] = false;
+                        }
+
+                        if (inRequestWindow) {
                             if (warningEl) {
                                 warningEl.innerText = 'Tiempo expirado. Prórroga requerida';
                                 warningEl.classList.remove('hidden');
@@ -438,17 +481,39 @@
                             if (prorrogaBtn) prorrogaBtn.classList.remove('hidden');
                             if (prorrogaLabel) prorrogaLabel.classList.add('hidden');
 
-                            if (queueId && !this.prorrogaAlerted[queueId + '_' + extensionCount]) {
-                                this.prorrogaAlerted[queueId + '_' + extensionCount] = true;
+                            const alertKey = queueId + '_' + extensionCount;
+                            if (queueId && !this.prorrogaAlerted[alertKey] && !this.prorrogaAnnouncing[alertKey]) {
                                 let sellerName = card.dataset.sellerName || 'Vendedor';
-                                this.speakMessage(`Atención {{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el tiempo de atención del vendedor ${sellerName} está por expirar.`);
+                                this.prorrogaAnnouncing[alertKey] = true;
+                                const msg = `Atención {{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el tiempo de atención del vendedor ${sellerName} está por expirar.`;
+                                this.speakMessage(msg, {
+                                    onComplete: (success) => {
+                                        this.prorrogaAnnouncing[alertKey] = false;
+                                        if (success) this.prorrogaAlerted[alertKey] = true;
+                                    },
+                                });
+                            }
+                        } else if (inExtensionGrace) {
+                            if (warningEl) {
+                                const remainingSecs = Math.max(0, Math.ceil((phase.grantedDeadlineMs - now) / 1000));
+                                const rMins = Math.floor(remainingSecs / 60);
+                                const rSecs = remainingSecs % 60;
+                                warningEl.innerText = `Prórroga activa: ${rMins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')} restantes`;
+                                warningEl.classList.remove('hidden');
+                            }
+                            let prorrogaBtn = card.querySelector('.request-extension-btn');
+                            let prorrogaLabel = card.querySelector('.request-extension-label');
+                            if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
+                            if (prorrogaLabel) {
+                                prorrogaLabel.classList.remove('hidden');
+                                prorrogaLabel.innerText = `Prórroga solicitada (${extensionCount})`;
                             }
                         } else {
                             if (warningEl) warningEl.classList.add('hidden');
                             let prorrogaBtn = card.querySelector('.request-extension-btn');
                             let prorrogaLabel = card.querySelector('.request-extension-label');
                             if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
-                            if (prorrogaLabel) prorrogaLabel.classList.remove('hidden');
+                            if (prorrogaLabel) prorrogaLabel.classList.add('hidden');
                         }
                     });
 
@@ -570,6 +635,7 @@
                     Object.keys(this.serveTimerAnchors).forEach((queueId) => {
                         if (!activeQueueIds.has(queueId)) {
                             delete this.serveTimerAnchors[queueId];
+                            if (this.prorrogaIntervalActive) delete this.prorrogaIntervalActive[queueId];
                         }
                     });
                 },
@@ -606,6 +672,148 @@
                     return true;
                 },
 
+                resolveProrrogaPhase(startTime, extensionCount, lastExtendedAt, now) {
+                    const attentionMs = this.timingSettings.attentionMins * 60 * 1000;
+                    const requestGraceMs = this.timingSettings.extensionMins * 60 * 1000;
+                    const grantedMs = attentionMs;
+                    const attentionDeadlineMs = startTime + attentionMs;
+
+                    if (extensionCount === 0) {
+                        const requestWindowEndMs = attentionDeadlineMs + requestGraceMs;
+                        const inRequestWindow = now >= attentionDeadlineMs && now < requestWindowEndMs;
+                        return {
+                            inRequestWindow,
+                            inExtensionGrace: false,
+                            grantedDeadlineMs: attentionDeadlineMs,
+                            requestWindowEndMs,
+                        };
+                    }
+
+                    const grantedAnchorMs = lastExtendedAt > 0 ? lastExtendedAt : attentionDeadlineMs;
+                    const grantedDeadlineMs = grantedAnchorMs + grantedMs;
+                    const requestWindowEndMs = grantedDeadlineMs + requestGraceMs;
+                    const inExtensionGrace = now >= grantedAnchorMs && now < grantedDeadlineMs;
+                    const inRequestWindow = now >= grantedDeadlineMs && now < requestWindowEndMs;
+
+                    return {
+                        inRequestWindow,
+                        inExtensionGrace,
+                        grantedDeadlineMs,
+                        requestWindowEndMs,
+                    };
+                },
+
+                applyExtensionToCard(queueId, extensionCount, lastExtendedAt) {
+                    this.extensionOverrides[queueId] = {
+                        extensionCount,
+                        lastExtendedAt: lastExtendedAt || Date.now(),
+                    };
+
+                    const card = document.querySelector(`.seller-card[data-queue-id="${queueId}"]`);
+                    if (!card) return;
+
+                    card.dataset.extensionCount = String(extensionCount);
+                    card.dataset.lastExtendedAt = String(lastExtendedAt || Date.now());
+
+                    const warningEl = card.querySelector('.extension-warning');
+                    const prorrogaBtn = card.querySelector('.request-extension-btn');
+                    const prorrogaLabel = card.querySelector('.request-extension-label');
+
+                    if (warningEl) warningEl.classList.add('hidden');
+                    if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
+                    if (prorrogaLabel) {
+                        prorrogaLabel.classList.remove('hidden');
+                        prorrogaLabel.innerText = `Prórroga solicitada (${extensionCount})`;
+                    }
+
+                    if (this.prorrogaIntervalActive[queueId]) {
+                        this.prorrogaIntervalActive[queueId] = false;
+                    }
+                },
+
+                applyExtensionOverridesToGrid() {
+                    Object.entries(this.extensionOverrides).forEach(([queueId, patch]) => {
+                        const card = document.querySelector(`.seller-card[data-queue-id="${queueId}"]`);
+                        if (!card) return;
+
+                        const serverCount = parseInt(card.dataset.extensionCount, 10) || 0;
+                        if (serverCount >= patch.extensionCount) {
+                            delete this.extensionOverrides[queueId];
+                            return;
+                        }
+
+                        card.dataset.extensionCount = String(patch.extensionCount);
+                        card.dataset.lastExtendedAt = String(patch.lastExtendedAt);
+                    });
+                },
+
+                refreshSellersGrid(html) {
+                    const grid = document.getElementById('sellers-grid');
+                    if (!grid) return;
+
+                    const timerDisplays = {};
+                    document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        const timerEl = card.querySelector('.seller-timer');
+                        if (queueId && timerEl) {
+                            timerDisplays[queueId] = timerEl.innerText;
+                        }
+                    });
+
+                    this.captureServeTimerAnchors();
+                    grid.innerHTML = html;
+                    if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                        window.Alpine.initTree(grid);
+                    }
+                    this.mergeServingTimers(this._pendingServingTimers || {});
+                    this._pendingServingTimers = null;
+                    this.applyExtensionOverridesToGrid();
+                    this.applyServeTimerAnchors();
+                    this.restoreTimerDisplays(timerDisplays);
+                    this.updateTimers();
+                },
+
+                unlockMedia() {
+                    if (this.mediaUnlocked) return;
+                    this.mediaUnlocked = true;
+                    sessionStorage.setItem('ventas_media_unlocked', '1');
+                    ['bell', 'bell_vip', 'soft_alert'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (!el) return;
+                        const prevVolume = el.volume;
+                        el.volume = 0.01;
+                        el.currentTime = 0;
+                        el.play().then(() => {
+                            el.pause();
+                            el.currentTime = 0;
+                            el.volume = prevVolume || 0.8;
+                        }).catch(() => {});
+                    });
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                        const warmup = new SpeechSynthesisUtterance(' ');
+                        warmup.volume = 0.01;
+                        if (this.spanishVoice) warmup.voice = this.spanishVoice;
+                        else warmup.lang = 'es-MX';
+                        window.speechSynthesis.speak(warmup);
+                    }
+                },
+
+                // Sonar intermitente durante la ventana de solicitud de prórroga
+                playSoftAlertIntervals(key) {
+                    const el = document.getElementById('soft_alert');
+                    if (!el) return;
+                    const pulse = () => {
+                        // Si ya no está en prórroga o cambió de key, detener
+                        if (!this.prorrogaIntervalActive || !this.prorrogaIntervalActive[key]) return;
+                        el.volume = 0.8;
+                        el.currentTime = 0;
+                        el.play().catch((e) => { console.warn('Audio autoplay blocked:', e); });
+                        setTimeout(pulse, this.softAlertIntervalMs);
+                    };
+                    pulse();
+                },
+
                 stopAlertAudio() {
                     ['bell', 'bell_vip'].forEach((id) => {
                         const el = document.getElementById(id);
@@ -618,12 +826,14 @@
 
                 waitForAnnouncementIdle() {
                     return new Promise((resolve) => {
+                        let checks = 0;
                         const check = () => {
+                            checks++;
                             const bell = document.getElementById('bell');
                             const bellVip = document.getElementById('bell_vip');
                             const audioBusy = (bell && !bell.paused && !bell.ended) || (bellVip && !bellVip.paused && !bellVip.ended);
                             const speechBusy = window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
-                            if (!audioBusy && !speechBusy) {
+                            if ((!audioBusy && !speechBusy) || checks > 100) { // Timeout de 15s aprox
                                 resolve();
                                 return;
                             }
@@ -651,24 +861,14 @@
                         })
                         .then(r => r.json())
                         .then(data => {
+                            if (data.timing) {
+                                this.timingSettings.attentionMins = Number(data.timing.attention_minutes) || this.timingSettings.attentionMins;
+                                this.timingSettings.extensionMins = Number(data.timing.extension_minutes) || this.timingSettings.extensionMins;
+                            }
                             this.waitingCount = data.waiting;
-                            const grid = document.getElementById('sellers-grid');
-                            if (grid) {
-                                const timerDisplays = {};
-                                document.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
-                                    const queueId = card.dataset.queueId;
-                                    const timerEl = card.querySelector('.seller-timer');
-                                    if (queueId && timerEl) {
-                                        timerDisplays[queueId] = timerEl.innerText;
-                                    }
-                                });
-
-                                this.captureServeTimerAnchors();
-                                grid.innerHTML = data.html;
-                                this.mergeServingTimers(data.serving_timers);
-                                this.applyServeTimerAnchors();
-                                this.restoreTimerDisplays(timerDisplays);
-                                this.updateTimers();
+                            if (data.html) {
+                                this._pendingServingTimers = data.serving_timers;
+                                this.refreshSellersGrid(data.html);
                             }
 
                             if (data.incidents && data.incidents.length > 0) {
@@ -716,7 +916,10 @@
                                 this.finishQueuedTask(() => this.processTaskQueue());
                             });
                         } else if (task.type === 'speech') {
-                            this.executeSpeech(task.message, sessionId, task.useBell === true, () => {
+                            this.executeSpeech(task.message, sessionId, task.useBell === true, (success) => {
+                                if (typeof task.onComplete === 'function') {
+                                    task.onComplete(success);
+                                }
                                 this.isProcessingTask = false;
                                 this.finishQueuedTask(() => this.processTaskQueue());
                             });
@@ -827,6 +1030,7 @@
                 },
 
                 requestExtension(payload) {
+                    this.unlockMedia();
                     fetch(this.requestExtensionUrl, {
                         method: 'POST',
                         headers: {
@@ -836,13 +1040,16 @@
                             'Accept': 'application/json'
                         },
                         body: JSON.stringify({ queue_id: payload.queue_id })
-                    }).then(r => r.json()).then(data => {
-                        if (data.success) {
-                            this.enqueueTask({ type: 'speech', message: `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.` });
-                            this.fetchUpdates();
-                        } else {
+                    }).then(async (r) => {
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok || !data.success) {
                             alert(data.message || 'Error al solicitar la prórroga.');
+                            return;
                         }
+                        this.applyExtensionToCard(payload.queue_id, data.extension_count, data.last_extended_at);
+                        this.updateTimers();
+                        this.enqueueTask({ type: 'speech', message: `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.` });
+                        this.fetchUpdates();
                     }).catch(() => {
                         alert('Error al solicitar la prórroga.');
                     });
@@ -853,12 +1060,13 @@
                         type: 'speech',
                         message: message,
                         useBell: options.useBell === true,
+                        onComplete: options.onComplete,
                     });
                 },
 
                 executeSpeech(message, sessionId, useBell, callback) {
                     if (!('speechSynthesis' in window)) {
-                        callback();
+                        callback(false);
                         return;
                     }
 
@@ -869,7 +1077,7 @@
                         if (hasCalledCallback || sessionId !== this.speechSessionId) return;
                         hasCalledCallback = true;
                         clearTimeout(fallbackTimer);
-                        callback();
+                        callback(reason === 'speech-onend');
                     };
 
                     const speakNow = () => {
@@ -886,8 +1094,14 @@
                         }
                         utterance.rate = 0.9;
                         
-                        utterance.onend = () => done('speech-onend');
+                        utterance.onend = () => {
+                            done('speech-onend');
+                        };
                         utterance.onerror = (event) => {
+                            if (event.error === 'not-allowed' && !this.mediaUnlocked) {
+                                done('speech-not-allowed');
+                                return;
+                            }
                             if ((event.error === 'interrupted' || event.error === 'canceled') && speechRetryCount < 1) {
                                 speechRetryCount += 1;
                                 setTimeout(speakNow, 200);

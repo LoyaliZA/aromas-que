@@ -87,6 +87,11 @@
                     {{ $cat['title'] }}
                 </button>
             @endforeach
+            <button @click="activeTab = 'system_settings'"
+                    :class="activeTab === 'system_settings' ? 'border-aromas-highlight text-aromas-highlight' : 'border-transparent text-gray-400 hover:text-gray-200'"
+                    class="py-3 px-1 border-b-2 font-medium transition-colors whitespace-nowrap text-sm uppercase tracking-wider">
+                Sistema
+            </button>
         </div>
 
         <div class="bg-aromas-secondary border border-aromas-tertiary/50 rounded-xl shadow-sm overflow-hidden p-6 min-h-[300px]">
@@ -242,6 +247,36 @@
                     </div>
                 @endif
             @endforeach
+
+            <div x-show="activeTab === 'system_settings'" x-cloak>
+                <div class="mb-6">
+                    <h2 class="text-lg font-semibold text-white">Configuración del Sistema</h2>
+                    <p class="text-gray-400 text-sm mt-1">Ajusta los parámetros globales de la aplicación.</p>
+                </div>
+
+                <form action="{{ route('admin.settings.system.update') }}" method="POST" class="max-w-2xl bg-gray-900/50 p-6 rounded-xl border border-gray-700">
+                    @csrf
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-300 mb-2">Tiempo de Atención Base (Minutos)</label>
+                            <input type="number" name="attention_time_minutes" min="1" max="120" value="{{ $systemSettings['attention_time_minutes'] ?? 20 }}" required
+                                   class="w-full bg-gray-800 border border-gray-600 rounded-lg text-white px-4 py-2 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
+                            <p class="text-xs text-gray-500 mt-1">Tiempo que tiene un vendedor antes de que la tarjeta se ponga roja.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-300 mb-2">Ventana para Solicitar Prórroga (Minutos)</label>
+                            <input type="number" name="extension_time_minutes" min="1" max="60" value="{{ $systemSettings['extension_time_minutes'] ?? 4 }}" required
+                                   class="w-full bg-gray-800 border border-gray-600 rounded-lg text-white px-4 py-2 focus:border-aromas-highlight focus:ring-1 focus:ring-aromas-highlight">
+                            <p class="text-xs text-gray-500 mt-1">Tiempo que tiene el colaborador para solicitar una prórroga antes de que el sistema corte el turno. La prórroga otorgada dura igual al tiempo de atención base.</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end">
+                        <button type="submit" class="bg-aromas-highlight hover:bg-yellow-600 text-aromas-main font-bold py-2 px-6 rounded-lg transition-colors">
+                            Guardar Configuración
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         {{-- Modal genérico --}}

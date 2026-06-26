@@ -75,12 +75,19 @@ class QueueController extends Controller
             ])
             ->all();
 
+        $attentionMins = (int)\App\Models\SystemSetting::getVal('attention_time_minutes', 20);
+        $extensionMins = (int)\App\Models\SystemSetting::getVal('extension_time_minutes', 4);
+
         return response()->json([
             'html' => $html,
             'waiting' => $clientsWaiting,
             'alerts' => $alertsData,
             'incidents' => $incidentAlerts,
             'serving_timers' => $servingTimers,
+            'timing' => [
+                'attention_minutes' => $attentionMins,
+                'extension_minutes' => $extensionMins,
+            ],
         ]);
     }
 
@@ -93,6 +100,7 @@ class QueueController extends Controller
             'last_extended_at' => now(),
             'extension_count' => max(1, $queue->extension_count + 1),
         ]);
+        $queue->refresh();
 
         \App\Models\QueueActionLog::create([
             'sales_queue_id' => $queue->id,
@@ -100,18 +108,35 @@ class QueueController extends Controller
             'action_type' => 'EXTENSION',
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Prórroga registrada.']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Prórroga registrada.',
+            'extension_count' => $queue->extension_count,
+            'last_extended_at' => $queue->last_extended_at?->getTimestamp() * 1000,
+        ]);
     }
 
     private function enforceAttentionTimeouts(): void
     {
-        $expiredQueues = SalesQueue::serving()
+        $attentionMins = (int)\App\Models\SystemSetting::getVal('attention_time_minutes', 20);
+        $requestGraceMins = (int)\App\Models\SystemSetting::getVal('extension_time_minutes', 4);
+        $cutoffMins = $attentionMins + $requestGraceMins;
+
+        $expiredWithoutExtension = SalesQueue::serving()
             ->whereNotNull('started_serving_at')
-            ->whereRaw('TIMESTAMPDIFF(MINUTE, started_serving_at, NOW()) >= (17 + (COALESCE(extension_count, 0) * 15))')
+            ->where('extension_count', 0)
+            ->whereRaw('TIMESTAMPDIFF(MINUTE, started_serving_at, NOW()) >= ?', [$cutoffMins])
             ->with('assignedShift')
             ->get();
 
-        foreach ($expiredQueues as $queue) {
+        $expiredAfterExtension = SalesQueue::serving()
+            ->where('extension_count', '>', 0)
+            ->whereNotNull('last_extended_at')
+            ->whereRaw('TIMESTAMPDIFF(MINUTE, last_extended_at, NOW()) >= ?', [$cutoffMins])
+            ->with('assignedShift')
+            ->get();
+
+        foreach ($expiredWithoutExtension->merge($expiredAfterExtension) as $queue) {
             DB::transaction(function () use ($queue) {
                 $shift = $queue->assignedShift;
                 $queue->update(array_merge(

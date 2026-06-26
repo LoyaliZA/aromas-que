@@ -47,6 +47,11 @@ class CatalogController extends Controller
         $serviceTypes = ServiceType::orderBy('name', 'asc')->get();
         $breakReasons = BreakReason::orderBy('sort_order', 'asc')->get();
 
+        $systemSettings = [];
+        try {
+            $systemSettings = \App\Models\SystemSetting::pluck('value', 'key')->toArray();
+        } catch (\Exception $e) {}
+
         return view('admin.settings.catalogs', compact(
             'banks',
             'couriers',
@@ -57,8 +62,26 @@ class CatalogController extends Controller
             'jobPositions',
             'clientTypes',
             'serviceTypes',
-            'breakReasons'
+            'breakReasons',
+            'systemSettings'
         ));
+    }
+
+    public function updateSystemSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'attention_time_minutes' => 'required|integer|min:1|max:120',
+            'extension_time_minutes' => 'required|integer|min:1|max:60',
+        ]);
+
+        foreach ($validated as $key => $value) {
+            \App\Models\SystemSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value]
+            );
+        }
+
+        return back()->with('success', 'Configuración de sistema actualizada.')->with('active_tab', 'system_settings');
     }
 
     public function store(Request $request)

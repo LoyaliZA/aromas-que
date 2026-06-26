@@ -116,6 +116,9 @@ Route::prefix('admin')
         Route::put('/settings/catalogs/{id}', [CatalogController::class, 'update'])->name('settings.catalogs.update');
         Route::post('/settings/catalogs/{id}/toggle', [CatalogController::class, 'toggle'])->name('settings.catalogs.toggle');
         Route::delete('/settings/catalogs/{id}', [CatalogController::class, 'destroy'])->name('settings.catalogs.destroy');
+        
+        // --- CONFIGURACIÓN DE SISTEMA ---
+        Route::post('/settings/system', [CatalogController::class, 'updateSystemSettings'])->name('settings.system.update');
     });
 
 /*
