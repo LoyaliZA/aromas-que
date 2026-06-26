@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Tablero de Ventas - Aromas</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/ventas/dashboard-pip.js', 'resources/js/app.js'])
 </head>
 
 <body class="bg-gray-900 text-white font-sans antialiased overflow-hidden">
@@ -47,6 +47,17 @@
                     <div class="w-px h-10 bg-gray-700"></div>
                     @endif
 
+                    <button @click="openPipSelector()" type="button"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+                        :class="pipActive ? 'ring-2 ring-emerald-300' : ''"
+                        :title="pipSupported ? 'Abrir ventana flotante always-on-top' : 'Disponible en Chrome o Edge 116+'">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        <span x-text="pipActive ? 'PiP Activo' : 'Extraer Dashboard'"></span>
+                    </button>
+                    <div class="w-px h-10 bg-gray-700"></div>
+
                     <div class="text-right">
                         <p class="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">En Fila</p>
                         <div class="flex items-baseline justify-end gap-1">
@@ -71,6 +82,40 @@
         <div class="flex-1 overflow-y-auto p-8">
             <div id="sellers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 content-start">
                 @include('ventas.partials.sellers-grid', ['sellers' => $sellers])
+            </div>
+        </div>
+
+        {{-- MODAL SELECTOR PiP --}}
+        <div x-show="showPipSelectorModal" style="display: none;" class="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" x-transition>
+            <div class="bg-gray-900 rounded-2xl border-2 border-emerald-500 shadow-[0_0_50px_rgba(16,185,129,0.15)] p-6 w-full max-w-lg flex flex-col max-h-[85vh]">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-4">
+                    <h3 class="text-xl font-black text-emerald-400 uppercase tracking-widest">Ventana Flotante</h3>
+                    <button @click="showPipSelectorModal = false" type="button" class="text-gray-500 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-sm mb-4" :class="pipSupportInfo.mode === 'document-pip' ? 'text-gray-400' : 'text-yellow-300/90'" x-text="pipSupportInfo.hint"></p>
+                <p class="text-xs text-emerald-300/80 mb-4">Desde la ventana puedes terminar venta, calificar y solicitar prórroga sin volver al tablero principal.</p>
+                <div class="flex gap-2 mb-4">
+                    <button @click="selectAllPipSellers()" type="button" class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700">Todos</button>
+                    <button @click="selectNonePipSellers()" type="button" class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700">Ninguno</button>
+                </div>
+                <div class="overflow-y-auto flex-1 space-y-2 pr-1 mb-6">
+                    <template x-for="seller in pipSellers" :key="seller.id">
+                        <label class="flex items-center gap-3 p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-emerald-500/40 cursor-pointer transition-colors">
+                            <input type="checkbox" class="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 bg-gray-900"
+                                :value="Number(seller.id)"
+                                x-model="selectedPipSellerIds">
+                            <span class="text-white font-bold text-sm" x-text="seller.name"></span>
+                        </label>
+                    </template>
+                </div>
+                <div class="flex gap-3">
+                    <button @click="showPipSelectorModal = false" type="button" class="flex-1 py-3 bg-gray-800 text-gray-400 font-bold rounded-xl uppercase text-sm hover:bg-gray-700">Cancelar</button>
+                    <button @click="confirmOpenPip()" type="button" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl uppercase text-sm" x-text="pipSupportInfo.buttonLabel">Abrir ventana</button>
+                </div>
             </div>
         </div>
 
@@ -284,7 +329,26 @@
                 isProcessingTask: false,
                 _keepaliveAudio: null,
 
+                pipSupported: true,
+                pipActive: false,
+                pipMode: null,
+                pipWindow: null,
+                pipSupportInfo: {
+                    canUseDocumentPip: false,
+                    canUsePopupFallback: true,
+                    isSecureContext: true,
+                    mode: 'popup',
+                    hint: '',
+                    buttonLabel: 'Abrir ventana',
+                },
+                showPipSelectorModal: false,
+                pipSellers: @json($pipSellers ?? []),
+                linkedEmployeeId: @json($linkedEmployeeId),
+                selectedPipSellerIds: [],
+
                 init() {
+                    this.refreshPipSupportInfo();
+                    this.selectedPipSellerIds = this.loadPipSelectionLocal();
 
                 window.addEventListener('finish-service', event => {
                         this.processFinishService(event.detail.shift_id, event.detail.queue_id);
@@ -358,6 +422,101 @@
                 openRetentionModal() {
                     this.fetchRetentionList();
                     this.showRetentionModal = true;
+                },
+
+                refreshPipSupportInfo() {
+                    if (window.VentasPip?.resolvePipSupport) {
+                        this.pipSupportInfo = window.VentasPip.resolvePipSupport();
+                    } else {
+                        const isSecure = window.isSecureContext === true;
+                        this.pipSupportInfo = {
+                            canUseDocumentPip: 'documentPictureInPicture' in window,
+                            canUsePopupFallback: true,
+                            isSecureContext: isSecure,
+                            mode: isSecure && 'documentPictureInPicture' in window ? 'document-pip' : 'popup',
+                            hint: isSecure
+                                ? 'Elige qué vendedores ver en la ventana flotante.'
+                                : 'PiP always-on-top requiere HTTPS. En HTTP se usará una ventana separada.',
+                            buttonLabel: isSecure && 'documentPictureInPicture' in window
+                                ? 'Abrir ventana flotante'
+                                : 'Abrir ventana separada',
+                        };
+                    }
+                    this.pipSupported = this.pipSupportInfo.canUseDocumentPip || this.pipSupportInfo.canUsePopupFallback;
+                },
+
+                openPipSelector() {
+                    this.refreshPipSupportInfo();
+                    if (!window.VentasPip) {
+                        alert('No se cargó el módulo PiP. Ejecute npm run dev o npm run build y recargue la página.');
+                        return;
+                    }
+                    this.selectedPipSellerIds = window.VentasPip.loadPipSelection(this.pipSellers, this.linkedEmployeeId);
+                    this.showPipSelectorModal = true;
+                },
+
+                loadPipSelectionLocal() {
+                    if (window.VentasPip) {
+                        return window.VentasPip.loadPipSelection(this.pipSellers, this.linkedEmployeeId);
+                    }
+                    try {
+                        const stored = localStorage.getItem('ventas_pip_seller_ids');
+                        if (stored) {
+                            const ids = JSON.parse(stored);
+                            if (Array.isArray(ids) && ids.length > 0) {
+                                return ids.map(Number);
+                            }
+                        }
+                    } catch {
+                        // ignore
+                    }
+                    if (this.linkedEmployeeId) {
+                        return [Number(this.linkedEmployeeId)];
+                    }
+                    return (this.pipSellers || []).map((s) => Number(s.id));
+                },
+
+                selectAllPipSellers() {
+                    this.selectedPipSellerIds = this.pipSellers.map((s) => Number(s.id));
+                },
+
+                selectNonePipSellers() {
+                    this.selectedPipSellerIds = [];
+                },
+
+                async confirmOpenPip() {
+                    if (this.selectedPipSellerIds.length === 0) {
+                        alert('Selecciona al menos un vendedor.');
+                        return;
+                    }
+                    window.VentasPip.persistPipSelection(this.selectedPipSellerIds);
+                    this.showPipSelectorModal = false;
+                    this.unlockMedia();
+                    await window.VentasPip.openExtractWindow(this);
+                },
+
+                syncPipFromPoll(html) {
+                    if (!this.pipActive || !this.pipWindow || this.pipWindow.closed) return;
+                    window.VentasPip.syncPipGrid(this.pipWindow, html, this.selectedPipSellerIds, this);
+                    window.VentasPip.updatePipHeaderLabel(this.pipWindow, this.selectedPipSellerIds, this.pipSellers);
+                    window.VentasPip.syncPipWaitingCount(this.pipWindow, this.waitingCount);
+                },
+
+                isAlertRelevantForPip(alert) {
+                    if (!this.pipActive) return true;
+                    return window.VentasPip.isAlertForSelectedSeller(alert, this.selectedPipSellerIds);
+                },
+
+                markAlertAsSeen(alert) {
+                    if (!alert?.id) return;
+                    const startedAt = Number(alert.started_serving_at || 0);
+                    const key = `${alert.id}_${startedAt}`;
+                    if (!this.alertedAssignmentKeys.includes(key)) {
+                        this.alertedAssignmentKeys.push(key);
+                    }
+                    if (alert.folio && !this.alertedFolios.includes(alert.folio)) {
+                        this.alertedFolios.push(alert.folio);
+                    }
                 },
 
                 fetchRetentionList() {
@@ -608,6 +767,29 @@
                             if (onlineDots) onlineDots.style.display = 'block';
                         }
                     });
+
+                    if (this.pipActive && this.pipWindow && !this.pipWindow.closed) {
+                        window.VentasPip.updateVisualTimersInDocument(this.pipWindow.document, this);
+                    }
+                },
+
+                applyServeTimerAnchorsInDocument(doc) {
+                    doc.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        if (queueId && this.serveTimerAnchors[queueId]) {
+                            card.dataset.startTime = String(this.serveTimerAnchors[queueId]);
+                        }
+                    });
+                },
+
+                applyExtensionOverridesToGridInDocument(doc) {
+                    doc.querySelectorAll('.seller-card[data-serving="true"]').forEach((card) => {
+                        const queueId = card.dataset.queueId;
+                        if (!queueId || !this.extensionOverrides[queueId]) return;
+                        const override = this.extensionOverrides[queueId];
+                        card.dataset.extensionCount = String(override.extensionCount);
+                        card.dataset.lastExtendedAt = String(override.lastExtendedAt);
+                    });
                 },
 
                 captureServeTimerAnchors() {
@@ -724,22 +906,29 @@
                         lastExtendedAt: lastExtendedAt || Date.now(),
                     };
 
-                    const card = document.querySelector(`.seller-card[data-queue-id="${queueId}"]`);
-                    if (!card) return;
-
-                    card.dataset.extensionCount = String(extensionCount);
-                    card.dataset.lastExtendedAt = String(lastExtendedAt || Date.now());
-
-                    const warningEl = card.querySelector('.extension-warning');
-                    const prorrogaBtn = card.querySelector('.request-extension-btn');
-                    const prorrogaLabel = card.querySelector('.request-extension-label');
-
-                    if (warningEl) warningEl.classList.add('hidden');
-                    if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
-                    if (prorrogaLabel) {
-                        prorrogaLabel.classList.remove('hidden');
-                        prorrogaLabel.innerText = `Prórroga solicitada (${extensionCount})`;
+                    const docs = [document];
+                    if (this.pipWindow && !this.pipWindow.closed) {
+                        docs.push(this.pipWindow.document);
                     }
+
+                    docs.forEach((doc) => {
+                        const card = doc.querySelector(`.seller-card[data-queue-id="${queueId}"]`);
+                        if (!card) return;
+
+                        card.dataset.extensionCount = String(extensionCount);
+                        card.dataset.lastExtendedAt = String(lastExtendedAt || Date.now());
+
+                        const warningEl = card.querySelector('.extension-warning');
+                        const prorrogaBtn = card.querySelector('.request-extension-btn');
+                        const prorrogaLabel = card.querySelector('.request-extension-label');
+
+                        if (warningEl) warningEl.classList.add('hidden');
+                        if (prorrogaBtn) prorrogaBtn.classList.add('hidden');
+                        if (prorrogaLabel) {
+                            prorrogaLabel.classList.remove('hidden');
+                            prorrogaLabel.innerText = `Prórroga solicitada (${extensionCount})`;
+                        }
+                    });
 
                     if (this.prorrogaIntervalActive[queueId]) {
                         this.prorrogaIntervalActive[queueId] = false;
@@ -786,6 +975,7 @@
                     this.applyServeTimerAnchors();
                     this.restoreTimerDisplays(timerDisplays);
                     this.updateTimers();
+                    this.syncPipFromPoll(html);
                 },
 
                 isTabInBackground() {
@@ -936,6 +1126,9 @@
                                 this.timingSettings.extensionMins = Number(data.timing.extension_minutes) || this.timingSettings.extensionMins;
                             }
                             this.waitingCount = data.waiting;
+                            if (this.pipActive && this.pipWindow && !this.pipWindow.closed) {
+                                window.VentasPip.syncPipWaitingCount(this.pipWindow, this.waitingCount);
+                            }
                             if (data.html) {
                                 this._pendingServingTimers = data.serving_timers;
                                 this.refreshSellersGrid(data.html);
@@ -962,9 +1155,14 @@
 
                             if (data.alerts && data.alerts.length > 0) {
                                 data.alerts.forEach(alert => {
-                                    if (this.shouldAnnounceAssignment(alert)) {
-                                        this.enqueueTask({ type: 'megaAlert', data: alert });
+                                    if (!this.shouldAnnounceAssignment(alert)) {
+                                        return;
                                     }
+                                    if (this.pipActive && !this.isAlertRelevantForPip(alert)) {
+                                        this.markAlertAsSeen(alert);
+                                        return;
+                                    }
+                                    this.enqueueTask({ type: 'megaAlert', data: alert });
                                 });
                             }
                         })
@@ -1027,8 +1225,7 @@
 
                 executeMegaAlert(data, sessionId, callback) {
                     this.alertData = data;
-                    this.showMegaAlert = true;
-                    this.alertTimer = 5;
+                    const usePipAlert = this.pipActive && this.pipWindow && !this.pipWindow.closed && this.isAlertRelevantForPip(data);
 
                     let hasCalledDone = false;
                     let fallbackTimer = null;
@@ -1037,8 +1234,19 @@
                         if (hasCalledDone || sessionId !== this.speechSessionId) return;
                         hasCalledDone = true;
                         clearTimeout(fallbackTimer);
+                        if (usePipAlert) {
+                            window.VentasPip.hidePipMegaAlert(this.pipWindow);
+                        }
                         callback();
                     };
+
+                    if (usePipAlert) {
+                        this.showMegaAlert = false;
+                        window.VentasPip.showPipMegaAlert(this.pipWindow, data, () => done('pip-dismiss'));
+                    } else {
+                        this.showMegaAlert = true;
+                    }
+                    this.alertTimer = 5;
 
                     fallbackTimer = setTimeout(() => done('fallback-timeout'), 25000);
 
@@ -1110,6 +1318,9 @@
 
                 closeAlert() {
                     this.showMegaAlert = false;
+                    if (this.pipWindow && !this.pipWindow.closed) {
+                        window.VentasPip.hidePipMegaAlert(this.pipWindow);
+                    }
                 },
 
                 processFinishService(shiftId, queueId) {
@@ -1247,7 +1458,11 @@
                     this.ratingStars = 0;
                     this.ratingTags = [];
                     this.ratingComment = '';
-                    this.showRatingModal = true;
+                    if (this.pipActive && this.pipWindow && !this.pipWindow.closed && window.VentasPip?.showExtractRatingModal) {
+                        window.VentasPip.showExtractRatingModal(this.pipWindow, this);
+                    } else {
+                        this.showRatingModal = true;
+                    }
                 },
 
                 availableTags() {
@@ -1284,7 +1499,10 @@
                         })
                     }).then(r => r.json()).then(() => {
                         this.showRatingModal = false;
-                        this.fetchUpdates(); // Refresca el Grid para volver a estado Disponible (verde)
+                        if (this.pipWindow && !this.pipWindow.closed && window.VentasPip?.hideExtractRatingModal) {
+                            window.VentasPip.hideExtractRatingModal(this.pipWindow);
+                        }
+                        this.fetchUpdates();
                     });
                 }
             }

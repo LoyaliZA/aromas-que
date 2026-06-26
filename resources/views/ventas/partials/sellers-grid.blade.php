@@ -1,7 +1,7 @@
 @forelse($sellers as $seller)
 @php
 $shift = $seller->todayShift;
-$status = $shift->current_status ?? 'OFFLINE';
+$status = $shift?->current_status ?? 'OFFLINE';
 $isOnline = $status === 'ONLINE';
 $isOnBreak = $status === 'BREAK';
 $isRating = $status === 'RATING';
@@ -51,15 +51,15 @@ if ($isServing) {
 }
 
 $breakStartTime = '';
-if ($isOnBreak && $shift->last_status_change_at) {
+if ($isOnBreak && $shift?->last_status_change_at) {
 $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
 }
 @endphp
 
 <div class="seller-card relative rounded-2xl border transition-all duration-500 {{ $cardClasses }} flex flex-col h-full overflow-hidden group"
+    @if($shift) data-shift-id="{{ $shift->id }}" @endif
     @if($isServing)
     data-serving="true"
-    data-shift-id="{{ $shift->id }}"
     data-queue-id="{{ $currentClient->id }}"
     data-turn-number="{{ $currentClient->turn_number }}"
     data-extension-count="{{ $currentClient->extension_count ?? 0 }}"
@@ -76,6 +76,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
     data-online="true"
     data-last-action-at="{{ $shift->last_action_at ? $shift->last_action_at->timestamp * 1000 : 0 }}"
     @endif
+    data-employee-id="{{ $seller->id }}"
     data-seller-name="{{ $seller->full_name }}">
 
 
@@ -107,7 +108,7 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
         {{-- Info Vendedor --}}
         <h3 class="text-lg font-bold text-white mb-0 leading-tight truncate">{{ $seller->full_name }}</h3>
         <p class="text-[10px] uppercase tracking-widest font-bold {{ $isServing ? ($isPremium ? 'text-yellow-400' : 'text-blue-400') : ($isOnline ? 'text-aromas-tertiary' : ($isRating ? 'text-purple-400' : 'text-gray-600')) }} mb-4">
-            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift->resolveBreakReasonLabel() }}) @elseif($isRating) Calificando @elseif($isOnline) Disponible @else Inactivo @endif
+            @if($isServing) Atendiendo @elseif($isOnBreak) En Pausa ({{ $shift?->resolveBreakReasonLabel() ?? 'Pausa' }}) @elseif($isRating) Calificando @elseif($isOnline) Disponible @else Inactivo @endif
         </p>
 
         {{-- ZONA CENTRAL ORIGINAL --}}
@@ -175,10 +176,12 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
         </div>
 
         {{-- Botones (Originales) --}}
-        <div class="mt-4 pt-4 border-t border-white/5">
+        <div class="seller-actions mt-4 pt-4 border-t border-white/5">
             @if($isServing)
                 {{-- NUEVO: Botón AJAX para terminar venta sin recargar la página --}}
-                <button type="button" @click="$dispatch('finish-service', { shift_id: {{ $shift->id }}, queue_id: {{ $currentClient->id }} })" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg transition-transform active:scale-95">
+                <button type="button" data-action="finish-service"
+                    @click="$dispatch('finish-service', { shift_id: {{ $shift->id }}, queue_id: {{ $currentClient->id }} })"
+                    class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg transition-transform active:scale-95">
                     Terminar Venta
                 </button>
                 
@@ -187,7 +190,9 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                 @php 
                     $lastClient = App\Models\SalesQueue::where('assigned_shift_id', $shift->id)->withStatusCode('COMPLETED')->latest('completed_at')->first(); 
                 @endphp
-                <button type="button" @click="$dispatch('open-rating-modal', { shift_id: {{ $shift->id }}, queue_id: {{ $lastClient->id ?? 0 }} })" class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg animate-pulse">
+                <button type="button" data-action="open-rating" data-queue-id="{{ $lastClient->id ?? 0 }}"
+                    @click="$dispatch('open-rating-modal', { shift_id: {{ $shift->id }}, queue_id: {{ $lastClient->id ?? 0 }} })"
+                    class="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg animate-pulse">
                     Calificar al Cliente
                 </button>
                 

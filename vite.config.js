@@ -11,6 +11,7 @@ export default defineConfig({
                 'resources/js/recepcion/recepcion-app.js',
                 'resources/js/gerencia/daily-alerts.js',
                 'resources/js/gerencia/pickup-delivery.js',
+                'resources/js/ventas/dashboard-pip.js',
             ],
             refresh: true,
         }),

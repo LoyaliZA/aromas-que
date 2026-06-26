@@ -21,8 +21,13 @@ class QueueController extends Controller
         $sellers = $this->getSellersList();
         $clientsWaiting = SalesQueue::waiting()->sales()->count();
         $breakReasons = BreakReason::active()->orderBy('sort_order')->get();
+        $pipSellers = $sellers->map(fn (Employee $seller) => [
+            'id' => $seller->id,
+            'name' => $seller->full_name,
+        ])->values();
+        $linkedEmployeeId = Employee::where('user_id', auth()->id())->value('id');
 
-        return view('ventas.dashboard', compact('sellers', 'clientsWaiting', 'breakReasons'));
+        return view('ventas.dashboard', compact('sellers', 'clientsWaiting', 'breakReasons', 'pipSellers', 'linkedEmployeeId'));
     }
 
     public function poll()
@@ -45,6 +50,7 @@ class QueueController extends Controller
                 $alertsData[] = array_merge($recentAssignment->toQueuePayload(), [
                     'client' => $recentAssignment->client_name,
                     'seller' => $recentAssignment->assignedShift->employee->full_name,
+                    'seller_id' => $recentAssignment->assignedShift->employee_id,
                     'folio' => $recentAssignment->turn_number,
                     'started_serving_at' => $recentAssignment->started_serving_at?->getTimestamp(),
                 ]);
