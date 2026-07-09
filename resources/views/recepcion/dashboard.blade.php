@@ -670,6 +670,12 @@
                         <span class="text-white font-medium text-sm">Presenta Discapacidad</span>
                     </label>
 
+                    {{-- CHECKBOX ADULTO MAYOR --}}
+                    <label class="flex items-center gap-3 p-3 bg-gray-800/50 border border-gray-700 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
+                        <input type="checkbox" name="is_senior" value="1" x-model="isSeniorQueue" class="w-5 h-5 rounded border-gray-600 text-aromas-highlight focus:ring-aromas-highlight bg-gray-900">
+                        <span class="text-white font-medium text-sm">Es Adulto Mayor</span>
+                    </label>
+
                     {{-- SECCIÓN: DESTINO --}}
                     <div>
                         <label class="block text-xs text-gray-400 uppercase tracking-wider font-bold mb-3">DESTINO</label>

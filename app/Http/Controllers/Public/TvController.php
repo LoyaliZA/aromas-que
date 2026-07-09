@@ -61,6 +61,7 @@ class TvController extends Controller
         return array_merge($ticket->toArray(), $ticket->clientTypeMetadata(), [
             'client_type' => $ticket->resolveClientTypeCode(),
             'client_type_label' => $ticket->resolveClientTypeLabel(),
+            'service_type' => $ticket->resolveServiceTypeName(),
         ]);
     }
 }

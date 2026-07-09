@@ -190,6 +190,7 @@ class DeliveryController extends Controller
             'is_third_party' => 'nullable|boolean',
             'representative_name' => 'required_if:is_third_party,1|string|max:100|nullable',
             'has_disability' => 'nullable|boolean',
+            'is_senior' => 'nullable|boolean',
         ]);
 
         $customerId = null;
@@ -223,6 +224,7 @@ class DeliveryController extends Controller
                 'customer_id' => $customerId,
                 'client_name' => $clientName,
                 'has_disability' => $request->boolean('has_disability'),
+                'is_senior' => $request->boolean('is_senior'),
                 'turn_number' => $turnNumber,
                 'queued_at' => now(),
             ],
@@ -254,6 +256,7 @@ class DeliveryController extends Controller
                 ->map(fn ($client) => array_merge($client->toArray(), $client->clientTypeMetadata(), [
                     'client_type' => $client->resolveClientTypeCode(),
                     'client_type_label' => $client->resolveClientTypeLabel(),
+                    'service_type' => $client->resolveServiceTypeName(),
                 ]));
 
             return response()->json([

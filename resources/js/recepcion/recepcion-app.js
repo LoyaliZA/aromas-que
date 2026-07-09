@@ -6,7 +6,7 @@ window.deliveryApp = function(config) {
         queueType: 'SALES', waitingClients: [], evidencePreview: null, evidenceName: '', 
         clientSearchQuery: '', clientSearchResults: [], showClientDropdown: false, selectedCustomerId: '',
         selectedCustomerObj: null, abandoningClient: null, abandonReasonId: '', customAbandonReason: '', otherReasonId: config.otherReasonId || null,
-        isThirdPartyQueue: false, representativeNameQueue: '', hasDisabilityQueue: false, isNewCustomerQueue: false, newClientName: '',
+        isThirdPartyQueue: false, representativeNameQueue: '', hasDisabilityQueue: false, isSeniorQueue: false, isNewCustomerQueue: false, newClientName: '',
 
         validateQueueForm(e) {
             if (!this.isNewCustomerQueue && !this.selectedCustomerId) {
@@ -58,12 +58,12 @@ window.deliveryApp = function(config) {
 
         selectCustomer(customer) {
             this.selectedCustomerObj = customer; this.selectedCustomerId = customer.id; this.clientSearchQuery = customer.name;
-            this.showClientDropdown = false; this.isThirdPartyQueue = false; this.representativeNameQueue = ''; this.hasDisabilityQueue = false;
+            this.showClientDropdown = false; this.isThirdPartyQueue = false; this.representativeNameQueue = ''; this.hasDisabilityQueue = false; this.isSeniorQueue = false;
         },
         
         clearSelectedCustomer() {
             this.selectedCustomerObj = null; this.selectedCustomerId = ''; this.isThirdPartyQueue = false;
-            this.representativeNameQueue = ''; this.hasDisabilityQueue = false;
+            this.representativeNameQueue = ''; this.hasDisabilityQueue = false; this.isSeniorQueue = false;
         },
 
         openQueueListModal() { this.fetchQueueList(); this.showQueueListModal = true; },

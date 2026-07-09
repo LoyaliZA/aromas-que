@@ -23,6 +23,7 @@ class SalesQueue extends Model
         'client_name',
         'client_type_id',
         'has_disability',
+        'is_senior',
         'service_type_id',
         'turn_number',
         'source_id',
@@ -129,7 +130,7 @@ class SalesQueue extends Model
             ->select('sales_queue.*')
             ->orderByRaw('LEAST(
                 COALESCE(CASE WHEN client_types.prioritize_in_queue = 1 THEN client_types.sort_order END, 999),
-                COALESCE(CASE WHEN sales_queue.has_disability = 1 THEN ? END, 999)
+                COALESCE(CASE WHEN sales_queue.has_disability = 1 OR sales_queue.is_senior = 1 THEN ? END, 999)
             ) ASC', [$disabilityPriority])
             ->orderBy('sales_queue.queued_at', 'asc');
     }
@@ -261,7 +262,9 @@ class SalesQueue extends Model
             'client_name' => $this->client_name,
             'client_type' => $this->resolveClientTypeCode(),
             'client_type_label' => $this->resolveClientTypeLabel(),
+            'service_type' => $this->resolveServiceTypeName(),
             'has_disability' => (bool) $this->has_disability,
+            'is_senior' => (bool) $this->is_senior,
             'queued_at' => $this->queued_at,
         ], $this->clientTypeMetadata(), $extra);
     }

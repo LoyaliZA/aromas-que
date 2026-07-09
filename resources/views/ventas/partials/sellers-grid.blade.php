@@ -127,14 +127,32 @@ $breakStartTime = $shift->last_status_change_at->timestamp * 1000;
                         <span class="bg-yellow-500 text-yellow-900 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">{{ $currentClient->catalogClientType?->displayLabel() ?? 'Premium' }}</span>
                         @endif
                         @if($currentClient->has_disability)
-                        <span class="bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">PRIORIDAD</span>
+                        <span class="bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg> DISCAPACIDAD
+                        </span>
+                        @endif
+                        @if($currentClient->is_senior)
+                        <span class="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> ADULTO MAYOR
+                        </span>
                         @endif
                     </div>
                 </div>
 
                 {{-- NOMBRE CLIENTE --}}
-                <div class="text-xl font-black text-white leading-tight break-words line-clamp-2" title="{{ $currentClient->client_name }}">
-                    {{ $currentClient->client_name }}
+                <div class="flex items-center gap-3">
+                    @if($currentClient->is_senior)
+                    <div class="bg-emerald-500/20 p-2 rounded-lg text-emerald-400 shrink-0 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    @elseif($currentClient->has_disability)
+                    <div class="bg-blue-500/20 p-2 rounded-lg text-blue-400 shrink-0 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                    </div>
+                    @endif
+                    <div class="text-xl font-black text-white leading-tight break-words line-clamp-2 flex-1" title="{{ $currentClient->client_name }}">
+                        {{ $currentClient->client_name }}
+                    </div>
                 </div>
 
                 {{-- CRONÓMETRO --}}
