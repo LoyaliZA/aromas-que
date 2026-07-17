@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DailyShift;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\SalesQueue;
 use App\Models\ShiftStatusLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -151,6 +152,7 @@ class StaffController extends Controller
             ]);
             $msg = "{$employee->full_name} ahora está ACTIVO.";
         } else {
+            $this->releaseServingClientsToWaiting($shift);
             $shift->update(array_merge(
                 DailyShift::breakReasonAttributes(null),
                 ['current_status' => 'OFFLINE', 'last_status_change_at' => now()]
@@ -241,6 +243,8 @@ class StaffController extends Controller
 
         $previousStatus = $shift->current_status;
 
+        $this->releaseServingClientsToWaiting($shift);
+
         $shift->update(array_merge(
             DailyShift::breakReasonAttributes(null),
             ['current_status' => 'OFFLINE', 'last_status_change_at' => now()]
@@ -252,6 +256,28 @@ class StaffController extends Controller
             'new_status' => 'OFFLINE',
             'changed_at' => now(),
         ]);
+    }
+
+    /**
+     * Return any in-progress clients to WAITING so they can be reassigned
+     * instead of timing out invisibly on an offline/hidden seller.
+     */
+    private function releaseServingClientsToWaiting(DailyShift $shift): void
+    {
+        SalesQueue::where('assigned_shift_id', $shift->id)
+            ->serving()
+            ->get()
+            ->each(function (SalesQueue $client) {
+                $client->update(array_merge(
+                    SalesQueue::attributesForStatus('WAITING'),
+                    [
+                        'assigned_shift_id' => null,
+                        'started_serving_at' => null,
+                        'last_extended_at' => null,
+                        'extension_count' => 0,
+                    ]
+                ));
+            });
     }
 
     private function catalogFormData(): array

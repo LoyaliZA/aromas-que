@@ -111,6 +111,9 @@ class DailyShift extends Model
 
         $query->where('current_status', 'ONLINE')
             ->where('flagged_as_idle', false)
+            ->whereHas('employee', function ($q) {
+                $q->where('appears_in_sales_queue', true)->where('is_active', true);
+            })
             ->whereNotExists(function ($sub) use ($servingId, $hasLegacyStatus) {
                 $sub->select(DB::raw(1))
                     ->from('sales_queue')

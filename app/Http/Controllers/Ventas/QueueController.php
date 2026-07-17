@@ -149,16 +149,18 @@ class QueueController extends Controller
                     SalesQueue::attributesForStatus('COMPLETED'),
                     [
                         'completed_at' => now(),
-                        // Remove custom_abandonment_reason as it's no longer abandoned
                     ]
                 ));
 
                 if ($shift) {
                     $shift->increment('customers_served_count');
-                    $shift->update([
-                        'current_status' => 'ONLINE',
-                        'last_action_at' => now(),
-                    ]);
+                    // Never resurrect OFFLINE/BREAK sellers to ONLINE — that caused
+                    // new assignments to "apagados"/pausados after a timeout.
+                    $shiftUpdate = ['last_action_at' => now()];
+                    if (in_array($shift->current_status, ['ONLINE', 'RATING'], true)) {
+                        $shiftUpdate['current_status'] = 'ONLINE';
+                    }
+                    $shift->update($shiftUpdate);
                 }
 
                 \App\Models\AttentionIncident::create([
@@ -201,6 +203,11 @@ class QueueController extends Controller
                 $statusChangeAt = now();
             } else {
                 $statusChangeAt = now();
+            }
+
+            $activeServing = SalesQueue::where('assigned_shift_id', $shift->id)->serving()->exists();
+            if ($activeServing) {
+                return back()->with('error', 'No se puede pausar mientras hay un cliente en atención. Termina la venta primero.');
             }
 
             $shift->update(array_merge(
@@ -339,6 +346,9 @@ class QueueController extends Controller
         $availableShifts = DailyShift::with('employee')
             ->where('work_date', today())
             ->where('current_status', 'ONLINE')
+            ->whereHas('employee', function ($q) {
+                $q->where('appears_in_sales_queue', true)->where('is_active', true);
+            })
             ->get()
             ->filter(function ($shift) {
                 return !SalesQueue::where('assigned_shift_id', $shift->id)->serving()->exists();
@@ -358,6 +368,25 @@ class QueueController extends Controller
         ]);
 
         $oldQueue = SalesQueue::find($request->queue_id);
+        $targetShift = DailyShift::with('employee')->find($request->shift_id);
+        $alreadyServing = $targetShift
+            ? SalesQueue::where('assigned_shift_id', $targetShift->id)->serving()->exists()
+            : null;
+        $employeeOk = $targetShift?->employee
+            && $targetShift->employee->appears_in_sales_queue
+            && $targetShift->employee->is_active;
+
+        if (
+            !$targetShift
+            || $targetShift->current_status !== 'ONLINE'
+            || !$employeeOk
+            || $alreadyServing
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El vendedor no está disponible (debe estar activo, en cola y sin cliente en atención).',
+            ], 422);
+        }
 
         $baseTurn = str_replace('-R', '', $oldQueue->turn_number);
         $newTurnNumber = !empty($baseTurn) ? substr($baseTurn, 0, 7) . '-R' : 'RET-R';
@@ -378,7 +407,7 @@ class QueueController extends Controller
             SalesQueue::attributesForStatus('SERVING')
         ));
 
-        DailyShift::find($request->shift_id)->update(['last_action_at' => now()]);
+        $targetShift->update(['last_action_at' => now()]);
 
         return response()->json(['success' => true]);
     }
@@ -408,6 +437,9 @@ class QueueController extends Controller
 
                 $availableShifts = DailyShift::where('work_date', today())
                     ->where('current_status', 'ONLINE')
+                    ->whereHas('employee', function ($q) {
+                        $q->where('appears_in_sales_queue', true)->where('is_active', true);
+                    })
                     ->whereNotExists(function ($query) use ($servingId, $hasLegacyStatus) {
                         $query->select(DB::raw(1))
                             ->from('sales_queue')
@@ -448,6 +480,14 @@ class QueueController extends Controller
                 });
 
                 foreach ($freeShifts as $shift) {
+                    $shift->refresh();
+                    $shift->loadMissing('employee');
+                    $employeeEligible = $shift->employee
+                        && $shift->employee->appears_in_sales_queue
+                        && $shift->employee->is_active;
+                    if ($shift->current_status !== 'ONLINE' || !$employeeEligible) {
+                        continue;
+                    }
                     $nextClient = SalesQueue::waiting()->sales()->lockForUpdate()->first();
                     if ($nextClient) {
                         $nextClient->update(array_merge(
