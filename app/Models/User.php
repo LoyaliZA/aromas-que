@@ -29,6 +29,7 @@ class User extends Authenticatable
         'can_manage_rezagados',
         'can_manage_shifts',
         'can_manage_sellers',
+        'receives_prorroga_alerts',
     ];
 
     /**
@@ -51,6 +52,7 @@ class User extends Authenticatable
             'can_manage_rezagados' => 'boolean',
             'can_manage_shifts' => 'boolean',
             'can_manage_sellers' => 'boolean',
+            'receives_prorroga_alerts' => 'boolean',
         ];
     }
 
@@ -147,6 +149,14 @@ class User extends Authenticatable
     public function canManageSellers(): bool
     {
         return $this->can_manage_sellers;
+    }
+
+    /**
+     * Verifica si recibe alertas de prórroga en el tablero de ventas.
+     */
+    public function receivesProrrogaAlerts(): bool
+    {
+        return $this->isAdmin() || (bool) $this->receives_prorroga_alerts;
     }
 
     public function setRoleAttribute(?string $value): void

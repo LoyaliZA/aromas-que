@@ -33,7 +33,9 @@ class QueueController extends Controller
     public function poll()
     {
         $this->enforceAttentionTimeouts();
-        $this->runMatchmaker();
+        if (!$this->isMatchmakerPausedForRetention()) {
+            $this->runMatchmaker();
+        }
 
         $sellers = $this->getSellersList();
         $clientsWaiting = SalesQueue::waiting()->sales()->count();
@@ -335,13 +337,52 @@ class QueueController extends Controller
 
     public function getRetentionList(Request $request)
     {
+        $this->pauseMatchmakerForRetention();
+
+        $activeReattentions = SalesQueue::serving()
+            ->sales()
+            ->where('turn_number', 'like', '%-R')
+            ->get(['id', 'customer_id', 'client_name', 'turn_number']);
+
+        $busyCustomerIds = $activeReattentions
+            ->pluck('customer_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $busyBaseTurns = $activeReattentions
+            ->map(function ($queue) {
+                $base = str_replace('-R', '', (string) $queue->turn_number);
+
+                return $base !== '' ? substr($base, 0, 7) : null;
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         $recentCompleted = SalesQueue::with(['assignedShift.employee', 'catalogClientType'])
             ->withStatusCode('COMPLETED')
             ->sales()
             ->where('completed_at', '>=', now()->subMinutes(90))
+            ->where('turn_number', 'not like', '%-R')
             ->orderBy('completed_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->limit(40)
+            ->get()
+            ->reject(function ($client) use ($busyCustomerIds, $busyBaseTurns) {
+                if ($client->customer_id && in_array((int) $client->customer_id, $busyCustomerIds, true)) {
+                    return true;
+                }
+
+                $baseTurn = str_replace('-R', '', (string) ($client->turn_number ?? ''));
+                $baseTurn = $baseTurn !== '' ? substr($baseTurn, 0, 7) : '';
+
+                return $baseTurn !== '' && in_array($baseTurn, $busyBaseTurns, true);
+            })
+            ->take(10)
+            ->values();
 
         $availableShifts = DailyShift::with('employee')
             ->where('work_date', today())
@@ -357,7 +398,15 @@ class QueueController extends Controller
         return response()->json([
             'clients' => $recentCompleted,
             'available_sellers' => $availableShifts,
+            'matchmaker_paused' => true,
         ]);
+    }
+
+    public function resumeRetentionMatchmaker()
+    {
+        $this->resumeMatchmakerAfterRetention();
+
+        return response()->json(['success' => true]);
     }
 
     public function reassignRetention(Request $request)
@@ -388,8 +437,27 @@ class QueueController extends Controller
             ], 422);
         }
 
-        $baseTurn = str_replace('-R', '', $oldQueue->turn_number);
-        $newTurnNumber = !empty($baseTurn) ? substr($baseTurn, 0, 7) . '-R' : 'RET-R';
+        $baseTurn = str_replace('-R', '', (string) ($oldQueue->turn_number ?? ''));
+        $baseTurn = $baseTurn !== '' ? substr($baseTurn, 0, 7) : '';
+        $newTurnNumber = $baseTurn !== '' ? $baseTurn . '-R' : 'RET-R';
+
+        $alreadyReattending = SalesQueue::serving()
+            ->sales()
+            ->where('turn_number', 'like', '%-R')
+            ->where(function ($q) use ($oldQueue, $newTurnNumber) {
+                if ($oldQueue->customer_id) {
+                    $q->where('customer_id', $oldQueue->customer_id);
+                }
+                $q->orWhere('turn_number', $newTurnNumber);
+            })
+            ->exists();
+
+        if ($alreadyReattending) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este cliente ya está en re-atención. No se puede asignar de nuevo mientras se le atiende.',
+            ], 422);
+        }
 
         SalesQueue::create(array_merge(
             [
@@ -408,6 +476,7 @@ class QueueController extends Controller
         ));
 
         $targetShift->update(['last_action_at' => now()]);
+        $this->resumeMatchmakerAfterRetention();
 
         return response()->json(['success' => true]);
     }
@@ -417,8 +486,27 @@ class QueueController extends Controller
         return Employee::sellers()->with(['todayShift.catalogBreakReason'])->get();
     }
 
+    private function isMatchmakerPausedForRetention(): bool
+    {
+        return Cache::has('matchmaker_paused_for_retention');
+    }
+
+    private function pauseMatchmakerForRetention(): void
+    {
+        Cache::put('matchmaker_paused_for_retention', auth()->id(), now()->addMinutes(3));
+    }
+
+    private function resumeMatchmakerAfterRetention(): void
+    {
+        Cache::forget('matchmaker_paused_for_retention');
+    }
+
     private function runMatchmaker()
     {
+        if ($this->isMatchmakerPausedForRetention()) {
+            return;
+        }
+
         $lock = Cache::lock('matchmaker_lock', 5);
 
         if (!$lock->get()) {

@@ -76,6 +76,18 @@
                         </label>
                     </div>
 
+                    <div class="col-span-full">
+                        <label class="inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="receives_prorroga_alerts" value="1" class="sr-only peer"
+                                {{ old('receives_prorroga_alerts', $employee->user->receives_prorroga_alerts ?? false) ? 'checked' : '' }}>
+                            <div class="relative w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aromas-highlight"></div>
+                            <div class="ms-3">
+                                <span class="block text-sm font-medium text-gray-300">Alertas de Prórroga (Pantalla de Ventas)</span>
+                                <span class="block text-xs text-gray-500 mt-1">Recibe voz, sonido y notificación cuando un vendedor necesita solicitar prórroga. Requiere credenciales de acceso.</span>
+                            </div>
+                        </label>
+                    </div>
+
                     <div class="col-span-full" x-show="role === 'MANAGER'" x-cloak>
                         <div class="p-5 bg-aromas-main border border-yellow-500/30 rounded-lg shadow-inner flex flex-col gap-5">
                             <h4 class="text-sm font-bold text-yellow-400 uppercase tracking-wider border-b border-yellow-500/20 pb-2">Permisos Especiales de Gerencia</h4>

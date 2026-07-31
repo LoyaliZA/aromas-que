@@ -215,6 +215,7 @@ Route::prefix('ventas')
         // --- RUTAS NUEVAS PARA GERENCIA (RETENCIÓN) ---
         Route::get('/retention/list', [QueueController::class, 'getRetentionList'])->name('retention.list');
         Route::post('/retention/reassign', [QueueController::class, 'reassignRetention'])->name('retention.reassign');
+        Route::post('/retention/resume-matchmaker', [QueueController::class, 'resumeRetentionMatchmaker'])->name('retention.resume-matchmaker');
         
     });
 

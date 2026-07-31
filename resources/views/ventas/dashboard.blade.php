@@ -159,10 +159,11 @@
             <div class="bg-gray-900 rounded-2xl border-2 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)] p-6 w-full max-w-2xl flex flex-col max-h-[85vh]">
                 <div class="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
                     <h3 class="text-2xl font-black text-blue-400 uppercase tracking-widest flex items-center gap-3">Re-Atención</h3>
-                    <button @click="showRetentionModal = false" class="text-gray-500 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button @click="closeRetentionModal()" class="text-gray-500 hover:text-white"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg></button>
                 </div>
+                <p class="text-xs text-blue-300/80 mb-4 -mt-2">Asignación automática en pausa mientras este panel está abierto.</p>
                 <div class="overflow-y-auto flex-1 pr-2 space-y-4">
                     <div x-show="retentionList.length === 0" class="text-center py-10">
                         <p class="text-gray-500 font-bold text-lg">No hay clientes recientes.</p>
@@ -287,6 +288,7 @@
                 showRetentionModal: false,
                 retentionList: [],
                 availableSellers: [], // <-- NUEVA VARIABLE
+                retentionFreezeAt: null,
 
                 showRatingModal: false,
                 ratingShiftId: null,
@@ -319,6 +321,7 @@
                     extensionMins: {{ $extensionMins }},
                 },
                 softAlertIntervalMs: 3000,
+                receivesProrrogaAlerts: {{ auth()->user()->receivesProrrogaAlerts() ? 'true' : 'false' }},
                 serveTimerAnchors: {},
                 speechSessionId: 0,
                 isLoading: false,
@@ -420,8 +423,26 @@
                 },
 
                 openRetentionModal() {
-                    this.fetchRetentionList();
+                    this.retentionFreezeAt = Date.now();
                     this.showRetentionModal = true;
+                    this.fetchRetentionList();
+                },
+
+                closeRetentionModal() {
+                    this.showRetentionModal = false;
+                    this.retentionFreezeAt = null;
+                    this.resumeRetentionMatchmaker();
+                },
+
+                resumeRetentionMatchmaker() {
+                    fetch("{{ route('ventas.retention.resume-matchmaker') }}", {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json',
+                        },
+                    }).catch(() => {});
                 },
 
                 refreshPipSupportInfo() {
@@ -560,7 +581,7 @@
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
-                                this.showRetentionModal = false;
+                                this.closeRetentionModal();
                                 this.fetchUpdates();
                             } else {
                                 alert(data.message || 'Error al procesar la retención.');
@@ -626,7 +647,7 @@
 
                         const phase = this.resolveProrrogaPhase(startTime, extensionCount, lastExtendedAt, now);
                         const { inRequestWindow, inExtensionGrace } = phase;
-                        const shouldSoftAlert = inRequestWindow;
+                        const shouldSoftAlert = inRequestWindow && this.receivesProrrogaAlerts;
 
                         if (shouldSoftAlert) {
                             if (!this.prorrogaIntervalActive[queueId]) {
@@ -648,10 +669,10 @@
                             if (prorrogaLabel) prorrogaLabel.classList.add('hidden');
 
                             const alertKey = queueId + '_' + extensionCount;
-                            if (queueId && !this.prorrogaAlerted[alertKey] && !this.prorrogaAnnouncing[alertKey]) {
+                            if (this.receivesProrrogaAlerts && queueId && !this.prorrogaAlerted[alertKey] && !this.prorrogaAnnouncing[alertKey]) {
                                 let sellerName = card.dataset.sellerName || 'Vendedor';
                                 this.prorrogaAnnouncing[alertKey] = true;
-                                const msg = `Atención {{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el tiempo de atención del vendedor ${sellerName} está por expirar.`;
+                                const msg = 'Usuario, tienes una nueva notificación';
                                 this.speakMessage(msg, {
                                     desktopNotification: {
                                         title: 'Prórroga requerida',
@@ -752,8 +773,12 @@
                     onlineCards.forEach(card => {
                         let lastActionAt = parseInt(card.dataset.lastActionAt);
                         if (!lastActionAt) return;
-                        
+
                         let elapsedSecs = Math.floor((now - lastActionAt) / 1000);
+                        // Congela el tiempo de recuperación mientras Re-Atención está abierto
+                        if (this.showRetentionModal && this.retentionFreezeAt) {
+                            elapsedSecs = Math.floor((this.retentionFreezeAt - lastActionAt) / 1000);
+                        }
                         let delayContainer = card.querySelector('.delay-container');
                         let onlineDots = card.querySelector('.online-dots');
                         let delayTimerEl = card.querySelector('.delay-timer');
@@ -761,7 +786,7 @@
                         if (elapsedSecs < 10) {
                             if (delayContainer) delayContainer.style.display = 'block';
                             if (onlineDots) onlineDots.style.display = 'none';
-                            if (delayTimerEl) delayTimerEl.innerText = (10 - elapsedSecs) + "s";
+                            if (delayTimerEl) delayTimerEl.innerText = Math.max(0, 10 - elapsedSecs) + "s";
                         } else {
                             if (delayContainer) delayContainer.style.display = 'none';
                             if (onlineDots) onlineDots.style.display = 'block';
@@ -1057,15 +1082,6 @@
                     const pulse = () => {
                         // Si ya no está en prórroga o cambió de key, detener
                         if (!this.prorrogaIntervalActive || !this.prorrogaIntervalActive[key]) return;
-                        const card = document.querySelector(`.seller-card[data-queue-id="${key}"]`);
-                        const sellerName = card?.dataset.sellerName || 'Vendedor';
-                        if (this.isTabInBackground()) {
-                            this.showDesktopNotification(
-                                'Prórroga requerida',
-                                `${sellerName}: solicite la prórroga ahora.`,
-                                { tag: `prorroga-soft-${key}`, renotify: true, requireInteraction: true }
-                            );
-                        }
                         el.volume = 0.8;
                         el.currentTime = 0;
                         el.play().catch((e) => { console.warn('Audio autoplay blocked:', e); });
@@ -1132,6 +1148,10 @@
                             if (data.html) {
                                 this._pendingServingTimers = data.serving_timers;
                                 this.refreshSellersGrid(data.html);
+                            }
+
+                            if (this.showRetentionModal) {
+                                this.fetchRetentionList();
                             }
 
                             if (data.incidents && data.incidents.length > 0) {
@@ -1357,18 +1377,20 @@
                         }
                         this.applyExtensionToCard(payload.queue_id, data.extension_count, data.last_extended_at);
                         this.updateTimers();
-                        const extensionMsg = `{{ explode(' ', auth()->user()->name ?? 'Gerente')[0] }}, el vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.`;
-                        this.enqueueTask({
-                            type: 'speech',
-                            message: extensionMsg,
-                            desktopNotification: {
-                                title: 'Prórroga solicitada',
-                                body: extensionMsg,
-                                tag: `extension-request-${payload.queue_id}`,
-                                renotify: true,
-                                onlyWhenHidden: true,
-                            },
-                        });
+                        if (this.receivesProrrogaAlerts) {
+                            const extensionMsg = 'Usuario, tienes una nueva notificación';
+                            this.enqueueTask({
+                                type: 'speech',
+                                message: extensionMsg,
+                                desktopNotification: {
+                                    title: 'Prórroga solicitada',
+                                    body: `El vendedor ${payload.seller_name || 'Vendedor'} solicitó una prórroga de atención.`,
+                                    tag: `extension-request-${payload.queue_id}`,
+                                    renotify: true,
+                                    onlyWhenHidden: true,
+                                },
+                            });
+                        }
                         this.fetchUpdates();
                     }).catch(() => {
                         alert('Error al solicitar la prórroga.');

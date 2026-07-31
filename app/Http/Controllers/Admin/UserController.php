@@ -52,6 +52,7 @@ class UserController extends Controller
                         'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                         'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
                         'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
+                        'receives_prorroga_alerts' => $request->has('receives_prorroga_alerts'),
                     ]);
                     $userId = $user->id;
                 }
@@ -115,6 +116,7 @@ class UserController extends Controller
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
                             'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
+                            'receives_prorroga_alerts' => $request->has('receives_prorroga_alerts'),
                         ];
                         if (!empty($validated['password'])) {
                             $dataToUpdate['password'] = Hash::make($validated['password']);
@@ -130,6 +132,7 @@ class UserController extends Controller
                             'can_manage_rezagados' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_rezagados') : false,
                             'can_manage_shifts' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_shifts') : false,
                             'can_manage_sellers' => $validated['job_position'] === 'MANAGER' ? $request->has('can_manage_sellers') : false,
+                            'receives_prorroga_alerts' => $request->has('receives_prorroga_alerts'),
                         ]);
                         $employee->update(['user_id' => $user->id]);
                     }
@@ -197,6 +200,7 @@ class UserController extends Controller
             'can_manage_rezagados' => 'nullable|boolean',
             'can_manage_shifts' => 'nullable|boolean',
             'can_manage_sellers' => 'nullable|boolean',
+            'receives_prorroga_alerts' => 'nullable|boolean',
             'has_access' => 'nullable|boolean',
             'email' => [
                 'nullable',
