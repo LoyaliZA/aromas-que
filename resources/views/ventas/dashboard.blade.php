@@ -671,8 +671,10 @@
                             const alertKey = queueId + '_' + extensionCount;
                             if (this.receivesProrrogaAlerts && queueId && !this.prorrogaAlerted[alertKey] && !this.prorrogaAnnouncing[alertKey]) {
                                 let sellerName = card.dataset.sellerName || 'Vendedor';
+                                const sellerFirst = (sellerName || 'Vendedor').trim().split(/\s+/)[0] || 'Vendedor';
                                 this.prorrogaAnnouncing[alertKey] = true;
-                                const msg = 'Usuario, tienes una nueva notificación';
+                                this.prorrogaAlerted[alertKey] = true; // evitar doble anuncio si updateTimers corre en paralelo
+                                const msg = `Atención. El tiempo de atención de ${sellerFirst} está por expirar. Soliciten prórroga.`;
                                 this.speakMessage(msg, {
                                     desktopNotification: {
                                         title: 'Prórroga requerida',
@@ -682,9 +684,8 @@
                                         renotify: true,
                                         onlyWhenHidden: true,
                                     },
-                                    onComplete: (success) => {
+                                    onComplete: () => {
                                         this.prorrogaAnnouncing[alertKey] = false;
-                                        if (success) this.prorrogaAlerted[alertKey] = true;
                                     },
                                 });
                             }
@@ -1347,14 +1348,20 @@
                     // Terminamos el servicio por AJAX para no recargar la página
                     fetch("{{ route('ventas.finish-service') }}", {
                         method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Content-Type': 'application/json' },
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Content-Type': 'application/json', 'Accept': 'application/json' },
                         body: JSON.stringify({ shift_id: shiftId })
-                    }).then(r => r.json()).then(data => {
-                        if(data.success) {
-                            this.speakMessage('Venta terminada.');
-                            this.fetchUpdates(); // Refresca el Grid para mostrar estado morado
-                            this.openRatingModal(shiftId, queueId);
+                    }).then(async (r) => {
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok || !data.success) {
+                            alert(data.message || 'No se pudo terminar la venta. Actualiza e intenta de nuevo.');
+                            this.fetchUpdates();
+                            return;
                         }
+                        this.speakMessage('Venta terminada.');
+                        this.fetchUpdates(); // Refresca el Grid para mostrar estado morado
+                        this.openRatingModal(shiftId, queueId);
+                    }).catch(() => {
+                        alert('Error de red al terminar la venta. Intenta de nuevo.');
                     });
                 },
 
@@ -1378,7 +1385,8 @@
                         this.applyExtensionToCard(payload.queue_id, data.extension_count, data.last_extended_at);
                         this.updateTimers();
                         if (this.receivesProrrogaAlerts) {
-                            const extensionMsg = 'Usuario, tienes una nueva notificación';
+                            const sellerFirst = ((payload.seller_name || 'Vendedor').trim().split(/\s+/)[0]) || 'Vendedor';
+                            const extensionMsg = `${sellerFirst} solicitó una prórroga de atención.`;
                             this.enqueueTask({
                                 type: 'speech',
                                 message: extensionMsg,

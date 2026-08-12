@@ -146,8 +146,17 @@ class QueueController extends Controller
 
         foreach ($expiredWithoutExtension->merge($expiredAfterExtension) as $queue) {
             DB::transaction(function () use ($queue) {
-                $shift = $queue->assignedShift;
-                $queue->update(array_merge(
+                // Revalidar bajo lock: evita carrera con finishService (turno ya cerrado / shift en RATING)
+                $lockedQueue = SalesQueue::serving()->whereKey($queue->id)->lockForUpdate()->first();
+                if (!$lockedQueue) {
+                    return;
+                }
+
+                $shift = $lockedQueue->assigned_shift_id
+                    ? DailyShift::lockForUpdate()->find($lockedQueue->assigned_shift_id)
+                    : null;
+
+                $lockedQueue->update(array_merge(
                     SalesQueue::attributesForStatus('COMPLETED'),
                     [
                         'completed_at' => now(),
@@ -158,8 +167,10 @@ class QueueController extends Controller
                     $shift->increment('customers_served_count');
                     // Never resurrect OFFLINE/BREAK sellers to ONLINE — that caused
                     // new assignments to "apagados"/pausados after a timeout.
+                    // Tampoco pisar RATING: ese estado lo pone finishService y debe
+                    // resolverse con calificación/omitir, no con el auto-timeout.
                     $shiftUpdate = ['last_action_at' => now()];
-                    if (in_array($shift->current_status, ['ONLINE', 'RATING'], true)) {
+                    if ($shift->current_status === 'ONLINE') {
                         $shiftUpdate['current_status'] = 'ONLINE';
                     }
                     $shift->update($shiftUpdate);
@@ -167,11 +178,11 @@ class QueueController extends Controller
 
                 \App\Models\AttentionIncident::create([
                     'daily_shift_id' => $shift->id ?? null,
-                    'sales_queue_id' => $queue->id,
+                    'sales_queue_id' => $lockedQueue->id,
                     'employee_id' => $shift->employee_id ?? null,
-                    'customer_id' => $queue->customer_id,
-                    'turn_number' => $queue->turn_number,
-                    'client_name' => $queue->client_name,
+                    'customer_id' => $lockedQueue->customer_id,
+                    'turn_number' => $lockedQueue->turn_number,
+                    'client_name' => $lockedQueue->client_name,
                     'reason' => 'TIEMPO_ATENCION_CADUCADO',
                     'details' => 'Turno terminado automáticamente tras no solicitar prórroga dentro del tiempo de atención.',
                 ]);
@@ -268,11 +279,14 @@ class QueueController extends Controller
     {
         $request->validate(['shift_id' => 'required|exists:daily_shifts,id']);
 
-        DB::transaction(function () use ($request) {
+        $finished = false;
+
+        DB::transaction(function () use ($request, &$finished) {
             $shift = DailyShift::lockForUpdate()->find($request->shift_id);
 
             $client = SalesQueue::where('assigned_shift_id', $shift->id)
                 ->serving()
+                ->lockForUpdate()
                 ->first();
 
             if ($client) {
@@ -292,11 +306,28 @@ class QueueController extends Controller
                     'user_id' => auth()->id(),
                     'action_type' => 'FINISHED',
                 ]);
+                $finished = true;
             }
         });
 
+        if (!$finished) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'finished' => false,
+                    'message' => 'No hay cliente en atención para este vendedor (puede haberse cerrado por tiempo o ya terminado). Actualiza la vista.',
+                ], 409);
+            }
+
+            return back()->with('error', 'No hay cliente en atención para terminar.');
+        }
+
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['success' => true, 'message' => 'Venta finalizada, pasando a calificación.']);
+            return response()->json([
+                'success' => true,
+                'finished' => true,
+                'message' => 'Venta finalizada, pasando a calificación.',
+            ]);
         }
 
         return back()->with('success', 'Venta finalizada');
